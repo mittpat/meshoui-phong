@@ -1,10 +1,10 @@
 #include <GL/glew.h>
 
-#include "GraphicsPrivate.h"
-#include "GraphicsProgram.h"
-#include "GraphicsUniform.h"
 #include "Mesh.h"
+#include "Program.h"
+#include "RendererPrivate.h"
 #include "TextureLoader.h"
+#include "Uniform.h"
 
 #include <SDL2/SDL_image.h>
 
@@ -17,11 +17,11 @@ namespace std { namespace filesystem = experimental::filesystem; }
 
 namespace
 {
-    const ProgramRegistration & registrationFor(const GraphicsProgramRegistrations & programRegistrations, GraphicsProgram * graphicsProgram)
+    const ProgramRegistration & registrationFor(const ProgramRegistrations & programRegistrations, Program * program)
     {
-        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [graphicsProgram](const std::pair<GraphicsProgram*, ProgramRegistration> & pair)
+        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
         {
-            return pair.first == graphicsProgram;
+            return pair.first == program;
         });
         if (found != programRegistrations.end())
         {
@@ -56,7 +56,7 @@ namespace
             return;
     }
 
-    void setUniform(const TextureRegistrations & textureRegistrations, Mesh * mesh, IGraphicsUniform * uniform, const ProgramUniform & programUniform)
+    void setUniform(const TextureRegistrations & textureRegistrations, Mesh * mesh, IUniform * uniform, const ProgramUniform & programUniform)
     {
         GLenum type = programUniform.type;
         switch (type)
@@ -87,7 +87,7 @@ namespace
             }
             else
             {
-                HashId textureName = dynamic_cast<GraphicsUniformSampler2D *>(uniform)->filename;
+                HashId textureName = dynamic_cast<UniformSampler2D *>(uniform)->filename;
                 auto textureRegistration = std::find_if(textureRegistrations.begin(), textureRegistrations.end(), [textureName](const TextureRegistration & textureRegistration)
                 {
                     return textureRegistration.name == textureName;
@@ -120,7 +120,7 @@ namespace
     }
 }
 
-bool GraphicsPrivate::registerShader(GLenum shaderType, const std::string & shaderSource, GLuint & shader, std::string * const error)
+bool RendererPrivate::registerShader(GLenum shaderType, const std::string & shaderSource, GLuint & shader, std::string * const error)
 {
     shader = glCreateShader(shaderType);
     const char * shaderSource_str = shaderSource.c_str();
@@ -145,7 +145,7 @@ bool GraphicsPrivate::registerShader(GLenum shaderType, const std::string & shad
     return true;        
 }
 
-void GraphicsPrivate::unregisterProgram(const ProgramRegistration & programRegistration)
+void RendererPrivate::unregisterProgram(const ProgramRegistration & programRegistration)
 {
     if (glIsProgram(programRegistration.program))
     {
@@ -158,13 +158,13 @@ void GraphicsPrivate::unregisterProgram(const ProgramRegistration & programRegis
     glDeleteVertexArrays(1, &programRegistration.vertexArray);
 }
 
-bool GraphicsPrivate::registerProgram(GraphicsProgram * graphicsProgram, ProgramRegistration & programRegistration)
+bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
 {
     GLuint vertex, fragment;
-    if (!registerShader(GL_VERTEX_SHADER, graphicsProgram->vertexShaderSource, vertex, &graphicsProgram->lastError))
+    if (!registerShader(GL_VERTEX_SHADER, program->vertexShaderSource, vertex, &program->lastError))
         return false;
 
-    if (!registerShader(GL_FRAGMENT_SHADER, graphicsProgram->fragmentShaderSource, fragment, &graphicsProgram->lastError))
+    if (!registerShader(GL_FRAGMENT_SHADER, program->fragmentShaderSource, fragment, &program->lastError))
         return false;
 
     programRegistration.program = glCreateProgram();
@@ -185,12 +185,12 @@ bool GraphicsPrivate::registerProgram(GraphicsProgram * graphicsProgram, Program
         {
             GLint infoLogLength = 0;
             glGetProgramiv(programRegistration.program, GL_INFO_LOG_LENGTH, &infoLogLength);
-            graphicsProgram->lastError.resize(infoLogLength);
-            glGetProgramInfoLog(programRegistration.program, infoLogLength, &infoLogLength, &graphicsProgram->lastError[0]);
+            program->lastError.resize(infoLogLength);
+            glGetProgramInfoLog(programRegistration.program, infoLogLength, &infoLogLength, &program->lastError[0]);
         }
 
         unregisterProgram(programRegistration);
-        graphicsProgram->linked = false;
+        program->linked = false;
     }
     else
     {
@@ -210,15 +210,15 @@ bool GraphicsPrivate::registerProgram(GraphicsProgram * graphicsProgram, Program
             programRegistration.uniforms[i].name = name;
             programRegistration.uniforms[i].index = glGetUniformLocation(programRegistration.program, name.c_str());
 
-            if (!graphicsProgram->uniform(name))
+            if (!program->uniform(name))
             {
-                if (auto uniform = GraphicsUniformFactory::makeUniform(name, programRegistration.uniforms[i].type, programRegistration.uniforms[i].size))
+                if (auto uniform = UniformFactory::makeUniform(name, programRegistration.uniforms[i].type, programRegistration.uniforms[i].size))
                 {
-                    graphicsProgram->add(uniform);
+                    program->add(uniform);
                 }
             }
 
-            if (auto sampler = dynamic_cast<GraphicsUniformSampler2D *>(graphicsProgram->uniform(name)))
+            if (auto sampler = dynamic_cast<UniformSampler2D *>(program->uniform(name)))
             {
                 programRegistration.uniforms[i].unit = unit++;
                 programRegistration.uniforms[i].enabler = glGetUniformLocation(programRegistration.program, (name + "Active").c_str());
@@ -247,29 +247,29 @@ bool GraphicsPrivate::registerProgram(GraphicsProgram * graphicsProgram, Program
         glGenVertexArrays(1, &programRegistration.vertexArray);
     }
 
-    graphicsProgram->linked = true;
-    return graphicsProgram->linked;
+    program->linked = true;
+    return program->linked;
 }
 
-void GraphicsPrivate::bindProgram(const ProgramRegistration & programRegistration)
+void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
 {
     glUseProgram(programRegistration.program);
     glBindVertexArray(programRegistration.vertexArray);
 }
 
-void GraphicsPrivate::unbindProgram(const ProgramRegistration & programRegistration)
+void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistration)
 {
     glBindVertexArray(0);
     glUseProgram(0);
 }
 
-void GraphicsPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
+void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 {
     glDeleteBuffers(1, &meshRegistration.indexBuffer);
     glDeleteBuffers(1, &meshRegistration.vertexBuffer);
 }
 
-void GraphicsPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
+void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
     glGenBuffers(1, &meshRegistration.indexBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
@@ -287,7 +287,7 @@ void GraphicsPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRe
     meshRegistration.definitionId = meshDefinition.definitionId;
 }
 
-void GraphicsPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
+void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
 {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
@@ -324,7 +324,7 @@ void GraphicsPrivate::bindMesh(const MeshRegistration & meshRegistration, const 
     }
 }
 
-void GraphicsPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
+void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
 {
     for (const HashId & attributeName : Vertex::Attributes)
     {
@@ -342,7 +342,7 @@ void GraphicsPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistra
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-GraphicsPrivate::GraphicsPrivate() 
+RendererPrivate::RendererPrivate() 
     : window(nullptr)
     , glContext(nullptr)
     , glewError(0)
@@ -352,10 +352,10 @@ GraphicsPrivate::GraphicsPrivate()
     
 }
 
-void GraphicsPrivate::registerGraphics(IGraphics * whatever)
+void RendererPrivate::registerGraphics(IGraphics * whatever)
 {
     whatever->d = this;
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {
         ProgramRegistration programRegistration;
         registerProgram(program, programRegistration);
@@ -390,9 +390,9 @@ void GraphicsPrivate::registerGraphics(IGraphics * whatever)
             {
                 for (auto value : material->values)
                 {
-                    auto uniform = GraphicsUniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
+                    auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
                     uniform->setData(value.data.data());
-                    if (auto sampler = dynamic_cast<GraphicsUniformSampler2D *>(uniform))
+                    if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
                     {
                         sampler->filename = value.filename;
                     }
@@ -404,11 +404,11 @@ void GraphicsPrivate::registerGraphics(IGraphics * whatever)
     }
 }
 
-void GraphicsPrivate::unregisterGraphics(IGraphics * whatever)
+void RendererPrivate::unregisterGraphics(IGraphics * whatever)
 {
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {
-        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<GraphicsProgram*, ProgramRegistration> & pair)
+        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
         {
             return pair.first == program;
         });
@@ -441,9 +441,9 @@ void GraphicsPrivate::unregisterGraphics(IGraphics * whatever)
     whatever->d = nullptr;
 }
 
-void GraphicsPrivate::bindGraphics(IGraphics * whatever)
+void RendererPrivate::bindGraphics(IGraphics * whatever)
 {
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {
         bindProgram(registrationFor(programRegistrations, program));
     }
@@ -454,9 +454,9 @@ void GraphicsPrivate::bindGraphics(IGraphics * whatever)
     whatever->bound = true;
 }
 
-void GraphicsPrivate::unbindGraphics(IGraphics * whatever)
+void RendererPrivate::unbindGraphics(IGraphics * whatever)
 {
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {   
         unbindProgram(registrationFor(programRegistrations, program));
     }
@@ -467,7 +467,7 @@ void GraphicsPrivate::unbindGraphics(IGraphics * whatever)
     whatever->bound = false;
 }
 
-void GraphicsPrivate::setProgramUniforms(Mesh * mesh)
+void RendererPrivate::setProgramUniforms(Mesh * mesh)
 {
     if (!mesh->program->bound)
     {
@@ -484,7 +484,7 @@ void GraphicsPrivate::setProgramUniforms(Mesh * mesh)
     }
 }
 
-void GraphicsPrivate::setProgramUniform(GraphicsProgram * program, IGraphicsUniform * uniform)
+void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
 {
     if (!program->bound)
     {
@@ -502,7 +502,7 @@ void GraphicsPrivate::setProgramUniform(GraphicsProgram * program, IGraphicsUnif
     }
 }
 
-void GraphicsPrivate::unsetProgramUniform(GraphicsProgram *program, IGraphicsUniform * uniform)
+void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
 {
     if (!program->bound)
     {
@@ -551,14 +551,14 @@ void GraphicsPrivate::unsetProgramUniform(GraphicsProgram *program, IGraphicsUni
     }
 }
 
-void GraphicsPrivate::draw(GraphicsProgram *, Mesh * mesh)
+void RendererPrivate::draw(Program *, Mesh * mesh)
 {
     mesh->bind();
     glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
     mesh->unbind();
 }
 
-const MeshFile& GraphicsPrivate::load(const std::string &filename)
+const MeshFile& RendererPrivate::load(const std::string &filename)
 {
     auto foundCache = std::find_if(meshCache.begin(), meshCache.end(), [filename](const MeshFile &fileCache)
     {

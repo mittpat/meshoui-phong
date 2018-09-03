@@ -1,6 +1,6 @@
 #pragma once
 
-class GraphicsPrivate;
+class RendererPrivate;
 class IGraphics
 {
 public:
@@ -10,13 +10,13 @@ public:
     void bind();
     void unbind();
 
-    GraphicsPrivate * d_ptr() const { return d; }
+    RendererPrivate * d_ptr() const { return d; }
 
     bool bound;
 
 private:
-    friend class GraphicsPrivate;
-    GraphicsPrivate * d;
+    friend class RendererPrivate;
+    RendererPrivate * d;
 };
 
 inline IGraphics::~IGraphics() {}

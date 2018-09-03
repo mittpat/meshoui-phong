@@ -8,14 +8,6 @@ add_library(meshouilib
     loose.h
     Camera.cpp
     Camera.h
-    GraphicsModule.cpp
-    GraphicsModule.h
-    GraphicsPrivate.cpp
-    GraphicsPrivate.h
-    GraphicsProgram.cpp
-    GraphicsProgram.h
-    GraphicsUniform.cpp
-    GraphicsUniform.h
     IGraphics.cpp
     IGraphics.h
     IWhatever.h
@@ -25,8 +17,16 @@ add_library(meshouilib
     MeshLoader.h
     MeshLoaderPrivate.cpp
     MeshLoaderPrivate.h
+    Program.cpp
+    Program.h
+    Renderer.cpp
+    Renderer.h
+    RendererPrivate.cpp
+    RendererPrivate.h
     TextureLoader.cpp
-    TextureLoader.h)
+    TextureLoader.h
+    Uniform.cpp
+    Uniform.h)
 
 add_custom_target(meshouiresources
     DEPENDS ${Resources}

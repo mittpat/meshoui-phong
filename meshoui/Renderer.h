@@ -7,14 +7,14 @@
 
 class Vertex;
 class Camera;
-class GraphicsProgram;
+class Program;
 class Widget;
-class GraphicsPrivate;
-class GraphicsModule final
+class RendererPrivate;
+class Renderer final
 {
 public:
-    virtual ~GraphicsModule();
-    GraphicsModule(bool gles = false);
+    virtual ~Renderer();
+    Renderer(bool gles = false);
 
     void addedToApplication();
     void aboutToBeRemovedFromApplication();
@@ -31,13 +31,13 @@ public:
     linalg::aliases::float4x4 projectionMatrix;
     linalg::aliases::float2 sun;
 
-    GraphicsProgram * defaultProgram;
+    Program * defaultProgram;
 
 private:
     void dispatch(Mesh * mesh);
 
-    GraphicsPrivate * d;
+    RendererPrivate * d;
     std::vector<Camera *> cameras;
     std::vector<Mesh *> meshes;
-    std::vector<GraphicsProgram *> programs;
+    std::vector<Program *> programs;
 };

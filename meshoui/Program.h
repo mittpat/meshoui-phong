@@ -10,33 +10,33 @@
 #include <string>
 #include <vector>
 
-class IGraphicsUniform;
+class IUniform;
 class Mesh;
-class GraphicsProgram final
+class Program final
     : public IWhatever
     , public IGraphics
 {
 public:
-    virtual ~GraphicsProgram();
-    GraphicsProgram();
+    virtual ~Program();
+    Program();
 
     void load(const std::string & filename);
-    void add(IGraphicsUniform * uniform);
-    void remove(IGraphicsUniform * uniform);
+    void add(IUniform * uniform);
+    void remove(IUniform * uniform);
     void applyUniforms();
     void unapplyUniforms();
     void draw(Mesh * mesh);
-    IGraphicsUniform * uniform(HashId name) const;
+    IUniform * uniform(HashId name) const;
 
     // set before adding
     std::string vertexShaderSource;
     std::string fragmentShaderSource;
 
     // applied on next frame
-    std::vector<IGraphicsUniform *> uniforms;
+    std::vector<IUniform *> uniforms;
 
     // outputs
     bool linked;
     std::string lastError;
 };
-inline GraphicsProgram::GraphicsProgram() : linked(false) {}
+inline Program::Program() : linked(false) {}

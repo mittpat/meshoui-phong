@@ -1,8 +1,8 @@
 ﻿#include <GL/glew.h>
 
-#include "GraphicsProgram.h"
-#include "GraphicsPrivate.h"
-#include "GraphicsUniform.h"
+#include "Program.h"
+#include "RendererPrivate.h"
+#include "Uniform.h"
 
 #include "assert.h"
 #include "loose.h"
@@ -17,7 +17,7 @@ using namespace linalg::aliases;
 
 namespace
 {
-    void readUniform(const std::string & filename, const std::string & name, const std::string & value, GraphicsProgram * program)
+    void readUniform(const std::string & filename, const std::string & name, const std::string & value, Program * program)
     {
         std::vector<GLfloat> values;
         std::string s;
@@ -29,9 +29,9 @@ namespace
         }
         if (!name.empty())
         {
-            auto uniform = GraphicsUniformFactory::makeUniform(name, enumForVectorSize(values.size()));
+            auto uniform = UniformFactory::makeUniform(name, enumForVectorSize(values.size()));
             uniform->setData(values.data());
-            if (auto sampler = dynamic_cast<GraphicsUniformSampler2D *>(uniform))
+            if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
             {
                 sampler->filename = sibling(value, filename);
             }
@@ -40,7 +40,7 @@ namespace
     }
 }
 
-GraphicsProgram::~GraphicsProgram()
+Program::~Program()
 {
     for (auto uniform : uniforms)
     {
@@ -48,7 +48,7 @@ GraphicsProgram::~GraphicsProgram()
     }
 }
 
-void GraphicsProgram::load(const std::string & filename)
+void Program::load(const std::string & filename)
 {
     dictionary * ini = iniparser_load(filename.c_str());
     {
@@ -73,7 +73,7 @@ void GraphicsProgram::load(const std::string & filename)
     iniparser_freedict(ini);
 }
 
-void GraphicsProgram::add(IGraphicsUniform * uniform)
+void Program::add(IUniform * uniform)
 {
     if (std::find(uniforms.begin(), uniforms.end(), uniform) == uniforms.end())
     {
@@ -81,12 +81,12 @@ void GraphicsProgram::add(IGraphicsUniform * uniform)
     }
 }
 
-void GraphicsProgram::remove(IGraphicsUniform * uniform)
+void Program::remove(IUniform * uniform)
 {
     uniforms.erase(std::remove(uniforms.begin(), uniforms.end(), uniform));
 }
 
-void GraphicsProgram::applyUniforms()
+void Program::applyUniforms()
 {
     for (auto* uniform : uniforms)
     {
@@ -94,7 +94,7 @@ void GraphicsProgram::applyUniforms()
     }
 }
 
-void GraphicsProgram::unapplyUniforms()
+void Program::unapplyUniforms()
 {
     for (auto* uniform : uniforms)
     {
@@ -102,14 +102,14 @@ void GraphicsProgram::unapplyUniforms()
     }
 }
 
-void GraphicsProgram::draw(Mesh * mesh)
+void Program::draw(Mesh * mesh)
 {
     d_ptr()->draw(this, mesh);
 }
 
-IGraphicsUniform *GraphicsProgram::uniform(HashId name) const
+IUniform *Program::uniform(HashId name) const
 {
-    auto found = std::find_if(uniforms.begin(), uniforms.end(), [name](IGraphicsUniform * uniform){
+    auto found = std::find_if(uniforms.begin(), uniforms.end(), [name](IUniform * uniform){
         return uniform->name == name;
     });
     if (found != uniforms.end())

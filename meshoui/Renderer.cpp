@@ -1,10 +1,10 @@
 #include <GL/glew.h>
 
-#include "GraphicsModule.h"
-#include "GraphicsPrivate.h"
+#include "Renderer.h"
+#include "RendererPrivate.h"
 #include "Camera.h"
-#include "GraphicsProgram.h"
-#include "GraphicsUniform.h"
+#include "Program.h"
+#include "Uniform.h"
 
 #include "loose.h"
 
@@ -20,7 +20,7 @@
 using namespace linalg;
 using namespace linalg::aliases;
 
-GraphicsModule::~GraphicsModule()
+Renderer::~Renderer()
 {
     aboutToBeRemovedFromApplication();
 
@@ -39,11 +39,11 @@ GraphicsModule::~GraphicsModule()
     IMG_Quit();
 }
 
-GraphicsModule::GraphicsModule(bool gles)
+Renderer::Renderer(bool gles)
     : projectionMatrix(linalg::perspective_matrix(degreesToRadians(90.f), 1280/800.f, 0.1f, 1000.f))
     , sun(0.6f, 0.8f)
-    , defaultProgram(new GraphicsProgram())
-    , d(new GraphicsPrivate)
+    , defaultProgram(new Program())
+    , d(new RendererPrivate)
     , meshes()
     , programs()
 {
@@ -89,17 +89,17 @@ GraphicsModule::GraphicsModule(bool gles)
     addedToApplication();
 }
 
-void GraphicsModule::addedToApplication()
+void Renderer::addedToApplication()
 {
     add(defaultProgram);
 }
 
-void GraphicsModule::aboutToBeRemovedFromApplication()
+void Renderer::aboutToBeRemovedFromApplication()
 {
     remove(defaultProgram);
 }
 
-void GraphicsModule::add(IWhatever * whatever)
+void Renderer::add(IWhatever * whatever)
 {
     if (auto camera = dynamic_cast<Camera *>(whatever))
     {
@@ -118,7 +118,7 @@ void GraphicsModule::add(IWhatever * whatever)
             d->registerGraphics(mesh);
         }
     }
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {
         if (std::find(programs.begin(), programs.end(), program) == programs.end())
         {
@@ -128,7 +128,7 @@ void GraphicsModule::add(IWhatever * whatever)
     }
 }
 
-void GraphicsModule::remove(IWhatever* whatever)
+void Renderer::remove(IWhatever* whatever)
 {
     if (auto camera = dynamic_cast<Camera *>(whatever))
     {
@@ -141,14 +141,14 @@ void GraphicsModule::remove(IWhatever* whatever)
             mesh->program = nullptr;
         meshes.erase(std::remove(meshes.begin(), meshes.end(), mesh));
     }
-    if (auto program = dynamic_cast<GraphicsProgram *>(whatever))
+    if (auto program = dynamic_cast<Program *>(whatever))
     {
         d->unregisterGraphics(program);
         programs.erase(std::remove(programs.begin(), programs.end(), program));
     }
 }
 
-void GraphicsModule::update(double)
+void Renderer::update(double)
 {
     glClearColor(0.f, 0.f, 0.f, 1.f);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -166,7 +166,7 @@ void GraphicsModule::update(double)
     glDepthMask(GL_TRUE);
 
     static const float SunDistance = 1000.f;
-    if (auto lightPositionUniform = dynamic_cast<GraphicsUniform3fv *>(defaultProgram->uniform("uniformLightPosition")))
+    if (auto lightPositionUniform = dynamic_cast<Uniform3fv *>(defaultProgram->uniform("uniformLightPosition")))
     {
         static const float3 up(0.,1.,0.);
         static const float3 right(-1.,0.,0.);
@@ -181,7 +181,7 @@ void GraphicsModule::update(double)
     postUpdate();
 }
 
-void GraphicsModule::postUpdate()
+void Renderer::postUpdate()
 {
     if (d->toFullscreen && !d->fullscreen)
     {
@@ -204,7 +204,7 @@ void GraphicsModule::postUpdate()
     d->fullscreen = d->toFullscreen;
 }
 
-void GraphicsModule::renderMeshes()
+void Renderer::renderMeshes()
 {
     std::stable_sort(meshes.begin(), meshes.end(), [](Mesh *, Mesh * right) { return (right->renderFlags & Render::DepthWrite) == 0; });
     for (Mesh * mesh : meshes)
@@ -227,15 +227,15 @@ void GraphicsModule::renderMeshes()
         if (mesh->renderFlags & Render::BackFaceCulling)
             glEnable(GL_CULL_FACE);
 
-        if (auto uniform = dynamic_cast<GraphicsUniform44fm*>(mesh->program->uniform("uniformModel")))
+        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformModel")))
             uniform->value = mesh->modelMatrix();
-        if (auto uniform = dynamic_cast<GraphicsUniform44fm*>(mesh->program->uniform("uniformProjection")))
+        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformProjection")))
             uniform->value = mesh->viewFlags == View::None ? identity : projectionMatrix;
         if (!cameras.empty())
         {
-            if (auto uniform = dynamic_cast<GraphicsUniform44fm*>(mesh->program->uniform("uniformView")))
+            if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformView")))
                 uniform->value = cameras[0]->viewMatrix(mesh->viewFlags);
-            if (auto uniform = dynamic_cast<GraphicsUniform3fv*>(mesh->program->uniform("uniformViewPosition")))
+            if (auto uniform = dynamic_cast<Uniform3fv*>(mesh->program->uniform("uniformViewPosition")))
             {
                 float4 v = inverse(cameras[0]->viewMatrix(View::Rotation | View::Translation))[3];
                 uniform->value = float3(v.x,v.y,v.z);
@@ -257,7 +257,7 @@ void GraphicsModule::renderMeshes()
     }
 }
 
-void GraphicsModule::renderWidgets()
+void Renderer::renderWidgets()
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame(d->window);
@@ -320,7 +320,7 @@ void GraphicsModule::renderWidgets()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-std::vector<Mesh *> GraphicsModule::meshFactory(const std::string &filename)
+std::vector<Mesh *> Renderer::meshFactory(const std::string &filename)
 {
     std::vector<Mesh *> ret;
     const MeshFile & fileCache = d->load(filename);

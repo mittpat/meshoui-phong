@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-class GraphicsProgram;
-class IGraphicsUniform;
+class Program;
+class IUniform;
 class Mesh
     : public IWhatever
     , public IGraphics
@@ -20,20 +20,20 @@ public:
     virtual ~Mesh();
     Mesh();
 
-    void add(IGraphicsUniform * uniform);
-    void remove(IGraphicsUniform * uniform);
+    void add(IUniform * uniform);
+    void remove(IUniform * uniform);
     void applyUniforms();
     void unapplyUniforms();
-    IGraphicsUniform * uniform(HashId name) const;
+    IUniform * uniform(HashId name) const;
     linalg::aliases::float4x4 modelMatrix() const;
 
     HashId name;
     HashId instanceId;
     HashId definitionId;
     std::string filename;
-    GraphicsProgram * program;
+    Program * program;
 
-    std::vector<IGraphicsUniform *> uniforms;
+    std::vector<IUniform *> uniforms;
 
     linalg::aliases::float3 scale;
     linalg::aliases::float4 orientation;

@@ -87,17 +87,17 @@ inline MeshRegistration::~MeshRegistration() {}
 inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), referenceCount(0) {}
 
 class IGraphics;
-class IGraphicsUniform;
-class GraphicsProgram;
-typedef std::vector<std::pair<GraphicsProgram *, ProgramRegistration>> GraphicsProgramRegistrations;
+class IUniform;
+class Program;
+typedef std::vector<std::pair<Program *, ProgramRegistration>> ProgramRegistrations;
 typedef std::vector<MeshRegistration> MeshRegistrations;
 typedef std::vector<TextureRegistration> TextureRegistrations;
-class GraphicsPrivate final
+class RendererPrivate final
 {
 public:
     static bool registerShader(GLenum shaderType, const std::string & shaderSource, GLuint & shader, std::string * const error);
     static void unregisterProgram(const ProgramRegistration & programRegistration);
-    static bool registerProgram(GraphicsProgram * graphicsProgram, ProgramRegistration & programRegistration);
+    static bool registerProgram(Program * program, ProgramRegistration & programRegistration);
     static void bindProgram(const ProgramRegistration & programRegistration);
     static void unbindProgram(const ProgramRegistration &);
     static void unregisterMesh(const MeshRegistration & meshRegistration);
@@ -105,8 +105,8 @@ public:
     static void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
     static void unbindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
 
-    ~GraphicsPrivate();
-    GraphicsPrivate();
+    ~RendererPrivate();
+    RendererPrivate();
 
     void registerGraphics(IGraphics * whatever);
     void unregisterGraphics(IGraphics * whatever);
@@ -114,9 +114,9 @@ public:
     void unbindGraphics(IGraphics * whatever);
 
     void setProgramUniforms(Mesh * mesh);
-    void setProgramUniform(GraphicsProgram * program, IGraphicsUniform * uniform);
-    void unsetProgramUniform(GraphicsProgram * program, IGraphicsUniform * uniform);
-    void draw(GraphicsProgram * program, Mesh * mesh);
+    void setProgramUniform(Program * program, IUniform * uniform);
+    void unsetProgramUniform(Program * program, IUniform * uniform);
+    void draw(Program * program, Mesh * mesh);
     bool convertMeshToBinary(const std::string & from, const std::string & to);
     const MeshFile & load(const std::string & filename);
 
@@ -124,12 +124,12 @@ public:
     SDL_GLContext glContext;
     GLenum glewError;
 
-    GraphicsProgramRegistrations programRegistrations;
+    ProgramRegistrations programRegistrations;
     MeshRegistrations meshRegistrations;
-    TextureRegistrations textureRegistrations; //refcount and unregister textures
+    TextureRegistrations textureRegistrations;
     MeshCache meshCache;
 
     bool toFullscreen;
     bool fullscreen;
 };
-inline GraphicsPrivate::~GraphicsPrivate() {}
+inline RendererPrivate::~RendererPrivate() {}

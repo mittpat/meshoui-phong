@@ -1,6 +1,6 @@
 #include "Mesh.h"
-#include "GraphicsPrivate.h"
-#include "GraphicsUniform.h"
+#include "RendererPrivate.h"
+#include "Uniform.h"
 
 #include "assert.h"
 #include <linalg.h>
@@ -18,7 +18,7 @@ Mesh::~Mesh()
     }
 }
 
-void Mesh::add(IGraphicsUniform * uniform)
+void Mesh::add(IUniform * uniform)
 {
     if (std::find(uniforms.begin(), uniforms.end(), uniform) == uniforms.end())
     {
@@ -26,7 +26,7 @@ void Mesh::add(IGraphicsUniform * uniform)
     }
 }
 
-void Mesh::remove(IGraphicsUniform * uniform)
+void Mesh::remove(IUniform * uniform)
 {
     uniforms.erase(std::remove(uniforms.begin(), uniforms.end(), uniform));
 }
@@ -44,9 +44,9 @@ void Mesh::unapplyUniforms()
     }
 }
 
-IGraphicsUniform *Mesh::uniform(HashId name) const
+IUniform *Mesh::uniform(HashId name) const
 {
-    auto found = std::find_if(uniforms.begin(), uniforms.end(), [name](IGraphicsUniform * uniform) { return uniform->name == name; });
+    auto found = std::find_if(uniforms.begin(), uniforms.end(), [name](IUniform * uniform) { return uniform->name == name; });
     if (found != uniforms.end())
         return *found;
     return nullptr;

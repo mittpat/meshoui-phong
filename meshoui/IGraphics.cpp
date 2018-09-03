@@ -1,5 +1,5 @@
 #include "IGraphics.h"
-#include "GraphicsPrivate.h"
+#include "RendererPrivate.h"
 
 void IGraphics::bind()
 {
