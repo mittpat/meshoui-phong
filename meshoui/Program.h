@@ -4,7 +4,6 @@
 #include <linalg.h>
 #include "hashid.h"
 
-#include "IGraphics.h"
 #include "IWhatever.h"
 
 #include <string>
@@ -12,9 +11,9 @@
 
 class IUniform;
 class Mesh;
+class RendererPrivate;
 class Program final
     : public IWhatever
-    , public IGraphics
 {
 public:
     virtual ~Program();
@@ -27,6 +26,7 @@ public:
     void unapplyUniforms();
     void draw(Mesh * mesh);
     IUniform * uniform(HashId name) const;
+    RendererPrivate * d_ptr() const;
 
     // set before adding
     std::string vertexShaderSource;
@@ -38,5 +38,10 @@ public:
     // outputs
     bool linked;
     std::string lastError;
+
+private:
+    friend class RendererPrivate;
+    RendererPrivate * d;
 };
 inline Program::Program() : linked(false) {}
+inline RendererPrivate *Program::d_ptr() const { return d; }

@@ -108,11 +108,10 @@ public:
     ~RendererPrivate();
     RendererPrivate();
 
-    void registerGraphics(IGraphics * whatever);
-    void unregisterGraphics(IGraphics * whatever);
-    void bindGraphics(IGraphics * whatever);
-    void unbindGraphics(IGraphics * whatever);
-
+    void registerGraphics(IWhatever * whatever);
+    void unregisterGraphics(IWhatever * whatever);
+    void bindGraphics(IWhatever * whatever);
+    void unbindGraphics(IWhatever * whatever);
     void setProgramUniforms(Mesh * mesh);
     void setProgramUniform(Program * program, IUniform * uniform);
     void unsetProgramUniform(Program * program, IUniform * uniform);

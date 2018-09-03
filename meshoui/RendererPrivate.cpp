@@ -352,17 +352,18 @@ RendererPrivate::RendererPrivate()
     
 }
 
-void RendererPrivate::registerGraphics(IGraphics * whatever)
+void RendererPrivate::registerGraphics(IWhatever * whatever)
 {
-    whatever->d = this;
     if (auto program = dynamic_cast<Program *>(whatever))
     {
+        program->d = this;
         ProgramRegistration programRegistration;
         registerProgram(program, programRegistration);
         programRegistrations.push_back(std::make_pair(program, programRegistration));
     }
     if (auto mesh = dynamic_cast<Mesh *>(whatever))
     {
+        mesh->d = this;
         const MeshFile & fileCache = load(mesh->filename);
         const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
         if (meshRegistration->definitionId == HashId())
@@ -404,7 +405,7 @@ void RendererPrivate::registerGraphics(IGraphics * whatever)
     }
 }
 
-void RendererPrivate::unregisterGraphics(IGraphics * whatever)
+void RendererPrivate::unregisterGraphics(IWhatever * whatever)
 {
     if (auto program = dynamic_cast<Program *>(whatever))
     {
@@ -417,6 +418,7 @@ void RendererPrivate::unregisterGraphics(IGraphics * whatever)
             unregisterProgram(found->second);
             programRegistrations.erase(found);
         }
+        program->d = nullptr;
     }
     if (auto mesh = dynamic_cast<Mesh *>(whatever))
     {
@@ -437,11 +439,11 @@ void RendererPrivate::unregisterGraphics(IGraphics * whatever)
         }
         for (auto * uniform : mesh->uniforms) { delete uniform; }
         mesh->uniforms.clear();
+        mesh->d = nullptr;
     }
-    whatever->d = nullptr;
 }
 
-void RendererPrivate::bindGraphics(IGraphics * whatever)
+void RendererPrivate::bindGraphics(IWhatever * whatever)
 {
     if (auto program = dynamic_cast<Program *>(whatever))
     {
@@ -451,10 +453,9 @@ void RendererPrivate::bindGraphics(IGraphics * whatever)
     {
         bindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
     }
-    whatever->bound = true;
 }
 
-void RendererPrivate::unbindGraphics(IGraphics * whatever)
+void RendererPrivate::unbindGraphics(IWhatever * whatever)
 {
     if (auto program = dynamic_cast<Program *>(whatever))
     {   
@@ -464,16 +465,10 @@ void RendererPrivate::unbindGraphics(IGraphics * whatever)
     {   
         unbindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
     }
-    whatever->bound = false;
 }
 
 void RendererPrivate::setProgramUniforms(Mesh * mesh)
 {
-    if (!mesh->program->bound)
-    {
-        return;
-    }
-
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, mesh->program);
     for (const ProgramUniform & programUniform : programRegistration.uniforms)
     {
@@ -486,11 +481,6 @@ void RendererPrivate::setProgramUniforms(Mesh * mesh)
 
 void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
 {
-    if (!program->bound)
-    {
-        return;
-    }
-
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     auto programUniform = std::find_if(programRegistration.uniforms.begin(), programRegistration.uniforms.end(), [uniform](const ProgramUniform & programUniform)
     {
@@ -504,11 +494,6 @@ void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
 
 void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
 {
-    if (!program->bound)
-    {
-        return;
-    }
-
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     auto programUniform = std::find_if(programRegistration.uniforms.begin(), programRegistration.uniforms.end(), [uniform](const ProgramUniform & programUniform)
     {
@@ -553,9 +538,7 @@ void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
 
 void RendererPrivate::draw(Program *, Mesh * mesh)
 {
-    mesh->bind();
     glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
-    mesh->unbind();
 }
 
 const MeshFile& RendererPrivate::load(const std::string &filename)

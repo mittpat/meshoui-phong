@@ -242,13 +242,15 @@ void Renderer::renderMeshes()
             }
         }
 
-        mesh->program->bind();
+        d->bindGraphics(mesh->program);
         mesh->program->applyUniforms();
         mesh->applyUniforms();
+        d->bindGraphics(mesh);
         mesh->program->draw(mesh);
+        d->unbindGraphics(mesh);
         mesh->unapplyUniforms();
         mesh->program->unapplyUniforms();
-        mesh->program->unbind();
+        d->unbindGraphics(mesh->program);
 
         glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);
