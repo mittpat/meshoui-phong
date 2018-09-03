@@ -1,13 +1,9 @@
 #pragma once
 
-#include "IWhatever.h"
-
 #include "enums.h"
-#include "gltypes.h"
 #include <linalg.h>
 
 class Camera final
-    : public IWhatever
 {
 public:
     virtual ~Camera();

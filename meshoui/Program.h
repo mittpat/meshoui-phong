@@ -1,10 +1,6 @@
 #pragma once
 
-#include "gltypes.h"
-#include <linalg.h>
 #include "hashid.h"
-
-#include "IWhatever.h"
 
 #include <string>
 #include <vector>
@@ -13,7 +9,6 @@ class IUniform;
 class Mesh;
 class RendererPrivate;
 class Program final
-    : public IWhatever
 {
 public:
     virtual ~Program();

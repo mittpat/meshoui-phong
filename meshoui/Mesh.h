@@ -1,7 +1,5 @@
 #pragma once
 
-#include "IWhatever.h"
-
 #include "enums.h"
 #include "hashid.h"
 #include <linalg.h>
@@ -12,8 +10,7 @@
 class Program;
 class RendererPrivate;
 class IUniform;
-class Mesh
-    : public IWhatever
+class Mesh final
 {
 public:
     virtual ~Mesh();

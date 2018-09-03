@@ -22,8 +22,7 @@ using namespace linalg::aliases;
 
 Renderer::~Renderer()
 {
-    aboutToBeRemovedFromApplication();
-
+    remove(defaultProgram);
     delete defaultProgram;
 
     // imgui cleanup
@@ -86,66 +85,54 @@ Renderer::Renderer(bool gles)
     ImGui_ImplOpenGL3_Init("#version 150");
     ImGui::StyleColorsDark();
 
-    addedToApplication();
-}
-
-void Renderer::addedToApplication()
-{
     add(defaultProgram);
 }
 
-void Renderer::aboutToBeRemovedFromApplication()
+void Renderer::add(Mesh * mesh)
 {
-    remove(defaultProgram);
-}
-
-void Renderer::add(IWhatever * whatever)
-{
-    if (auto camera = dynamic_cast<Camera *>(whatever))
+    if (std::find(meshes.begin(), meshes.end(), mesh) == meshes.end())
     {
-        if (std::find(cameras.begin(), cameras.end(), camera) == cameras.end())
-        {
-            cameras.push_back(camera);
-        }
-    }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
-    {
-        if (std::find(meshes.begin(), meshes.end(), mesh) == meshes.end())
-        {
-            meshes.push_back(mesh);
-            if (!mesh->program)
-                mesh->program = defaultProgram;
-            d->registerGraphics(mesh);
-        }
-    }
-    if (auto program = dynamic_cast<Program *>(whatever))
-    {
-        if (std::find(programs.begin(), programs.end(), program) == programs.end())
-        {
-            programs.push_back(program);
-            d->registerGraphics(program);
-        }
+        meshes.push_back(mesh);
+        if (!mesh->program)
+            mesh->program = defaultProgram;
+        d->registerGraphics(mesh);
     }
 }
 
-void Renderer::remove(IWhatever* whatever)
+void Renderer::add(Program * program)
 {
-    if (auto camera = dynamic_cast<Camera *>(whatever))
+    if (std::find(programs.begin(), programs.end(), program) == programs.end())
     {
-        cameras.erase(std::remove(cameras.begin(), cameras.end(), camera));
+        programs.push_back(program);
+        d->registerGraphics(program);
     }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
+}
+
+void Renderer::add(Camera * camera)
+{
+    if (std::find(cameras.begin(), cameras.end(), camera) == cameras.end())
     {
-        d->unregisterGraphics(mesh);
-        if (mesh->program == defaultProgram)
-            mesh->program = nullptr;
-        meshes.erase(std::remove(meshes.begin(), meshes.end(), mesh));
+        cameras.push_back(camera);
     }
-    if (auto program = dynamic_cast<Program *>(whatever))
-    {
-        d->unregisterGraphics(program);
-        programs.erase(std::remove(programs.begin(), programs.end(), program));
-    }
+}
+
+void Renderer::remove(Mesh* mesh)
+{
+    d->unregisterGraphics(mesh);
+    if (mesh->program == defaultProgram)
+        mesh->program = nullptr;
+    meshes.erase(std::remove(meshes.begin(), meshes.end(), mesh));
+}
+
+void Renderer::remove(Program* program)
+{
+    d->unregisterGraphics(program);
+    programs.erase(std::remove(programs.begin(), programs.end(), program));
+}
+
+void Renderer::remove(Camera* camera)
+{
+    cameras.erase(std::remove(cameras.begin(), cameras.end(), camera));
 }
 
 void Renderer::update(double)

@@ -352,119 +352,111 @@ RendererPrivate::RendererPrivate()
     
 }
 
-void RendererPrivate::registerGraphics(IWhatever * whatever)
+void RendererPrivate::registerGraphics(Mesh * mesh)
 {
-    if (auto program = dynamic_cast<Program *>(whatever))
+    mesh->d = this;
+    const MeshFile & fileCache = load(mesh->filename);
+    const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
+    if (meshRegistration->definitionId == HashId())
     {
-        program->d = this;
-        ProgramRegistration programRegistration;
-        registerProgram(program, programRegistration);
-        programRegistrations.push_back(std::make_pair(program, programRegistration));
+        const MeshInstance & instance = fileCache.instances[0];
+        mesh->name = instance.instanceId;
+        mesh->instanceId = instance.instanceId;
+        mesh->definitionId = instance.definitionId;
+        mesh->filename = fileCache.filename.str;
+        mesh->scale *= instance.scale;
+        mesh->position += instance.position;
+        mesh->orientation = linalg::qmul(instance.orientation, mesh->orientation);
+        meshRegistration = &registrationFor(meshRegistrations, mesh);
     }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
+    auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
+    if (definition != fileCache.definitions.end())
     {
-        mesh->d = this;
-        const MeshFile & fileCache = load(mesh->filename);
-        const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
-        if (meshRegistration->definitionId == HashId())
+        if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
+    }
+    auto instance = std::find_if(fileCache.instances.begin(), fileCache.instances.end(), [mesh](const auto & inst){ return inst.instanceId == mesh->instanceId; });
+    if (instance != fileCache.instances.end())
+    {
+        auto material = std::find_if(fileCache.materials.begin(), fileCache.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance->materialId; });
+        if (material != fileCache.materials.end())
         {
-            const MeshInstance & instance = fileCache.instances[0];
-            mesh->name = instance.instanceId;
-            mesh->instanceId = instance.instanceId;
-            mesh->definitionId = instance.definitionId;
-            mesh->filename = fileCache.filename.str;
-            mesh->scale *= instance.scale;
-            mesh->position += instance.position;
-            mesh->orientation = linalg::qmul(instance.orientation, mesh->orientation);
-            meshRegistration = &registrationFor(meshRegistrations, mesh);
-        }
-        auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
-        if (definition != fileCache.definitions.end())
-        {
-            if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
-        }
-        auto instance = std::find_if(fileCache.instances.begin(), fileCache.instances.end(), [mesh](const auto & inst){ return inst.instanceId == mesh->instanceId; });
-        if (instance != fileCache.instances.end())
-        {
-            auto material = std::find_if(fileCache.materials.begin(), fileCache.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance->materialId; });
-            if (material != fileCache.materials.end())
+            for (auto value : material->values)
             {
-                for (auto value : material->values)
+                auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
+                uniform->setData(value.data.data());
+                if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
                 {
-                    auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
-                    uniform->setData(value.data.data());
-                    if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
-                    {
-                        sampler->filename = value.filename;
-                    }
-                    mesh->add(uniform);
+                    sampler->filename = value.filename;
                 }
+                mesh->add(uniform);
             }
         }
-        const_cast<MeshRegistration *>(meshRegistration)->referenceCount += 1;
     }
+    const_cast<MeshRegistration *>(meshRegistration)->referenceCount += 1;
 }
 
-void RendererPrivate::unregisterGraphics(IWhatever * whatever)
+void RendererPrivate::registerGraphics(Program * program)
 {
-    if (auto program = dynamic_cast<Program *>(whatever))
+    program->d = this;
+    ProgramRegistration programRegistration;
+    registerProgram(program, programRegistration);
+    programRegistrations.push_back(std::make_pair(program, programRegistration));
+}
+
+void RendererPrivate::unregisterGraphics(Mesh * mesh)
+{
+    auto found = std::find_if(meshRegistrations.begin(), meshRegistrations.end(), [mesh](const MeshRegistration & meshRegistration)
     {
-        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
+        return meshRegistration.definitionId == mesh->definitionId;
+    });
+    if (found != meshRegistrations.end())
+    {
+        MeshRegistration & meshRegistration = *found;
+        if (meshRegistration.referenceCount > 0)
+            meshRegistration.referenceCount--;
+        if (meshRegistration.referenceCount == 0)
         {
-            return pair.first == program;
-        });
-        if (found != programRegistrations.end())
-        {
-            unregisterProgram(found->second);
-            programRegistrations.erase(found);
+            unregisterMesh(meshRegistration);
+            meshRegistrations.erase(found);
         }
-        program->d = nullptr;
     }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
-    {
-        auto found = std::find_if(meshRegistrations.begin(), meshRegistrations.end(), [mesh](const MeshRegistration & meshRegistration)
-        {
-            return meshRegistration.definitionId == mesh->definitionId;
-        });
-        if (found != meshRegistrations.end())
-        {
-            MeshRegistration & meshRegistration = *found;
-            if (meshRegistration.referenceCount > 0)
-                meshRegistration.referenceCount--;
-            if (meshRegistration.referenceCount == 0)
-            {
-                unregisterMesh(meshRegistration);
-                meshRegistrations.erase(found);
-            }
-        }
-        for (auto * uniform : mesh->uniforms) { delete uniform; }
-        mesh->uniforms.clear();
-        mesh->d = nullptr;
-    }
+    for (auto * uniform : mesh->uniforms) { delete uniform; }
+    mesh->uniforms.clear();
+    mesh->d = nullptr;
 }
 
-void RendererPrivate::bindGraphics(IWhatever * whatever)
+void RendererPrivate::unregisterGraphics(Program * program)
 {
-    if (auto program = dynamic_cast<Program *>(whatever))
+    auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
     {
-        bindProgram(registrationFor(programRegistrations, program));
-    }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
+        return pair.first == program;
+    });
+    if (found != programRegistrations.end())
     {
-        bindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
+        unregisterProgram(found->second);
+        programRegistrations.erase(found);
     }
+    program->d = nullptr;
 }
 
-void RendererPrivate::unbindGraphics(IWhatever * whatever)
+void RendererPrivate::bindGraphics(Mesh * mesh)
 {
-    if (auto program = dynamic_cast<Program *>(whatever))
-    {   
-        unbindProgram(registrationFor(programRegistrations, program));
-    }
-    if (auto mesh = dynamic_cast<Mesh *>(whatever))
-    {   
-        unbindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
-    }
+    bindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
+}
+
+void RendererPrivate::bindGraphics(Program * program)
+{
+    bindProgram(registrationFor(programRegistrations, program));
+}
+
+void RendererPrivate::unbindGraphics(Mesh * mesh)
+{
+    unbindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
+}
+
+void RendererPrivate::unbindGraphics(Program * program)
+{
+    unbindProgram(registrationFor(programRegistrations, program));
 }
 
 void RendererPrivate::setProgramUniforms(Mesh * mesh)

@@ -8,7 +8,6 @@ add_library(meshouilib
     loose.h
     Camera.cpp
     Camera.h
-    IWhatever.h
     Mesh.cpp
     Mesh.h
     MeshLoader.cpp

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "gltypes.h"
-#include <linalg.h>
 #include "hashid.h"
+#include <linalg.h>
 
 class IUniform
 {

@@ -16,10 +16,12 @@ public:
     virtual ~Renderer();
     Renderer(bool gles = false);
 
-    void addedToApplication();
-    void aboutToBeRemovedFromApplication();
-    void add(IWhatever * whatever);
-    void remove(IWhatever * whatever);
+    void add(Mesh * mesh);
+    void add(Program * program);
+    void add(Camera * camera);
+    void remove(Mesh * mesh);
+    void remove(Program * program);
+    void remove(Camera * camera);
 
     void update(double);
     void postUpdate();

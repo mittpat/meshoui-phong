@@ -108,15 +108,18 @@ public:
     ~RendererPrivate();
     RendererPrivate();
 
-    void registerGraphics(IWhatever * whatever);
-    void unregisterGraphics(IWhatever * whatever);
-    void bindGraphics(IWhatever * whatever);
-    void unbindGraphics(IWhatever * whatever);
+    void registerGraphics(Mesh * mesh);
+    void registerGraphics(Program * program);
+    void unregisterGraphics(Mesh * mesh);
+    void unregisterGraphics(Program * program);
+    void bindGraphics(Mesh * mesh);
+    void bindGraphics(Program * program);
+    void unbindGraphics(Mesh * mesh);
+    void unbindGraphics(Program * program);
     void setProgramUniforms(Mesh * mesh);
     void setProgramUniform(Program * program, IUniform * uniform);
     void unsetProgramUniform(Program * program, IUniform * uniform);
     void draw(Program * program, Mesh * mesh);
-    bool convertMeshToBinary(const std::string & from, const std::string & to);
     const MeshFile & load(const std::string & filename);
 
     SDL_Window * window;
