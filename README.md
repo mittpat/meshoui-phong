@@ -1,5 +1,6 @@
 # meshoui - Simple Collada importer and viewer
-=====
+
+![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.jpg)
 
 Notes
 -------
