@@ -18,4 +18,4 @@ Todo
 License
 -------
 
-meshoui is licensed by under the MIT License, see LICENSE for more information.
+meshoui is licensed by Patrick Pelletier under the MIT License, see LICENSE for more information.
