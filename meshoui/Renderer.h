@@ -1,14 +1,12 @@
 #pragma once
 
-#include "Mesh.h"
 #include <linalg.h>
 
 #include <vector>
 
-class Vertex;
 class Camera;
+class Mesh;
 class Program;
-class Widget;
 class RendererPrivate;
 class Renderer final
 {
@@ -36,8 +34,6 @@ public:
     Program * defaultProgram;
 
 private:
-    void dispatch(Mesh * mesh);
-
     RendererPrivate * d;
     std::vector<Camera *> cameras;
     std::vector<Mesh *> meshes;

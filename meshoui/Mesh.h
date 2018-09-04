@@ -10,7 +10,7 @@
 class Program;
 class RendererPrivate;
 class IUniform;
-class Mesh final
+class Mesh
 {
 public:
     virtual ~Mesh();

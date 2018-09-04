@@ -8,7 +8,7 @@
 class IUniform;
 class Mesh;
 class RendererPrivate;
-class Program final
+class Program
 {
 public:
     virtual ~Program();

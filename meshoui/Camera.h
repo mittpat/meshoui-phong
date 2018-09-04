@@ -3,7 +3,7 @@
 #include "enums.h"
 #include <linalg.h>
 
-class Camera final
+class Camera
 {
 public:
     virtual ~Camera();
