@@ -1,7 +1,18 @@
 #include "Camera.h"
+#include "RendererPrivate.h"
 
 using namespace linalg;
 using namespace linalg::aliases;
+
+void Camera::enable(bool asLight)
+{
+    d->bindGraphics(this, asLight);
+}
+
+void Camera::disable()
+{
+    d->unbindGraphics(this);
+}
 
 linalg::aliases::float4x4 Camera::viewMatrix(View::Flags op) const
 {

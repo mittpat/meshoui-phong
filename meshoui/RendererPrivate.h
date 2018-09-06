@@ -2,6 +2,7 @@
 
 #include "gltypes.h"
 #include "hashid.h"
+#include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
 
@@ -110,12 +111,16 @@ public:
 
     void registerGraphics(Mesh * mesh);
     void registerGraphics(Program * program);
+    void registerGraphics(Camera * cam);
     void unregisterGraphics(Mesh * mesh);
     void unregisterGraphics(Program * program);
+    void unregisterGraphics(Camera * cam);
     void bindGraphics(Mesh * mesh);
     void bindGraphics(Program * program);
+    void bindGraphics(Camera * cam, bool asLight = false);
     void unbindGraphics(Mesh * mesh);
     void unbindGraphics(Program * program);
+    void unbindGraphics(Camera * cam);
     void setProgramUniforms(Mesh * mesh);
     void setProgramUniform(Program * program, IUniform * uniform);
     void unsetProgramUniform(Program * program, IUniform * uniform);
@@ -133,5 +138,9 @@ public:
 
     bool toFullscreen;
     bool fullscreen;
+
+    linalg::aliases::float4x4 projectionMatrix;
+    Camera * camera;
+    std::vector<Light *> lights;
 };
 inline RendererPrivate::~RendererPrivate() {}

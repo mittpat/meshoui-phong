@@ -23,7 +23,8 @@ add_library(meshouilib
     TextureLoader.cpp
     TextureLoader.h
     Uniform.cpp
-    Uniform.h)
+    Uniform.h
+    Widget.h)
 
 add_custom_target(meshouiresources
     DEPENDS ${Resources}

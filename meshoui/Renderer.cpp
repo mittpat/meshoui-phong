@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Program.h"
 #include "Uniform.h"
+#include "Widget.h"
 
 #include "loose.h"
 
@@ -22,9 +23,6 @@ using namespace linalg::aliases;
 
 Renderer::~Renderer()
 {
-    remove(defaultProgram);
-    delete defaultProgram;
-
     // imgui cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
@@ -39,15 +37,11 @@ Renderer::~Renderer()
 }
 
 Renderer::Renderer(bool gles)
-    : projectionMatrix(linalg::perspective_matrix(degreesToRadians(90.f), 1280/800.f, 0.1f, 1000.f))
-    , sun(0.6f, 0.8f)
-    , defaultProgram(new Program())
+    : defaultProgram(nullptr)
     , d(new RendererPrivate)
     , meshes()
     , programs()
 {
-    defaultProgram->load("meshoui/resources/shaders/Phong.shader");
-
     // sdl & gl
     SDL_InitSubSystem(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG);
@@ -84,8 +78,6 @@ Renderer::Renderer(bool gles)
     ImGui_ImplSDL2_InitForOpenGL(d->window, d->glContext);
     ImGui_ImplOpenGL3_Init("#version 150");
     ImGui::StyleColorsDark();
-
-    add(defaultProgram);
 }
 
 void Renderer::add(Mesh * mesh)
@@ -106,6 +98,8 @@ void Renderer::add(Program * program)
         programs.push_back(program);
         d->registerGraphics(program);
     }
+    if (defaultProgram == nullptr)
+        defaultProgram = program;
 }
 
 void Renderer::add(Camera * camera)
@@ -113,6 +107,15 @@ void Renderer::add(Camera * camera)
     if (std::find(cameras.begin(), cameras.end(), camera) == cameras.end())
     {
         cameras.push_back(camera);
+        d->registerGraphics(camera);
+    }
+}
+
+void Renderer::add(Widget * widget)
+{
+    if (std::find(widgets.begin(), widgets.end(), widget) == widgets.end())
+    {
+        widgets.push_back(widget);
     }
 }
 
@@ -128,11 +131,19 @@ void Renderer::remove(Program* program)
 {
     d->unregisterGraphics(program);
     programs.erase(std::remove(programs.begin(), programs.end(), program));
+    if (defaultProgram == program)
+        defaultProgram = nullptr;
 }
 
 void Renderer::remove(Camera* camera)
 {
+    d->unregisterGraphics(camera);
     cameras.erase(std::remove(cameras.begin(), cameras.end(), camera));
+}
+
+void Renderer::remove(Widget * widget)
+{
+    widgets.erase(std::remove(widgets.begin(), widgets.end(), widget));
 }
 
 void Renderer::update(double)
@@ -151,14 +162,6 @@ void Renderer::update(double)
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glDepthMask(GL_TRUE);
-
-    static const float SunDistance = 1000.f;
-    if (auto lightPositionUniform = dynamic_cast<Uniform3fv *>(defaultProgram->uniform("uniformLightPosition")))
-    {
-        static const float3 up(0.,1.,0.);
-        static const float3 right(-1.,0.,0.);
-        lightPositionUniform->value = mul(rotation_matrix(qmul(rotation_quat(up, sun.y), rotation_quat(right, sun.x))), float4(0., 0., 1., 1.0)).xyz() * SunDistance;
-    }
 
     renderMeshes();
     renderWidgets();
@@ -214,21 +217,6 @@ void Renderer::renderMeshes()
         if (mesh->renderFlags & Render::BackFaceCulling)
             glEnable(GL_CULL_FACE);
 
-        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformModel")))
-            uniform->value = mesh->modelMatrix();
-        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformProjection")))
-            uniform->value = mesh->viewFlags == View::None ? identity : projectionMatrix;
-        if (!cameras.empty())
-        {
-            if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformView")))
-                uniform->value = cameras[0]->viewMatrix(mesh->viewFlags);
-            if (auto uniform = dynamic_cast<Uniform3fv*>(mesh->program->uniform("uniformViewPosition")))
-            {
-                float4 v = inverse(cameras[0]->viewMatrix(View::Rotation | View::Translation))[3];
-                uniform->value = float3(v.x,v.y,v.z);
-            }
-        }
-
         d->bindGraphics(mesh->program);
         mesh->program->applyUniforms();
         mesh->applyUniforms();
@@ -261,11 +249,15 @@ void Renderer::renderWidgets()
             sdlevent.type = SDL_QUIT;
             SDL_PushEvent(&sdlevent);
         }
-        ImGui::SliderFloat2("Sun", &sun[0], -M_PI, M_PI);
     }
     if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Checkbox("fullscreen", &d->toFullscreen);
+    }
+    for (auto * widget : widgets)
+    {
+        if (widget->window == "Main window")
+            widget->draw();
     }
     if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -304,18 +296,31 @@ void Renderer::renderWidgets()
     }
     ImGui::End();
 
+    for (auto * widget : widgets)
+    {
+        if (widget->window != "Main window")
+            widget->draw();
+    }
+
     // Rendering
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-std::vector<Mesh *> Renderer::meshFactory(const std::string &filename)
+bool Renderer::load(const std::string &filename, size_t &count)
 {
-    std::vector<Mesh *> ret;
     const MeshFile & fileCache = d->load(filename);
-    for (const auto & instance : fileCache.instances)
+    count = fileCache.instances.size();
+    return count > 0;
+}
+
+void Renderer::fill(const std::string &filename, std::vector<Mesh *> &m)
+{
+    const MeshFile & fileCache = d->load(filename);
+    for (size_t i = 0; i < fileCache.instances.size(); ++i)
     {
-        Mesh * mesh = new Mesh();
+        const MeshInstance & instance = fileCache.instances[i];
+        Mesh * mesh = m[i];
         mesh->name = instance.instanceId;
         mesh->instanceId = instance.instanceId;
         mesh->definitionId = instance.definitionId;
@@ -326,7 +331,5 @@ std::vector<Mesh *> Renderer::meshFactory(const std::string &filename)
         auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
         if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
         add(mesh);
-        ret.push_back(mesh);
     }
-    return ret;
 }

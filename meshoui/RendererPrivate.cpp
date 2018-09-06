@@ -13,6 +13,8 @@
 #include <experimental/filesystem>
 #include <fstream>
 
+using namespace linalg;
+using namespace linalg::aliases;
 namespace std { namespace filesystem = experimental::filesystem; }
 
 namespace
@@ -348,6 +350,8 @@ RendererPrivate::RendererPrivate()
     , glewError(0)
     , toFullscreen(false)
     , fullscreen(false)
+    , projectionMatrix(linalg::perspective_matrix(degreesToRadians(90.f), 1280/800.f, 0.1f, 1000.f))
+    , camera(nullptr)
 {
     
 }
@@ -403,6 +407,11 @@ void RendererPrivate::registerGraphics(Program * program)
     programRegistrations.push_back(std::make_pair(program, programRegistration));
 }
 
+void RendererPrivate::registerGraphics(Camera * cam)
+{
+    cam->d = this;
+}
+
 void RendererPrivate::unregisterGraphics(Mesh * mesh)
 {
     auto found = std::find_if(meshRegistrations.begin(), meshRegistrations.end(), [mesh](const MeshRegistration & meshRegistration)
@@ -439,6 +448,12 @@ void RendererPrivate::unregisterGraphics(Program * program)
     program->d = nullptr;
 }
 
+void RendererPrivate::unregisterGraphics(Camera *cam)
+{
+    unbindGraphics(cam);
+    cam->d = nullptr;
+}
+
 void RendererPrivate::bindGraphics(Mesh * mesh)
 {
     bindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
@@ -449,6 +464,14 @@ void RendererPrivate::bindGraphics(Program * program)
     bindProgram(registrationFor(programRegistrations, program));
 }
 
+void RendererPrivate::bindGraphics(Camera *cam, bool asLight)
+{
+    if (asLight && std::find(lights.begin(), lights.end(), cam) == lights.end())
+        lights.push_back(cam);
+    else
+        camera = cam;
+}
+
 void RendererPrivate::unbindGraphics(Mesh * mesh)
 {
     unbindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
@@ -457,6 +480,14 @@ void RendererPrivate::unbindGraphics(Mesh * mesh)
 void RendererPrivate::unbindGraphics(Program * program)
 {
     unbindProgram(registrationFor(programRegistrations, program));
+}
+
+void RendererPrivate::unbindGraphics(Camera *cam)
+{
+    if (camera == cam)
+        camera = nullptr;
+    if (std::find(lights.begin(), lights.end(), cam) != lights.end())
+        lights.erase(std::remove(lights.begin(), lights.end(), cam));
 }
 
 void RendererPrivate::setProgramUniforms(Mesh * mesh)
@@ -528,8 +559,29 @@ void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
     }
 }
 
-void RendererPrivate::draw(Program *, Mesh * mesh)
+void RendererPrivate::draw(Program * program, Mesh * mesh)
 {
+    if (!lights.empty())
+    {
+        if (auto uniform = dynamic_cast<Uniform3fv *>(program->uniform("sunPosition")))
+            uniform->value = normalize(lights[0]->position);
+        if (auto uniform = dynamic_cast<Uniform3fv *>(program->uniform("uniformLightPosition")))
+            uniform->value = lights[0]->position;
+    }
+
+    if (camera != nullptr)
+    {
+        if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformView")))
+            uniform->value = camera->viewMatrix(mesh->viewFlags);
+        if (auto uniform = dynamic_cast<Uniform3fv*>(program->uniform("uniformViewPosition")))
+            uniform->value = inverse(camera->viewMatrix(View::Rotation | View::Translation))[3].xyz();
+    }
+
+    if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformModel")))
+        uniform->value = mesh->modelMatrix();
+    if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformProjection")))
+        uniform->value = mesh->viewFlags == View::None ? identity : projectionMatrix;
+
     glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
 }
 
