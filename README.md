@@ -1,4 +1,4 @@
-# meshoui - Simple Collada importer and viewer
+# meshoui - Simple Collada parser and viewer
 
 ![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.jpg)
 
@@ -18,4 +18,4 @@ Todo
 License
 -------
 
-meshoui is licensed by under the MIT License, see LICENSE for more information.
+meshoui is licensed by Patrick Pelletier under the MIT License, see LICENSE for more information.
