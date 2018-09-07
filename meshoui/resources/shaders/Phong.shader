@@ -10,4 +10,5 @@ uniformAmbient=0.0 0.0 0.0
 uniformDiffuse=0.0 0.0 0.0
 uniformSpecular=0.0 0.0 0.0
 uniformEmissive=0.0 0.0 0.0
-uniformWind=0.0 0.0 0.0
+uniformFogColor=0.4 0.5 0.75
+uniformFog=100.0 50.0

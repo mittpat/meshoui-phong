@@ -12,4 +12,4 @@ public:
     HashId window;
 };
 inline Widget::~Widget() {}
-inline Widget::Widget() {}
+inline Widget::Widget() : window("Main window") {}

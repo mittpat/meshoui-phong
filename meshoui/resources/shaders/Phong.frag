@@ -24,6 +24,8 @@ uniform vec3 uniformAmbient;
 uniform vec3 uniformDiffuse;
 uniform vec3 uniformSpecular;
 uniform vec3 uniformEmissive;
+uniform vec3 uniformFogColor;
+uniform vec2 uniformFog;// (100.0, 50.0)
 
 void alphaTest(inout vec4 color)
 {
@@ -59,4 +61,7 @@ void main()
 
         fragment += vec4(diffuse * textureDiffuse.rgb + specular, 0.0);
     }
+
+    vec3 fogColor = mix(ambient, uniformFogColor, pow(max(dot(vec3(0.0,1.0,0.0), lightDir), 0.0), 0.25));
+    fragment = mix(fragment, vec4(fogColor, 1.0), clamp((distance(uniformViewPosition, vertex) - uniformFog.x) / uniformFog.y, 0.0, 1.0));
 }
