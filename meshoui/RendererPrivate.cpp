@@ -120,31 +120,35 @@ namespace
             break;
         }
     }
-}
 
-bool RendererPrivate::registerShader(GLenum shaderType, const std::string & shaderSource, GLuint & shader, std::string * const error)
-{
-    shader = glCreateShader(shaderType);
-    const char * shaderSource_str = shaderSource.c_str();
-    glShaderSource(shader, 1, &shaderSource_str, nullptr);
-    glCompileShader(shader);
-
-    GLint shaderCompiled = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &shaderCompiled);
-    if (shaderCompiled != GL_TRUE)
+    bool registerShader(GLenum shaderType, const std::vector<std::string> & defines, const std::string & shaderSource, GLuint & shader, std::string * const error)
     {
-        if (error != nullptr)
-        {
-            GLint infoLogLength = 0;
-            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLength );
-            error->resize(infoLogLength);
-            glGetShaderInfoLog(shader, infoLogLength, &infoLogLength, &(*error)[0]);
-        }
+        shader = glCreateShader(shaderType);
+        std::vector<const char *> shaderSource_str;
+        for (const auto & def : defines)
+            shaderSource_str.push_back(def.c_str());
+        shaderSource_str.push_back(shaderSource.c_str());
 
-        glDeleteShader(shader);
-        return false;
+        glShaderSource(shader, shaderSource_str.size(), shaderSource_str.data(), nullptr);
+        glCompileShader(shader);
+
+        GLint shaderCompiled = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &shaderCompiled);
+        if (shaderCompiled != GL_TRUE)
+        {
+            if (error != nullptr)
+            {
+                GLint infoLogLength = 0;
+                glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLength );
+                error->resize(infoLogLength);
+                glGetShaderInfoLog(shader, infoLogLength, &infoLogLength, &(*error)[0]);
+            }
+
+            glDeleteShader(shader);
+            return false;
+        }
+        return true;
     }
-    return true;        
 }
 
 void RendererPrivate::unregisterProgram(const ProgramRegistration & programRegistration)
@@ -163,10 +167,10 @@ void RendererPrivate::unregisterProgram(const ProgramRegistration & programRegis
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
 {
     GLuint vertex, fragment;
-    if (!registerShader(GL_VERTEX_SHADER, program->vertexShaderSource, vertex, &program->lastError))
+    if (!registerShader(GL_VERTEX_SHADER, program->defines, program->vertexShaderSource, vertex, &program->lastError))
         return false;
 
-    if (!registerShader(GL_FRAGMENT_SHADER, program->fragmentShaderSource, fragment, &program->lastError))
+    if (!registerShader(GL_FRAGMENT_SHADER, program->defines, program->fragmentShaderSource, fragment, &program->lastError))
         return false;
 
     programRegistration.program = glCreateProgram();
@@ -267,17 +271,22 @@ void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistrat
 
 void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 {
-    glDeleteBuffers(1, &meshRegistration.indexBuffer);
-    glDeleteBuffers(1, &meshRegistration.vertexBuffer);
+    if (meshRegistration.indexBuffer != 0)
+        glDeleteBuffers(1, &meshRegistration.indexBuffer);
+    if (meshRegistration.vertexBuffer != 0)
+        glDeleteBuffers(1, &meshRegistration.vertexBuffer);
 }
 
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
-    glGenBuffers(1, &meshRegistration.indexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshDefinition.indices.size() * sizeof(unsigned int), nullptr, GL_STATIC_DRAW);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, meshDefinition.indices.size() * sizeof(unsigned int), meshDefinition.indices.data());
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if (!meshDefinition.indices.empty())
+    {
+        glGenBuffers(1, &meshRegistration.indexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshDefinition.indices.size() * sizeof(unsigned int), nullptr, GL_STATIC_DRAW);
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, meshDefinition.indices.size() * sizeof(unsigned int), meshDefinition.indices.data());
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
 
     glGenBuffers(1, &meshRegistration.vertexBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
@@ -286,53 +295,41 @@ void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRe
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     meshRegistration.indexBufferSize = meshDefinition.indices.size();
+    meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
     meshRegistration.definitionId = meshDefinition.definitionId;
 }
 
 void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
 {
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
+    if (meshRegistration.indexBuffer != 0)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
+
+    if (meshRegistration.vertexBuffer != 0)
+        glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
 
     size_t offset = 0;
-    for (const HashId & attributeName : Vertex::Attributes)
+    for (const Attribute & attributeDef : Vertex::Attributes)
     {
-        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeName](const ProgramAttribute & attribute)
+        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeDef](const ProgramAttribute & attribute)
         {
-            return attribute.name == attributeName;
+            return attribute.name == attributeDef.name;
         });
         if (found != programRegistration.attributes.end())
         {
             glEnableVertexAttribArray((*found).index);
-
-            switch ((*found).type)
-            {
-            case GL_FLOAT_VEC2_ARB:
-                glVertexAttribPointer((*found).index, 2, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
-                offset += 2 * sizeof(GLfloat);
-                break;
-            case GL_FLOAT_VEC3_ARB:
-                glVertexAttribPointer((*found).index, 3, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
-                offset += 3 * sizeof(GLfloat);
-                break;
-            case GL_FLOAT_VEC4_ARB:
-                glVertexAttribPointer((*found).index, 4, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
-                offset += 4 * sizeof(GLfloat);
-                break;
-            default:
-                break;
-            }
         }
+        glVertexAttribPointer((*found).index, attributeDef.size, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
+        offset += attributeDef.size * sizeof(GLfloat);
     }
 }
 
 void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
 {
-    for (const HashId & attributeName : Vertex::Attributes)
+    for (const Attribute & attributeDef : Vertex::Attributes)
     {
-        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeName](const ProgramAttribute & attribute)
+        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeDef](const ProgramAttribute & attribute)
         {
-            return attribute.name == attributeName;
+            return attribute.name == attributeDef.name;
         });
         if (found != programRegistration.attributes.end())
         {
@@ -410,6 +407,30 @@ void RendererPrivate::registerGraphics(Program * program)
 void RendererPrivate::registerGraphics(Camera * cam)
 {
     cam->d = this;
+}
+
+void RendererPrivate::registerGraphics(const MeshFile &meshFile)
+{
+    for (const auto & definition : meshFile.definitions)
+    {
+        printf("%s\n", definition.definitionId.str.c_str());
+
+        MeshRegistration meshRegistration;
+        registerMesh(definition, meshRegistration);
+        meshRegistrations.push_back(meshRegistration);
+    }
+    for (const auto & material : meshFile.materials)
+    {
+        for (auto value : material.values)
+        {
+            if (enumForVectorSize(value.data.size()) == GL_SAMPLER_2D_ARB && !value.filename.empty())
+            {
+                TextureRegistration textureRegistration = TextureRegistration(value.filename);
+                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename.str));
+                textureRegistrations.push_back(textureRegistration);
+            }
+        }
+    }
 }
 
 void RendererPrivate::unregisterGraphics(Mesh * mesh)
@@ -559,30 +580,16 @@ void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
     }
 }
 
-void RendererPrivate::draw(Program * program, Mesh * mesh)
+void RendererPrivate::draw(Program *, Mesh * mesh)
 {
-    if (!lights.empty())
+    if (mesh->renderFlags & Render::Points)
     {
-        if (auto uniform = dynamic_cast<Uniform3fv *>(program->uniform("sunPosition")))
-            uniform->value = normalize(lights[0]->position);
-        if (auto uniform = dynamic_cast<Uniform3fv *>(program->uniform("uniformLightPosition")))
-            uniform->value = lights[0]->position;
+        glDrawArrays(GL_POINTS, 0, registrationFor(meshRegistrations, mesh).vertexBufferSize);
     }
-
-    if (camera != nullptr)
+    else
     {
-        if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformView")))
-            uniform->value = camera->viewMatrix(mesh->viewFlags);
-        if (auto uniform = dynamic_cast<Uniform3fv*>(program->uniform("uniformViewPosition")))
-            uniform->value = inverse(camera->viewMatrix(View::Rotation | View::Translation))[3].xyz();
+        glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
     }
-
-    if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformModel")))
-        uniform->value = mesh->modelMatrix();
-    if (auto uniform = dynamic_cast<Uniform44fm*>(program->uniform("uniformProjection")))
-        uniform->value = mesh->viewFlags == View::None ? identity : projectionMatrix;
-
-    glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
 }
 
 const MeshFile& RendererPrivate::load(const std::string &filename)
@@ -596,25 +603,7 @@ const MeshFile& RendererPrivate::load(const std::string &filename)
         MeshFile fileCache;
         if (MeshLoader::load(filename, fileCache))
         {
-            for (const auto & definition : fileCache.definitions)
-            {
-                MeshRegistration meshRegistration;
-                registerMesh(definition, meshRegistration);
-                meshRegistrations.push_back(meshRegistration);
-            }
-            for (const auto & material : fileCache.materials)
-            {
-                for (auto value : material.values)
-                {
-                    if (enumForVectorSize(value.data.size()) == GL_SAMPLER_2D_ARB && !value.filename.empty())
-                    {
-                        TextureRegistration textureRegistration = TextureRegistration(value.filename);
-                        texture(&textureRegistration.buffer, sibling(value.filename, fileCache.filename.str));
-                        textureRegistrations.push_back(textureRegistration);
-                    }
-                }
-            }
-
+            registerGraphics(fileCache);
             meshCache.push_back(fileCache);
             return meshCache.back();
         }

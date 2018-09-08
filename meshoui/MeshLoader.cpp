@@ -12,8 +12,20 @@ using namespace linalg;
 using namespace linalg::aliases;
 namespace std { namespace filesystem = experimental::filesystem; }
 
-const std::array<HashId, 5> Vertex::Attributes = { "vertexPosition", "vertexTexcoord", "vertexNormal", "vertexTangent", "vertexBitangent" };
+const std::array<Attribute, 5> Vertex::Attributes =
+{ Attribute{"vertexPosition",  3},
+  Attribute{"vertexTexcoord",  2},
+  Attribute{"vertexNormal",    3},
+  Attribute{"vertexTangent",   3},
+  Attribute{"vertexBitangent", 3} };
 const size_t Vertex::AttributeDataSize = sizeof(Vertex);
+
+const MeshMaterial MeshMaterial::kDefault = MeshMaterial{"Default",
+                                       {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
+                                        MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")),
+                                        MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")),
+                                        MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000"))}};
+
 
 namespace
 {
@@ -152,6 +164,22 @@ namespace
     }
 }
 
+MeshFile MeshFile::kDefault(HashId name, size_t v)
+{
+    MeshFile fileCache;
+    fileCache.filename = name;
+    fileCache.materials.push_back(MeshMaterial::kDefault);
+
+    MeshDefinition definition(name, v);
+    fileCache.definitions.push_back(definition);
+
+    MeshInstance instance(name, definition);
+    instance.materialId = MeshMaterial::kDefault.name;
+    fileCache.instances.push_back(instance);
+
+    return fileCache;
+}
+
 bool MeshLoader::load(const std::string & filename, MeshFile &fileCache)
 {
     if (MeshLoader::loadDae(filename, fileCache))
@@ -221,12 +249,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     }
     if (fileCache.materials.empty())
     {
-        MeshMaterial material;
-        material.values.push_back(MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")));
-        material.values.push_back(MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")));
-        material.values.push_back(MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")));
-        material.values.push_back(MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000")));
-        fileCache.materials.push_back(material);
+        fileCache.materials.push_back(MeshMaterial::kDefault);
     }
     std::vector<LibraryGeometry> libraryGeometries;
     for (pugi::xml_node elem_geometry : root.child("library_geometries"))
@@ -402,6 +425,8 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
             instance_geometry.traverse(instanceMaterial);
             if (!instanceMaterial.materialId.empty())
                 instance.materialId = instanceMaterial.materialId;
+            else
+                instance.materialId = MeshMaterial::kDefault.name;
             float3x3 rot = identity;
             linalg::split(transform, instance.position, instance.scale, rot);
             rot = transpose(rot);

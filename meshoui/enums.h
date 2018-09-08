@@ -8,6 +8,7 @@ struct View
 
 struct Render
 {
-    enum Flag { None = 0x0, DepthTest = 0x01, Filtering = 0x02, Anisotropic = 0x04, Mipmap = 0x08, Blend = 0x10, BackFaceCulling = 0x20, DepthWrite = 0x40, Default = DepthTest | Filtering | Anisotropic | Mipmap | BackFaceCulling | DepthWrite, All = 0xFF };
+    enum Flag { None = 0x0, DepthTest = 0x01, Filtering = 0x02, Anisotropic = 0x04, Mipmap = 0x08, Blend = 0x10, BackFaceCulling = 0x20, DepthWrite = 0x40, Points = 0x80,
+                Default = DepthTest | Filtering | Anisotropic | Mipmap | BackFaceCulling | DepthWrite, All = 0xFF };
     typedef int Flags;
 };

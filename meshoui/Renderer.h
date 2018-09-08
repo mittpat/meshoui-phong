@@ -5,8 +5,10 @@
 #include <algorithm>
 #include <vector>
 
+#include "Mesh.h"
+
 class Camera;
-class Mesh;
+class MeshFile;
 class Program;
 class Widget;
 class RendererPrivate;
@@ -25,21 +27,25 @@ public:
     void remove(Camera * camera);
     void remove(Widget * widget);
 
-    void update(double);
+    void update(double s);
     void postUpdate();
     void renderMeshes();
     void renderWidgets();
 
     bool load(const std::string & filename, size_t & count);
-    void fill(const std::string & filename, std::vector<Mesh *> & m);
+    bool produce(const std::string & name, size_t &count);
+    void fill(const std::string & filename, const std::vector<Mesh *> &m);
+    void fill(const MeshFile & fileCache, const std::vector<Mesh *> &m);
 
     template <typename T>
     std::vector<T *> meshFactory(const std::string & filename);
 
+    RendererPrivate * d;
+
     Program * defaultProgram;
+    float time;
 
 private:
-    RendererPrivate * d;
     std::vector<Camera *> cameras;
     std::vector<Mesh *> meshes;
     std::vector<Program *> programs;

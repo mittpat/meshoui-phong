@@ -82,10 +82,11 @@ public:
     GLuint indexBuffer;
     GLuint vertexBuffer;
     size_t indexBufferSize;
+    size_t vertexBufferSize;
     size_t referenceCount;
 };
 inline MeshRegistration::~MeshRegistration() {}
-inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), referenceCount(0) {}
+inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
 
 class IGraphics;
 class IUniform;
@@ -96,7 +97,6 @@ typedef std::vector<TextureRegistration> TextureRegistrations;
 class RendererPrivate final
 {
 public:
-    static bool registerShader(GLenum shaderType, const std::string & shaderSource, GLuint & shader, std::string * const error);
     static void unregisterProgram(const ProgramRegistration & programRegistration);
     static bool registerProgram(Program * program, ProgramRegistration & programRegistration);
     static void bindProgram(const ProgramRegistration & programRegistration);
@@ -112,6 +112,7 @@ public:
     void registerGraphics(Mesh * mesh);
     void registerGraphics(Program * program);
     void registerGraphics(Camera * cam);
+    void registerGraphics(const MeshFile & meshFile);
     void unregisterGraphics(Mesh * mesh);
     void unregisterGraphics(Program * program);
     void unregisterGraphics(Camera * cam);

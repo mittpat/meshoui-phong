@@ -30,6 +30,9 @@ public:
     // applied on next frame
     std::vector<IUniform *> uniforms;
 
+    // define constants
+    std::vector<std::string> defines;
+
     // outputs
     bool linked;
     std::string lastError;

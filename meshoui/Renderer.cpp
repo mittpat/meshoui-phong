@@ -37,8 +37,9 @@ Renderer::~Renderer()
 }
 
 Renderer::Renderer(bool gles)
-    : defaultProgram(nullptr)
-    , d(new RendererPrivate)
+    : d(new RendererPrivate)
+    , defaultProgram(nullptr)
+    , time(0.f)
     , meshes()
     , programs()
 {
@@ -146,7 +147,7 @@ void Renderer::remove(Widget * widget)
     widgets.erase(std::remove(widgets.begin(), widgets.end(), widget));
 }
 
-void Renderer::update(double)
+void Renderer::update(double s)
 {
     glClearColor(0.f, 0.f, 0.f, 1.f);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -169,6 +170,8 @@ void Renderer::update(double)
     SDL_GL_SwapWindow(d->window);
 
     postUpdate();
+
+    time += s;
 }
 
 void Renderer::postUpdate()
@@ -217,6 +220,33 @@ void Renderer::renderMeshes()
         if (mesh->renderFlags & Render::BackFaceCulling)
             glEnable(GL_CULL_FACE);
 
+        if (mesh->renderFlags & Render::Points)
+            glPointSize(mesh->scale.x);
+
+        if (!d->lights.empty())
+        {
+            if (auto uniform = dynamic_cast<Uniform3fv *>(mesh->program->uniform("sunPosition")))
+                uniform->value = normalize(d->lights[0]->position);
+            if (auto uniform = dynamic_cast<Uniform3fv *>(mesh->program->uniform("uniformLightPosition")))
+                uniform->value = d->lights[0]->position;
+        }
+
+        if (d->camera != nullptr)
+        {
+            if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformView")))
+                uniform->value = d->camera->viewMatrix(mesh->viewFlags);
+            if (auto uniform = dynamic_cast<Uniform3fv*>(mesh->program->uniform("uniformViewPosition")))
+                uniform->value = inverse(d->camera->viewMatrix(View::Rotation | View::Translation))[3].xyz();
+        }
+
+        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformModel")))
+            uniform->value = mesh->modelMatrix();
+        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformProjection")))
+            uniform->value = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
+
+        if (auto uniform = dynamic_cast<Uniform2fv*>(mesh->program->uniform("uniformTime")))
+            uniform->value = float2(time, 0.016f);
+
         d->bindGraphics(mesh->program);
         mesh->program->applyUniforms();
         mesh->applyUniforms();
@@ -227,6 +257,7 @@ void Renderer::renderMeshes()
         mesh->program->unapplyUniforms();
         d->unbindGraphics(mesh->program);
 
+        glPointSize(1.0f);
         glDisable(GL_CULL_FACE);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
@@ -314,9 +345,14 @@ bool Renderer::load(const std::string &filename, size_t &count)
     return count > 0;
 }
 
-void Renderer::fill(const std::string &filename, std::vector<Mesh *> &m)
+void Renderer::fill(const std::string &filename, const std::vector<Mesh *> &m)
 {
     const MeshFile & fileCache = d->load(filename);
+    fill(fileCache, m);
+}
+
+void Renderer::fill(const MeshFile & fileCache, const std::vector<Mesh *> &m)
+{
     for (size_t i = 0; i < fileCache.instances.size(); ++i)
     {
         const MeshInstance & instance = fileCache.instances[i];
