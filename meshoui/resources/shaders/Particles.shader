@@ -15,5 +15,6 @@ uniformFogColor=0.4 0.5 0.75
 uniformFog=100.0 50.0
 uniformEffect=2.0 10.0
 [defines]
+version=150
 PARTICLES=1
 FOG=1

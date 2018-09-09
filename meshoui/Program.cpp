@@ -70,16 +70,16 @@ void Program::load(const std::string & filename)
             readUniform(filename, split(key, ':')[1], line, this);
         }
     }
-
-    defines.push_back("#version 150\n");
-
+    defines.push_back(std::string("#version") + " " + iniparser_getstring(ini, "defines:version", "150") + "\n");
     std::vector<const char*> defKeys(iniparser_getsecnkeys(ini, "defines"), nullptr);
     if (iniparser_getseckeys(ini, "defines", defKeys.data()) != nullptr)
     {
         for (const char * key : defKeys)
         {
-            std::string line = iniparser_getstring(ini, key, "");
-            defines.push_back(std::string("#define") + " " + split(key, ':')[1] + " " + line + "\n");
+            if (strcmp(key, "defines:version") == 0)
+                continue;
+            else
+                defines.push_back(std::string("#define") + " " + split(key, ':')[1] + " " + iniparser_getstring(ini, key, "") + "\n");
         }
     }
     iniparser_freedict(ini);

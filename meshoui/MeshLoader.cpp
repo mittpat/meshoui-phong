@@ -20,7 +20,7 @@ const std::array<Attribute, 5> Vertex::Attributes =
   Attribute{"vertexBitangent", 3} };
 const size_t Vertex::AttributeDataSize = sizeof(Vertex);
 
-const MeshMaterial MeshMaterial::kDefault = MeshMaterial{"Default",
+const MeshMaterial MeshMaterial::kDefault = MeshMaterial{HashId(),
                                        {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
                                         MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")),
                                         MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")),
@@ -188,6 +188,77 @@ bool MeshLoader::load(const std::string & filename, MeshFile &fileCache)
     return false;
 }
 
+namespace
+{
+    void processSceneElement(MeshFile & fileCache, pugi::xml_node elem_scene, float4x4 transform, const std::string & upAxis = "Z_UP")
+    {
+        for (pugi::xml_node property : elem_scene)
+        {
+            if (strcmp(property.name(), "matrix") == 0)
+            {
+                // Collada is row major
+                // linalg.h is column major
+                auto m44 = conv::stofa(property.child_value());
+                transform = mul(transform, float4x4(float4(m44[0], m44[4], m44[8], m44[12]),
+                                                    float4(m44[1], m44[5], m44[9], m44[13]),
+                                                    float4(m44[2], m44[6], m44[10], m44[14]),
+                                                    float4(m44[3], m44[7], m44[11], m44[15])));
+            }
+            else if (strcmp(property.name(), "translate") == 0)
+            {
+                transform = mul(transform, translation_matrix(conv::stof3(property.child_value())));
+            }
+            else if (strcmp(property.name(), "rotate") == 0)
+            {
+                auto v4 = float4(conv::stofa(property.child_value()).data());
+                transform = mul(transform, rotation_matrix(rotation_quat(float3(v4.x, v4.y, v4.z), degreesToRadians(v4.w))));
+            }
+            else if (strcmp(property.name(), "scale") == 0)
+            {
+                transform = mul(transform, scaling_matrix(conv::stof3(property.child_value())));
+            }
+            else
+            {
+                processSceneElement(fileCache, property, transform, upAxis);
+            }
+        }
+        if (upAxis == "Z_UP")
+        {
+            transform = mul(float4x4(float4(1, 0, 0, 0),
+                                     float4(0, 0,-1, 0),
+                                     float4(0, 1, 0, 0),
+                                     float4(0, 0, 0, 1)), transform);
+        }
+        else if (upAxis == "X_UP")
+        {
+            transform = mul(float4x4(float4( 0, 1, 0, 0),
+                                     float4(-1, 0, 0, 0),
+                                     float4( 0, 0, 1, 0),
+                                     float4( 0, 0, 0, 1)), transform);
+        }
+        if (auto instance_geometry = elem_scene.child("instance_geometry"))
+        {
+            HashId reference = remainder(instance_geometry.attribute("url").as_string(), "#");
+            auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [reference](const MeshDefinition & definition){ return definition.definitionId == reference; });
+
+            MeshInstance instance;
+            instance.instanceId = elem_scene.attribute("id").as_string();
+            instance.definitionId = (*definition).definitionId;
+            InstanceMaterialWalker instanceMaterial;
+            instance_geometry.traverse(instanceMaterial);
+            if (!instanceMaterial.materialId.empty())
+                instance.materialId = instanceMaterial.materialId;
+            else
+                instance.materialId = MeshMaterial::kDefault.name;
+            float3x3 rot = identity;
+            linalg::split(transform, instance.position, instance.scale, rot);
+            rot = transpose(rot);
+            instance.orientation = rotation_quat(rot);
+            fileCache.instances.push_back(instance);
+        }
+    }
+}
+
 bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
 {
     if (std::filesystem::path(filename).extension() != ".dae")
@@ -209,6 +280,8 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     auto root = doc.child("COLLADA");
     auto version = root.attribute("version");
     printf("COLLADA version '%s'\n", version.as_string());
+
+    fileCache.materials.push_back(MeshMaterial::kDefault);
 
     std::vector<LibraryImage> libraryImages;
     for (pugi::xml_node elem_image : root.child("library_images"))
@@ -246,10 +319,6 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
             }
             fileCache.materials.push_back(libraryMaterial);
         }
-    }
-    if (fileCache.materials.empty())
-    {
-        fileCache.materials.push_back(MeshMaterial::kDefault);
     }
     std::vector<LibraryGeometry> libraryGeometries;
     for (pugi::xml_node elem_geometry : root.child("library_geometries"))
@@ -372,67 +441,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     std::string upAxis = root.child("asset").child_value("up_axis");
     for (pugi::xml_node elem_scene : root.child("library_visual_scenes").child("visual_scene"))
     {
-        float4x4 transform = identity;
-        for (pugi::xml_node property : elem_scene)
-        {
-            if (strcmp(property.name(), "matrix") == 0)
-            {
-                // Collada is row major
-                // linalg.h is column major
-                auto m44 = conv::stofa(property.child_value());
-                transform = mul(transform, float4x4(float4(m44[0], m44[4], m44[8], m44[12]),
-                                                    float4(m44[1], m44[5], m44[9], m44[13]),
-                                                    float4(m44[2], m44[6], m44[10], m44[14]),
-                                                    float4(m44[3], m44[7], m44[11], m44[15])));
-            }
-            if (strcmp(property.name(), "translate") == 0)
-            {
-                transform = mul(transform, translation_matrix(conv::stof3(property.child_value())));
-            }
-            if (strcmp(property.name(), "rotate") == 0)
-            {
-                auto v4 = float4(conv::stofa(property.child_value()).data());
-                transform = mul(transform, rotation_matrix(rotation_quat(float3(v4.x, v4.y, v4.z), degreesToRadians(v4.w))));
-            }
-            if (strcmp(property.name(), "scale") == 0)
-            {
-                transform = mul(transform, scaling_matrix(conv::stof3(property.child_value())));
-            }
-        }
-        if (upAxis == "Z_UP")
-        {
-            transform = mul(float4x4(float4(1, 0, 0, 0),
-                                     float4(0, 0,-1, 0),
-                                     float4(0, 1, 0, 0),
-                                     float4(0, 0, 0, 1)), transform);
-        }
-        else if (upAxis == "X_UP")
-        {
-            transform = mul(float4x4(float4( 0, 1, 0, 0),
-                                     float4(-1, 0, 0, 0),
-                                     float4( 0, 0, 1, 0),
-                                     float4( 0, 0, 0, 1)), transform);
-        }
-        if (auto instance_geometry = elem_scene.child("instance_geometry"))
-        {
-            HashId reference = remainder(instance_geometry.attribute("url").as_string(), "#");
-            auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [reference](const MeshDefinition & definition){ return definition.definitionId == reference; });
-
-            MeshInstance instance;
-            instance.instanceId = elem_scene.attribute("id").as_string();
-            instance.definitionId = (*definition).definitionId;
-            InstanceMaterialWalker instanceMaterial;
-            instance_geometry.traverse(instanceMaterial);
-            if (!instanceMaterial.materialId.empty())
-                instance.materialId = instanceMaterial.materialId;
-            else
-                instance.materialId = MeshMaterial::kDefault.name;
-            float3x3 rot = identity;
-            linalg::split(transform, instance.position, instance.scale, rot);
-            rot = transpose(rot);
-            instance.orientation = rotation_quat(rot);
-            fileCache.instances.push_back(instance);
-        }
+        processSceneElement(fileCache, elem_scene, identity, upAxis);
     }
 
     fflush(stdout);
