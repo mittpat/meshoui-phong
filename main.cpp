@@ -28,11 +28,15 @@ int main(int, char**)
     light.position = mul(rotation_matrix(qmul(rotation_quat(up, 0.8f), rotation_quat(right, 0.6f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
     renderer.add(&light);
 
+    Model model("meshoui/resources/models/bricks.dae");
+    renderer.add(&model);
+
     {
         camera.enable();
         light.enable(true);
 
-        auto meshes = renderer.meshFactory<Mesh>("meshoui/resources/models/bricks.dae");
+        auto meshes = model.meshFactory<Mesh>();
+        for (auto mesh : meshes) renderer.add(mesh);
 
         bool run = true;
         while (run)
@@ -48,6 +52,7 @@ int main(int, char**)
         for (auto mesh : meshes) renderer.remove(mesh);
     }
 
+    renderer.remove(&model);
     renderer.remove(&light);
     renderer.remove(&camera);
     renderer.remove(&program);

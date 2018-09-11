@@ -353,46 +353,16 @@ RendererPrivate::RendererPrivate()
     
 }
 
+void RendererPrivate::registerGraphics(Model *model)
+{
+    model->d = this;
+    load(model->filename);
+}
+
 void RendererPrivate::registerGraphics(Mesh * mesh)
 {
     mesh->d = this;
-    const MeshFile & fileCache = load(mesh->filename);
     const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
-    if (meshRegistration->definitionId == HashId())
-    {
-        const MeshInstance & instance = fileCache.instances[0];
-        mesh->name = instance.instanceId;
-        mesh->instanceId = instance.instanceId;
-        mesh->definitionId = instance.definitionId;
-        mesh->filename = fileCache.filename.str;
-        mesh->scale *= instance.scale;
-        mesh->position += instance.position;
-        mesh->orientation = linalg::qmul(instance.orientation, mesh->orientation);
-        meshRegistration = &registrationFor(meshRegistrations, mesh);
-    }
-    auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
-    if (definition != fileCache.definitions.end())
-    {
-        if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
-    }
-    auto instance = std::find_if(fileCache.instances.begin(), fileCache.instances.end(), [mesh](const auto & inst){ return inst.instanceId == mesh->instanceId; });
-    if (instance != fileCache.instances.end())
-    {
-        auto material = std::find_if(fileCache.materials.begin(), fileCache.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance->materialId; });
-        if (material != fileCache.materials.end())
-        {
-            for (auto value : material->values)
-            {
-                auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
-                uniform->setData(value.data.data());
-                if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
-                {
-                    sampler->filename = value.filename;
-                }
-                mesh->add(uniform);
-            }
-        }
-    }
     const_cast<MeshRegistration *>(meshRegistration)->referenceCount += 1;
 }
 
@@ -431,6 +401,11 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
             }
         }
     }
+}
+
+void RendererPrivate::unregisterGraphics(Model *model)
+{
+    model->d = nullptr;
 }
 
 void RendererPrivate::unregisterGraphics(Mesh * mesh)
@@ -592,20 +567,58 @@ void RendererPrivate::draw(Program *, Mesh * mesh)
     }
 }
 
+void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *> &meshes)
+{
+    const MeshFile & meshFile = load(filename);
+    for (size_t i = 0; i < meshFile.instances.size(); ++i)
+    {
+        const MeshInstance & instance = meshFile.instances[i];
+        Mesh * mesh = meshes[i];
+        mesh->name = instance.instanceId;
+        mesh->instanceId = instance.instanceId;
+        mesh->definitionId = instance.definitionId;
+        mesh->filename = meshFile.filename.str;
+        mesh->scale = instance.scale;
+        mesh->position = instance.position;
+        mesh->orientation = instance.orientation;
+        if (instance.collision)
+        {
+            mesh->renderFlags &= ~Render::Visible;
+            mesh->renderFlags |= Render::Collision;
+        }
+        auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [instance](const auto & definition){ return definition.definitionId == instance.definitionId; });
+        if (definition->doubleSided)
+        {
+            mesh->renderFlags &= ~Render::BackFaceCulling;
+        }
+        auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance.materialId; });
+        for (auto value : material->values)
+        {
+            auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
+            uniform->setData(value.data.data());
+            if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
+            {
+                sampler->filename = value.filename;
+            }
+            mesh->add(uniform);
+        }
+    }
+}
+
 const MeshFile& RendererPrivate::load(const std::string &filename)
 {
-    auto foundCache = std::find_if(meshCache.begin(), meshCache.end(), [filename](const MeshFile &fileCache)
+    auto foundFile = std::find_if(meshFiles.begin(), meshFiles.end(), [filename](const MeshFile &meshFile)
     {
-        return fileCache.filename == filename;
+        return meshFile.filename == filename;
     });
-    if (foundCache == meshCache.end())
+    if (foundFile == meshFiles.end())
     {
-        MeshFile fileCache;
-        if (MeshLoader::load(filename, fileCache))
+        MeshFile meshFile;
+        if (MeshLoader::load(filename, meshFile))
         {
-            registerGraphics(fileCache);
-            meshCache.push_back(fileCache);
-            return meshCache.back();
+            registerGraphics(meshFile);
+            meshFiles.push_back(meshFile);
+            return meshFiles.back();
         }
         else
         {
@@ -615,6 +628,6 @@ const MeshFile& RendererPrivate::load(const std::string &filename)
     }
     else
     {
-        return *foundCache;
+        return *foundFile;
     }
 }

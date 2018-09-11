@@ -109,10 +109,12 @@ public:
     ~RendererPrivate();
     RendererPrivate();
 
+    void registerGraphics(Model * model);
     void registerGraphics(Mesh * mesh);
     void registerGraphics(Program * program);
     void registerGraphics(Camera * cam);
     void registerGraphics(const MeshFile & meshFile);
+    void unregisterGraphics(Model * model);
     void unregisterGraphics(Mesh * mesh);
     void unregisterGraphics(Program * program);
     void unregisterGraphics(Camera * cam);
@@ -126,6 +128,7 @@ public:
     void setProgramUniform(Program * program, IUniform * uniform);
     void unsetProgramUniform(Program * program, IUniform * uniform);
     void draw(Program * program, Mesh * mesh);
+    void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
     const MeshFile & load(const std::string & filename);
 
     SDL_Window * window;
@@ -135,7 +138,7 @@ public:
     ProgramRegistrations programRegistrations;
     MeshRegistrations meshRegistrations;
     TextureRegistrations textureRegistrations;
-    MeshCache meshCache;
+    MeshFiles meshFiles;
 
     bool toFullscreen;
     bool fullscreen;

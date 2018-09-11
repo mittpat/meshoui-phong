@@ -166,23 +166,23 @@ namespace
 
 MeshFile MeshFile::kDefault(HashId name, size_t v)
 {
-    MeshFile fileCache;
-    fileCache.filename = name;
-    fileCache.materials.push_back(MeshMaterial::kDefault);
+    MeshFile meshFile;
+    meshFile.filename = name;
+    meshFile.materials.push_back(MeshMaterial::kDefault);
 
     MeshDefinition definition(name, v);
-    fileCache.definitions.push_back(definition);
+    meshFile.definitions.push_back(definition);
 
     MeshInstance instance(name, definition);
     instance.materialId = MeshMaterial::kDefault.name;
-    fileCache.instances.push_back(instance);
+    meshFile.instances.push_back(instance);
 
-    return fileCache;
+    return meshFile;
 }
 
-bool MeshLoader::load(const std::string & filename, MeshFile &fileCache)
+bool MeshLoader::load(const std::string & filename, MeshFile &meshFile)
 {
-    if (MeshLoader::loadDae(filename, fileCache))
+    if (MeshLoader::loadDae(filename, meshFile))
         return true;
 
     return false;
@@ -261,7 +261,7 @@ namespace
     }
 }
 
-bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
+bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
 {
     if (std::filesystem::path(filename).extension() != ".dae")
         return false;
@@ -269,7 +269,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     if (!std::filesystem::exists(filename))
         return false;
 
-    fileCache.filename = filename;
+    meshFile.filename = filename;
     printf("Loading '%s'\n", std::filesystem::absolute(filename).c_str());
 
     pugi::xml_document doc;
@@ -283,7 +283,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     auto version = root.attribute("version");
     printf("COLLADA version '%s'\n", version.as_string());
 
-    fileCache.materials.push_back(MeshMaterial::kDefault);
+    meshFile.materials.push_back(MeshMaterial::kDefault);
 
     std::vector<LibraryImage> libraryImages;
     for (pugi::xml_node elem_image : root.child("library_images"))
@@ -319,7 +319,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
                 if (image != libraryImages.end()) { v.filename = (*image).source; }
                 libraryMaterial.values.push_back(v);
             }
-            fileCache.materials.push_back(libraryMaterial);
+            meshFile.materials.push_back(libraryMaterial);
         }
     }
     std::vector<LibraryGeometry> libraryGeometries;
@@ -438,18 +438,18 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     {
         MeshDefinition definition;
         buildGeometry(definition, libraryGeometry.attributes, libraryGeometry.geometry);
-        fileCache.definitions.push_back(definition);
+        meshFile.definitions.push_back(definition);
     }
     std::string upAxis = root.child("asset").child_value("up_axis");
     for (pugi::xml_node elem_scene : root.child("library_visual_scenes").child("visual_scene"))
     {
-        processSceneElement(fileCache, elem_scene, identity, upAxis);
+        processSceneElement(meshFile, elem_scene, identity, upAxis);
     }
 
-    for (auto & material : fileCache.materials)
+    for (auto & material : meshFile.materials)
         material.repeatTexcoords = true;
 
     fflush(stdout);
 
-    return !fileCache.definitions.empty() && !fileCache.instances.empty();
+    return !meshFile.definitions.empty() && !meshFile.instances.empty();
 }

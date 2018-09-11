@@ -81,6 +81,15 @@ Renderer::Renderer(bool gles)
     ImGui::StyleColorsDark();
 }
 
+void Renderer::add(Model *model)
+{
+    if (std::find(models.begin(), models.end(), model) == models.end())
+    {
+        models.push_back(model);
+        d->registerGraphics(model);
+    }
+}
+
 void Renderer::add(Mesh * mesh)
 {
     if (std::find(meshes.begin(), meshes.end(), mesh) == meshes.end())
@@ -118,6 +127,12 @@ void Renderer::add(Widget * widget)
     {
         widgets.push_back(widget);
     }
+}
+
+void Renderer::remove(Model *model)
+{
+    d->unregisterGraphics(model);
+    models.erase(std::remove(models.begin(), models.end(), model));
 }
 
 void Renderer::remove(Mesh* mesh)
@@ -296,9 +311,9 @@ void Renderer::renderWidgets()
     if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("frametime : %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshCache.size());
+        ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshFiles.size());
         if (ImGui::Button("Clear cache"))
-            d->meshCache.clear();
+            d->meshFiles.clear();
         if (ImGui::CollapsingHeader("instances"))
         {
             for (const auto * mesh : meshes)
@@ -322,9 +337,9 @@ void Renderer::renderWidgets()
         }
         if (ImGui::CollapsingHeader("files"))
         {
-            for (const auto & fileCache : d->meshCache)
+            for (const auto & meshFile : d->meshFiles)
             {
-                ImGui::Text("%s", fileCache.filename.str.c_str());
+                ImGui::Text("%s", meshFile.filename.str.c_str());
             }
         }
     }
@@ -339,41 +354,4 @@ void Renderer::renderWidgets()
     // Rendering
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-bool Renderer::load(const std::string &filename, size_t &count)
-{
-    const MeshFile & fileCache = d->load(filename);
-    count = fileCache.instances.size();
-    return count > 0;
-}
-
-void Renderer::fill(const std::string &filename, const std::vector<Mesh *> &m)
-{
-    const MeshFile & fileCache = d->load(filename);
-    fill(fileCache, m);
-}
-
-void Renderer::fill(const MeshFile & fileCache, const std::vector<Mesh *> &m)
-{
-    for (size_t i = 0; i < fileCache.instances.size(); ++i)
-    {
-        const MeshInstance & instance = fileCache.instances[i];
-        Mesh * mesh = m[i];
-        mesh->name = instance.instanceId;
-        mesh->instanceId = instance.instanceId;
-        mesh->definitionId = instance.definitionId;
-        mesh->filename = fileCache.filename.str;
-        mesh->scale *= instance.scale;
-        mesh->position += instance.position;
-        mesh->orientation = linalg::qmul(instance.orientation, mesh->orientation);
-        auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
-        if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
-        if (instance.collision)
-        {
-            mesh->renderFlags &= ~Render::Visible;
-            mesh->renderFlags |= Render::Collision;
-        }
-        add(mesh);
-    }
 }

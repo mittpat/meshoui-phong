@@ -99,10 +99,10 @@ struct MeshFile final
     std::vector<MeshInstance> instances;
     std::vector<MeshMaterial> materials;
 };
-typedef std::vector<MeshFile> MeshCache;
+typedef std::vector<MeshFile> MeshFiles;
 
 namespace MeshLoader
 {
-    bool load   (const std::string & filename, MeshFile &fileCache);
-    bool loadDae(const std::string & filename, MeshFile &fileCache);
+    bool load   (const std::string & filename, MeshFile &meshFile);
+    bool loadDae(const std::string & filename, MeshFile &meshFile);
 }
