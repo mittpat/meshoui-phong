@@ -20,11 +20,11 @@ const std::array<Attribute, 5> Vertex::Attributes =
   Attribute{"vertexBitangent", 3} };
 const size_t Vertex::AttributeDataSize = sizeof(Vertex);
 
-const MeshMaterial MeshMaterial::kDefault = MeshMaterial{HashId(),
+const MeshMaterial MeshMaterial::kDefault = MeshMaterial(HashId(),
                                        {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
                                         MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")),
                                         MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")),
-                                        MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000"))}};
+                                        MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000"))});
 
 
 namespace
@@ -190,8 +190,9 @@ bool MeshLoader::load(const std::string & filename, MeshFile &fileCache)
 
 namespace
 {
-    void processSceneElement(MeshFile & fileCache, pugi::xml_node elem_scene, float4x4 transform, const std::string & upAxis = "Z_UP")
+    void processSceneElement(MeshFile & fileCache, pugi::xml_node elem_scene, float4x4 transform, const std::string & upAxis = "Z_UP", bool collision = false)
     {
+        collision |= (strcmp(elem_scene.attribute("name").as_string(), "Collision") == 0);
         for (pugi::xml_node property : elem_scene)
         {
             if (strcmp(property.name(), "matrix") == 0)
@@ -219,7 +220,7 @@ namespace
             }
             else
             {
-                processSceneElement(fileCache, property, transform, upAxis);
+                processSceneElement(fileCache, property, transform, upAxis, collision);
             }
         }
         if (upAxis == "Z_UP")
@@ -244,6 +245,7 @@ namespace
             MeshInstance instance;
             instance.instanceId = elem_scene.attribute("id").as_string();
             instance.definitionId = (*definition).definitionId;
+            instance.collision = collision;
             InstanceMaterialWalker instanceMaterial;
             instance_geometry.traverse(instanceMaterial);
             if (!instanceMaterial.materialId.empty())
@@ -443,6 +445,9 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &fileCache)
     {
         processSceneElement(fileCache, elem_scene, identity, upAxis);
     }
+
+    for (auto & material : fileCache.materials)
+        material.repeatTexcoords = true;
 
     fflush(stdout);
 

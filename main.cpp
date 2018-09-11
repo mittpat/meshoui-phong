@@ -18,7 +18,7 @@ int main(int, char**)
     renderer.add(&program);
 
     Camera camera;
-    camera.position = linalg::aliases::float3(0.0, -2.0, -5.0f);
+    camera.position = linalg::aliases::float3(0.0, 2.0, 5.0);
     renderer.add(&camera);
 
     static const float3 up(0.,1.,0.);

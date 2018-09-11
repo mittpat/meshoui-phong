@@ -11,7 +11,7 @@
 using namespace nv_dds;
 namespace std { namespace filesystem = experimental::filesystem; }
 
-bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename)
+bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename, bool repeat)
 {
     if (std::filesystem::path(filename).extension() != ".png")
         return false;
@@ -28,8 +28,8 @@ bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename)
     GLenum mode = image->format->BytesPerPixel == 4 ? GL_RGBA : GL_RGB;
 
     glTexImage2D(GL_TEXTURE_2D, 0, mode, image->w, image->h, 0, mode, GL_UNSIGNED_BYTE, image->pixels);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -39,7 +39,7 @@ bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename)
     return true;
 }
 
-bool TextureLoader::loadDDS(GLuint * buffer, const std::string & filename)
+bool TextureLoader::loadDDS(GLuint * buffer, const std::string & filename, bool repeat)
 {
     if (std::filesystem::path(filename).extension() != ".dds")
         return false;
@@ -55,8 +55,8 @@ bool TextureLoader::loadDDS(GLuint * buffer, const std::string & filename)
     glBindTexture(GL_TEXTURE_2D, *buffer);
 
     glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, image.get_format(), image.get_width(), image.get_height(), 0, image.get_size(), image);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     for (unsigned int i = 0; i < image.get_num_mipmaps(); i++)
     {
         CSurface mipmap = image.get_mipmap(i);

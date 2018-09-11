@@ -11,6 +11,7 @@ public:
     Camera();
     void enable(bool asLight = false);
     void disable();
+    linalg::aliases::float4x4 modelMatrix() const;
     linalg::aliases::float4x4 viewMatrix(View::Flags op = View::All) const;
 
     linalg::aliases::float4 orientation;

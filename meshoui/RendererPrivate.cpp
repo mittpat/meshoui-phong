@@ -50,11 +50,11 @@ namespace
         return Invalid;
     }
 
-    void texture(GLuint * buffer, const std::string & filename)
+    void texture(GLuint * buffer, const std::string & filename, bool repeat)
     {
-        if (TextureLoader::loadDDS(buffer, std::filesystem::path(filename).replace_extension(".dds")))
+        if (TextureLoader::loadDDS(buffer, std::filesystem::path(filename).replace_extension(".dds"), repeat))
             return;
-        if (TextureLoader::loadPNG(buffer, std::filesystem::path(filename).replace_extension(".png")))
+        if (TextureLoader::loadPNG(buffer, std::filesystem::path(filename).replace_extension(".png"), repeat))
             return;
     }
 
@@ -230,7 +230,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
                 programRegistration.uniforms[i].enabler = glGetUniformLocation(programRegistration.program, (name + "Active").c_str());
                 if (!sampler->filename.empty())
                 {
-                    texture(&programRegistration.uniforms[i].buffer, sampler->filename);
+                    texture(&programRegistration.uniforms[i].buffer, sampler->filename, true);
                 }
             }
         }
@@ -317,8 +317,8 @@ void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const 
         if (found != programRegistration.attributes.end())
         {
             glEnableVertexAttribArray((*found).index);
+            glVertexAttribPointer((*found).index, attributeDef.size, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
         }
-        glVertexAttribPointer((*found).index, attributeDef.size, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
         offset += attributeDef.size * sizeof(GLfloat);
     }
 }
@@ -347,7 +347,7 @@ RendererPrivate::RendererPrivate()
     , glewError(0)
     , toFullscreen(false)
     , fullscreen(false)
-    , projectionMatrix(linalg::perspective_matrix(degreesToRadians(90.f), 1280/800.f, 0.1f, 1000.f))
+    , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
     , camera(nullptr)
 {
     
@@ -426,7 +426,7 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
             if (enumForVectorSize(value.data.size()) == GL_SAMPLER_2D_ARB && !value.filename.empty())
             {
                 TextureRegistration textureRegistration = TextureRegistration(value.filename);
-                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename.str));
+                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename.str), material.repeatTexcoords);
                 textureRegistrations.push_back(textureRegistration);
             }
         }

@@ -202,6 +202,9 @@ void Renderer::renderMeshes()
     std::stable_sort(meshes.begin(), meshes.end(), [](Mesh *, Mesh * right) { return (right->renderFlags & Render::DepthWrite) == 0; });
     for (Mesh * mesh : meshes)
     {
+        if ((mesh->renderFlags & Render::Visible) == 0)
+            continue;
+
         if (!mesh->program->lastError.empty())
         {
             printf((mesh->program->lastError + "\n").c_str(), 0);
@@ -236,7 +239,7 @@ void Renderer::renderMeshes()
             if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformView")))
                 uniform->value = d->camera->viewMatrix(mesh->viewFlags);
             if (auto uniform = dynamic_cast<Uniform3fv*>(mesh->program->uniform("uniformViewPosition")))
-                uniform->value = inverse(d->camera->viewMatrix(View::Rotation | View::Translation))[3].xyz();
+                uniform->value = d->camera->position;
         }
 
         if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformModel")))
@@ -366,6 +369,11 @@ void Renderer::fill(const MeshFile & fileCache, const std::vector<Mesh *> &m)
         mesh->orientation = linalg::qmul(instance.orientation, mesh->orientation);
         auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [mesh](const auto & def){ return def.definitionId == mesh->definitionId; });
         if (definition->doubleSided) mesh->renderFlags &= ~Render::BackFaceCulling;
+        if (instance.collision)
+        {
+            mesh->renderFlags &= ~Render::Visible;
+            mesh->renderFlags |= Render::Collision;
+        }
         add(mesh);
     }
 }
