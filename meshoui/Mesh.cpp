@@ -15,7 +15,7 @@ size_t Model::meshCount() const
     return d->load(filename).instances.size();
 }
 
-void Model::fill(std::vector<Mesh *> & meshes) const
+void Model::fill(const std::vector<Mesh *> & meshes) const
 {
     d->fill(filename, meshes);
 }

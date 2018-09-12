@@ -63,7 +63,7 @@ public:
     std::string filename;
 
 private:
-    void fill(std::vector<Mesh *> & meshes) const;
+    void fill(const std::vector<Mesh *> &meshes) const;
 
     friend class RendererPrivate;
     RendererPrivate * d;
@@ -73,8 +73,10 @@ inline Model::Model() {}
 inline Model::Model(const std::string & f) : filename(f) {}
 template<typename T> inline std::vector<T *> Model::meshFactory() const
 {
-    std::vector<Mesh *> meshes(meshCount(), new T());
-    fill(meshes);
-    return std::vector<T *>(meshes.begin(), meshes.end());
+    size_t count = meshCount();
+    std::vector<T *> meshes; meshes.reserve(count);
+    for (size_t i = 0; i < count; ++i) meshes.emplace_back(new T());
+    fill(std::vector<Mesh *>(meshes.begin(), meshes.end()));
+    return meshes;
 }
 inline RendererPrivate *Model::d_ptr() const { return d; }
