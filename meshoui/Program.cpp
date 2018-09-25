@@ -4,7 +4,6 @@
 #include "RendererPrivate.h"
 #include "Uniform.h"
 
-#include "assert.h"
 #include "loose.h"
 #include <iniparser.h>
 

@@ -162,7 +162,7 @@ void Renderer::remove(Widget * widget)
     widgets.erase(std::remove(widgets.begin(), widgets.end(), widget));
 }
 
-void Renderer::update(double s)
+void Renderer::update(float s)
 {
     glClearColor(0.f, 0.f, 0.f, 1.f);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -339,7 +339,7 @@ void Renderer::renderWidgets()
         {
             for (const auto & meshFile : d->meshFiles)
             {
-                ImGui::Text("%s", meshFile.filename.str.c_str());
+                ImGui::Text("%s", meshFile.filename.c_str());
             }
         }
     }

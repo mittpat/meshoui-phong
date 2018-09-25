@@ -26,7 +26,6 @@ const MeshMaterial MeshMaterial::kDefault = MeshMaterial(HashId(),
                                         MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")),
                                         MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000"))});
 
-
 namespace
 {
     struct Reference
@@ -103,7 +102,8 @@ namespace
             }
             if (pugi::xml_node sampler2D = node.child("sampler2D"))
             {
-                reference.source = sampler2D.child_value("source");
+                if ((reference.source = sampler2D.child_value("source")).empty())
+                    reference.source = remainder(sampler2D.child("instance_image").attribute("url").as_string(), "#");
                 effect->samplers.push_back(reference);
             }
         }
@@ -164,7 +164,7 @@ namespace
     }
 }
 
-MeshFile MeshFile::kDefault(HashId name, size_t v)
+MeshFile MeshFile::kDefault(const std::string & name, size_t v)
 {
     MeshFile meshFile;
     meshFile.filename = name;
@@ -190,9 +190,8 @@ bool MeshLoader::load(const std::string & filename, MeshFile &meshFile)
 
 namespace
 {
-    void processSceneElement(MeshFile & fileCache, pugi::xml_node elem_scene, float4x4 transform, const std::string & upAxis = "Z_UP", bool collision = false)
+    void processSceneElement(MeshFile & fileCache, pugi::xml_node elem_scene, float4x4 transform, const std::string & upAxis = "Z_UP")
     {
-        collision |= (strcmp(elem_scene.attribute("name").as_string(), "Collision") == 0);
         for (pugi::xml_node property : elem_scene)
         {
             if (strcmp(property.name(), "matrix") == 0)
@@ -220,7 +219,7 @@ namespace
             }
             else
             {
-                processSceneElement(fileCache, property, transform, upAxis, collision);
+                processSceneElement(fileCache, property, transform, upAxis);
             }
         }
         if (upAxis == "Z_UP")
@@ -239,13 +238,12 @@ namespace
         }
         if (auto instance_geometry = elem_scene.child("instance_geometry"))
         {
-            HashId reference = remainder(instance_geometry.attribute("url").as_string(), "#");
+            HashId reference = HashId(remainder(instance_geometry.attribute("url").as_string(), "#"), fileCache.filename);
             auto definition = std::find_if(fileCache.definitions.begin(), fileCache.definitions.end(), [reference](const MeshDefinition & definition){ return definition.definitionId == reference; });
 
             MeshInstance instance;
             instance.instanceId = elem_scene.attribute("id").as_string();
             instance.definitionId = (*definition).definitionId;
-            instance.collision = collision;
             InstanceMaterialWalker instanceMaterial;
             instance_geometry.traverse(instanceMaterial);
             if (!instanceMaterial.materialId.empty())
@@ -281,7 +279,8 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
 
     auto root = doc.child("COLLADA");
     auto version = root.attribute("version");
-    printf("COLLADA version '%s'\n", version.as_string());
+    std::string sversion = version.as_string();
+    printf("COLLADA version '%s'\n", sversion.c_str());
 
     meshFile.materials.push_back(MeshMaterial::kDefault);
 
@@ -290,7 +289,8 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
     {
         LibraryImage libraryImage;
         libraryImage.id = elem_image.attribute("id").as_string();
-        libraryImage.source = elem_image.child_value("init_from");
+        if ((libraryImage.source = elem_image.child("init_from").child_value("ref")).empty())
+            libraryImage.source = elem_image.child_value("init_from");
         libraryImages.push_back(libraryImage);
     }
     std::vector<LibraryEffect> libraryEffects;
@@ -327,7 +327,7 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
     {
         LibraryGeometry libraryGeometry;
         libraryGeometry.geometry.bbox = AABB();
-        libraryGeometry.geometry.id = elem_geometry.attribute("id").as_string();
+        libraryGeometry.geometry.id = HashId(elem_geometry.attribute("id").as_string(), filename);
 
         printf("Loading '%s'\n", libraryGeometry.geometry.id.str.c_str());
         if (pugi::xml_node mesh = elem_geometry.child("mesh"))
@@ -396,8 +396,14 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
                 }
                 if (auto data = polylist.child("p"))
                 {
+                    unsigned int max = 0;
                     std::map<size_t, unsigned int> sourceIndexes;
-                    for (const auto & input : attributeInputs) sourceIndexes[input.id] = input.offset;
+                    for (const auto & input : attributeInputs)
+                    {
+                        sourceIndexes[input.id] = input.offset;
+                        max = std::max(max, input.offset);
+                    }
+                    max += 1;
                     std::vector<unsigned int> indexes = conv::stouia(data.child_value());
                     size_t i = 0;
                     for (size_t j = 0; j < polygons.size(); ++j)
@@ -408,25 +414,25 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
                             Triangle face;
                             if (sourceIndexes.find(kVertex) != sourceIndexes.end())
                             {
-                                face.vertices.x = 1+indexes[i+sourceIndexes[kVertex]+(0  )*sourceIndexes.size()];
-                                face.vertices.y = 1+indexes[i+sourceIndexes[kVertex]+(k-1)*sourceIndexes.size()];
-                                face.vertices.z = 1+indexes[i+sourceIndexes[kVertex]+(k  )*sourceIndexes.size()];
+                                face.vertices.x = 1+indexes[i+sourceIndexes[kVertex]+(0  )*max];
+                                face.vertices.y = 1+indexes[i+sourceIndexes[kVertex]+(k-1)*max];
+                                face.vertices.z = 1+indexes[i+sourceIndexes[kVertex]+(k  )*max];
                             }
                             if (sourceIndexes.find(kNormal) != sourceIndexes.end())
                             {
-                                face.normals.x = 1+indexes[i+sourceIndexes[kNormal]+(0  )*sourceIndexes.size()];
-                                face.normals.y = 1+indexes[i+sourceIndexes[kNormal]+(k-1)*sourceIndexes.size()];
-                                face.normals.z = 1+indexes[i+sourceIndexes[kNormal]+(k  )*sourceIndexes.size()];
+                                face.normals.x = 1+indexes[i+sourceIndexes[kNormal]+(0  )*max];
+                                face.normals.y = 1+indexes[i+sourceIndexes[kNormal]+(k-1)*max];
+                                face.normals.z = 1+indexes[i+sourceIndexes[kNormal]+(k  )*max];
                             }
                             if (sourceIndexes.find(kTexcoord) != sourceIndexes.end())
                             {
-                                face.texcoords.x = 1+indexes[i+sourceIndexes[kTexcoord]+(0  )*sourceIndexes.size()];
-                                face.texcoords.y = 1+indexes[i+sourceIndexes[kTexcoord]+(k-1)*sourceIndexes.size()];
-                                face.texcoords.z = 1+indexes[i+sourceIndexes[kTexcoord]+(k  )*sourceIndexes.size()];
+                                face.texcoords.x = 1+indexes[i+sourceIndexes[kTexcoord]+(0  )*max];
+                                face.texcoords.y = 1+indexes[i+sourceIndexes[kTexcoord]+(k-1)*max];
+                                face.texcoords.z = 1+indexes[i+sourceIndexes[kTexcoord]+(k  )*max];
                             }
                             libraryGeometry.geometry.triangles.push_back(face);
                         }
-                        i += sourceIndexes.size() * vcount;
+                        i += max * vcount;
                     }
                 }
             }
@@ -441,6 +447,10 @@ bool MeshLoader::loadDae(const std::string &filename, MeshFile &meshFile)
         meshFile.definitions.push_back(definition);
     }
     std::string upAxis = root.child("asset").child_value("up_axis");
+    for (pugi::xml_node elem_scene : root.child("library_nodes"))
+    {
+        processSceneElement(meshFile, elem_scene, identity, upAxis);
+    }
     for (pugi::xml_node elem_scene : root.child("library_visual_scenes").child("visual_scene"))
     {
         processSceneElement(meshFile, elem_scene, identity, upAxis);

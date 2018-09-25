@@ -29,7 +29,7 @@ public:
     void remove(Camera * camera);
     void remove(Widget * widget);
 
-    void update(double s);
+    void update(float s);
     void postUpdate();
     void renderMeshes();
     void renderWidgets();

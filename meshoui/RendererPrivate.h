@@ -76,7 +76,6 @@ class MeshRegistration final
 public:
     ~MeshRegistration();
     MeshRegistration();
-    MeshRegistration(HashId n);
 
     HashId definitionId;
     GLuint indexBuffer;

@@ -2,7 +2,6 @@
 #include "RendererPrivate.h"
 #include "Uniform.h"
 
-#include "assert.h"
 #include <linalg.h>
 
 #include <algorithm>

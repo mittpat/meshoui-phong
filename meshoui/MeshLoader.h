@@ -82,19 +82,18 @@ struct MeshInstance final
     HashId instanceId;
     HashId definitionId;
     HashId materialId;
-    bool collision;
     linalg::aliases::float3 scale;
     linalg::aliases::float4 orientation;
     linalg::aliases::float3 position;
 };
-inline MeshInstance::MeshInstance() : collision(false), scale(1.f, 1.f, 1.f), orientation(linalg::rotation_quat(linalg::aliases::float3(0.f, 1.f, 0.f), 0.f)), position(0.f, 0.f, 0.f) {}
-inline MeshInstance::MeshInstance(HashId name, const MeshDefinition & definition) : instanceId(name), definitionId(definition.definitionId), collision(false), scale(1.f, 1.f, 1.f), orientation(linalg::rotation_quat(linalg::aliases::float3(0.f, 1.f, 0.f), 0.f)), position(0.f, 0.f, 0.f) {}
+inline MeshInstance::MeshInstance() : scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
+inline MeshInstance::MeshInstance(HashId name, const MeshDefinition & definition) : instanceId(name), definitionId(definition.definitionId), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
 
 struct MeshFile final
 {
-    static MeshFile kDefault(HashId name, size_t v);
+    static MeshFile kDefault(const std::string & name, size_t v);
 
-    HashId filename;
+    std::string filename;
     std::vector<MeshDefinition> definitions;
     std::vector<MeshInstance> instances;
     std::vector<MeshMaterial> materials;

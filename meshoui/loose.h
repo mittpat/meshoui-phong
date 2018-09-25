@@ -205,7 +205,8 @@ namespace conv
         std::vector<float> ret;
         while (true)
         {
-            ret.push_back(stof(t));
+            if (*t != '\0')
+                ret.push_back(stof(t));
             if (*t != '\0')
                 ++t;
             else

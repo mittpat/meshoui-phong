@@ -396,7 +396,7 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
             if (enumForVectorSize(value.data.size()) == GL_SAMPLER_2D_ARB && !value.filename.empty())
             {
                 TextureRegistration textureRegistration = TextureRegistration(value.filename);
-                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename.str), material.repeatTexcoords);
+                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename), material.repeatTexcoords);
                 textureRegistrations.push_back(textureRegistration);
             }
         }
@@ -577,15 +577,10 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         mesh->name = instance.instanceId;
         mesh->instanceId = instance.instanceId;
         mesh->definitionId = instance.definitionId;
-        mesh->filename = meshFile.filename.str;
+        mesh->filename = meshFile.filename;
         mesh->scale = instance.scale;
         mesh->position = instance.position;
         mesh->orientation = instance.orientation;
-        if (instance.collision)
-        {
-            mesh->renderFlags &= ~Render::Visible;
-            mesh->renderFlags |= Render::Collision;
-        }
         auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [instance](const auto & definition){ return definition.definitionId == instance.definitionId; });
         if (definition->doubleSided)
         {
