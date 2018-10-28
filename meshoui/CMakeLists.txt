@@ -32,15 +32,10 @@ add_custom_target(meshouiresources
 add_dependencies(meshouilib meshouiresources)
 add_custom_target(meshouilib_data SOURCES ${Resources})
 
-find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(SDL2)
 
-if(NOT DEFINED SDL2_LIBRARIES)
-    include(FindPkgConfig)
-    pkg_search_module(SDL2 REQUIRED sdl2)
-endif()
-
+include_directories(../3rdparty/glad/include)
+include_directories(../3rdparty/glfw/include)
 include_directories(../3rdparty/iniparser)
 include_directories(../3rdparty/imgui)
 include_directories(../3rdparty/linalg)
@@ -48,6 +43,5 @@ include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
 include_directories(../3rdparty/octree)
 include_directories(../3rdparty/pugixml)
-include_directories(../3rdparty/sdl2_image)
 
-target_link_libraries(meshouilib stdc++fs ${SDL2_LIBRARIES} ${OPENGL_gl_LIBRARY} GLEW::GLEW iniparser imgui lodepng pugixml nv_dds)
+target_link_libraries(meshouilib stdc++fs ${OPENGL_gl_LIBRARY} glad glfw iniparser imgui lodepng pugixml nv_dds)

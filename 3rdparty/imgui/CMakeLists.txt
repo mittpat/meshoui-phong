@@ -1,9 +1,8 @@
 add_library(imgui
-    imconfig.h      imgui.h                 imgui_impl_sdl.h  stb_truetype.h
-    imgui.cpp       imgui_impl_opengl3.cpp  imgui_internal.h
-    imgui_demo.cpp  imgui_impl_opengl3.h    stb_rect_pack.h
-    imgui_draw.cpp  imgui_impl_sdl.cpp      stb_textedit.h
-)
+    imconfig.h      imgui.h                 imgui_impl_opengl3.h  imstb_textedit.h
+    imgui.cpp       imgui_impl_glfw.cpp     imgui_internal.h      imstb_truetype.h
+    imgui_demo.cpp  imgui_impl_glfw.h       imgui_widgets.cpp
+    imgui_draw.cpp  imgui_impl_opengl3.cpp  imstb_rectpack.h)
 
 target_link_libraries(imgui)
 

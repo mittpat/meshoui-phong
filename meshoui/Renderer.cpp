@@ -1,4 +1,5 @@
-#include <GL/glew.h>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include "Renderer.h"
 #include "RendererPrivate.h"
@@ -13,8 +14,16 @@
 #include <set>
 
 #include <imgui.h>
-#include <imgui_impl_sdl.h>
+#include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+
+namespace
+{
+    void error_callback(int, const char* description)
+    {
+        printf("Error: %s\n", description);
+    }
+}
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -23,57 +32,46 @@ Renderer::~Renderer()
 {
     // imgui cleanup
     ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    // sdl & gl cleanup
-    SDL_GL_DeleteContext(d->glContext);
-    SDL_DestroyWindow(d->window);
+    // glfw & gl cleanup
+    glfwDestroyWindow(d->window);
+    glfwTerminate();
     delete d;
 }
 
-Renderer::Renderer(bool gles)
+Renderer::Renderer()
     : d(new RendererPrivate)
     , defaultProgram(nullptr)
     , time(0.f)
     , meshes()
     , programs()
 {
-    // sdl & gl
-    SDL_InitSubSystem(SDL_INIT_VIDEO);
+    // glfw & gl
+    glfwSetErrorCallback(error_callback);
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
-    if (gles)
-    {
-        // GLES 2.0, GLSL 320
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    }
-    else
-    {
-        // LIBGL_ALWAYS_SOFTWARE mesa version (Raspberry PI + Intel GMA900M support)
-        // Geforce 8xxx and up
-        // Radeon HD 4xxx and up
-        // OpenGL 3.3, GLSL 150
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    }
+    d->window = glfwCreateWindow(1920/2, 1080/2, "Meshoui", nullptr, nullptr);
 
-    d->window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1920/2, 1080/2, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
-    //SDL_SetWindowFullscreen(d->window, SDL_WINDOW_FULLSCREEN);
-    d->glContext = SDL_GL_CreateContext(d->window);
-
-    // glew
-    glewExperimental = GL_TRUE;
-    d->glewError = glewInit();
+    // glad
+    glfwMakeContextCurrent(d->window);
+    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    glfwSwapInterval(1);
 
     // imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplSDL2_InitForOpenGL(d->window, d->glContext);
+    ImGui_ImplGlfw_InitForOpenGL(d->window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
     ImGui::StyleColorsDark();
+}
+
+bool Renderer::shouldClose() const
+{
+    return glfwWindowShouldClose(d->window);
 }
 
 void Renderer::add(Model *model)
@@ -163,12 +161,11 @@ void Renderer::update(float s)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glCullFace(GL_BACK);
 
-    SDL_DisplayMode mode;
-    SDL_GetWindowDisplayMode(d->window, &mode);
-    glViewport(0, 0, mode.w, mode.h);
+    int w, h;
+    glfwGetFramebufferSize(d->window, &w, &h);
+    glViewport(0, 0, w, h);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
@@ -177,16 +174,18 @@ void Renderer::update(float s)
     renderMeshes();
     renderWidgets();
 
-    SDL_GL_SwapWindow(d->window);
+    glfwSwapBuffers(d->window);
 
     postUpdate();
+
+    glfwPollEvents();
 
     time += s;
 }
 
 void Renderer::postUpdate()
 {
-    if (d->toFullscreen && !d->fullscreen)
+    /*if (d->toFullscreen && !d->fullscreen)
     {
         SDL_DisplayMode mode;
         SDL_GetWindowDisplayMode(d->window, &mode);
@@ -203,8 +202,7 @@ void Renderer::postUpdate()
         mode.h = 1080/2;
         SDL_SetWindowDisplayMode(d->window, &mode);
         SDL_SetWindowFullscreen(d->window, 0);
-    }
-    d->fullscreen = d->toFullscreen;
+    }*/
 }
 
 void Renderer::renderMeshes()
@@ -281,7 +279,7 @@ void Renderer::renderMeshes()
 void Renderer::renderWidgets()
 {
     ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL2_NewFrame(d->window);
+    ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     ImGui::Begin("Main window");
@@ -289,15 +287,13 @@ void Renderer::renderWidgets()
     {
         if (ImGui::Button("Exit"))
         {
-            SDL_Event sdlevent;
-            sdlevent.type = SDL_QUIT;
-            SDL_PushEvent(&sdlevent);
+            glfwSetWindowShouldClose(d->window, 1);
         }
     }
-    if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("fullscreen", &d->toFullscreen);
-    }
+    //if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
+    //{
+    //    ImGui::Checkbox("fullscreen (N/A)", &d->toFullscreen);
+    //}
     for (auto * widget : widgets)
     {
         if (widget->window == "Main window")

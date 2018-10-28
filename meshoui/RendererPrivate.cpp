@@ -1,4 +1,4 @@
-#include <GL/glew.h>
+#include <glad/glad.h>
 
 #include "Mesh.h"
 #include "Program.h"
@@ -6,12 +6,14 @@
 #include "TextureLoader.h"
 #include "Uniform.h"
 
-#include <SDL2/SDL_image.h>
-
 #include "loose.h"
 #include <algorithm>
 #include <experimental/filesystem>
 #include <fstream>
+
+#ifndef GL_FLOAT_MAT4_ARB
+#define GL_FLOAT_MAT4_ARB GL_FLOAT_MAT4
+#endif
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -85,7 +87,9 @@ namespace
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+#if GL_EXT
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16);
+#endif
             }
             else
             {
@@ -105,7 +109,9 @@ namespace
                     Render::Flags flags = mesh ? mesh->renderFlags : Render::Default;
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, flags & Render::Mipmap ? GL_LINEAR_MIPMAP_LINEAR : (flags & Render::Filtering ? GL_LINEAR : GL_NEAREST));
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, flags & Render::Filtering ? GL_LINEAR : GL_NEAREST);
+#if GL_EXT
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, flags & Render::Anisotropic ? 16 : 1);
+#endif
                 }
                 else
                 {
@@ -343,8 +349,6 @@ void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistra
 
 RendererPrivate::RendererPrivate() 
     : window(nullptr)
-    , glContext(nullptr)
-    , glewError(0)
     , toFullscreen(false)
     , fullscreen(false)
     , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))

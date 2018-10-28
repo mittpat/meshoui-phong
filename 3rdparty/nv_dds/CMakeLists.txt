@@ -1,7 +1,4 @@
-add_library(nv_dds
-    nv_dds.h
-    nv_dds.cpp
-)
+add_library(nv_dds nv_dds.h nv_dds.cpp)
 
 target_link_libraries(nv_dds)
 

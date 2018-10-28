@@ -6,8 +6,6 @@
 #include "Mesh.h"
 #include "MeshLoader.h"
 
-#include <SDL2/SDL.h>
-
 #include <string>
 #include <vector>
 
@@ -87,6 +85,7 @@ public:
 inline MeshRegistration::~MeshRegistration() {}
 inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
 
+struct GLFWwindow;
 class IGraphics;
 class IUniform;
 class Program;
@@ -130,8 +129,7 @@ public:
     void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
     const MeshFile & load(const std::string & filename);
 
-    SDL_Window * window;
-    SDL_GLContext glContext;
+    GLFWwindow * window;
     GLenum glewError;
 
     ProgramRegistrations programRegistrations;

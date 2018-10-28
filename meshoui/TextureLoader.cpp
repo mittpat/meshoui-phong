@@ -1,7 +1,6 @@
-#include <GL/glew.h>
+#include <glad/glad.h>
 #include "TextureLoader.h"
 
-#include <SDL2/SDL_image.h>
 #include <lodepng.h>
 #include <nv_dds.h>
 
@@ -59,13 +58,13 @@ bool TextureLoader::loadDDS(GLuint * buffer, const std::string & filename, bool 
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, *buffer);
 
-    glCompressedTexImage2DARB(GL_TEXTURE_2D, 0, image.get_format(), image.get_width(), image.get_height(), 0, image.get_size(), image);
+    glCompressedTexImage2D(GL_TEXTURE_2D, 0, image.get_format(), GLsizei(image.get_width()), GLsizei(image.get_height()), 0, GLsizei(image.get_size()), image);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     for (unsigned int i = 0; i < image.get_num_mipmaps(); i++)
     {
         CSurface mipmap = image.get_mipmap(i);
-        glCompressedTexImage2DARB(GL_TEXTURE_2D, i+1, image.get_format(), mipmap.get_width(), mipmap.get_height(), 0, mipmap.get_size(), mipmap);
+        glCompressedTexImage2D(GL_TEXTURE_2D, i+1, image.get_format(), GLsizei(mipmap.get_width()), GLsizei(mipmap.get_height()), 0, GLsizei(mipmap.get_size()), mipmap);
     }
     if (image.get_num_mipmaps() == 0)
     {

@@ -4,8 +4,6 @@
 #include <Uniform.h>
 #include <Mesh.h>
 
-#include <SDL2/SDL.h>
-
 using namespace linalg;
 using namespace linalg::aliases;
 
@@ -18,7 +16,7 @@ int main(int, char**)
     renderer.add(&program);
 
     Camera camera;
-    camera.position = linalg::aliases::float3(0.0, 2.0, 5.0);
+    camera.position = float3(0.0, 2.0, 5.0);
     renderer.add(&camera);
 
     static const float3 up(0.,1.,0.);
@@ -41,12 +39,9 @@ int main(int, char**)
         bool run = true;
         while (run)
         {
-            SDL_PumpEvents();
-            SDL_Event * event = nullptr;
-            if (0 != SDL_PeepEvents(event, 8, SDL_GETEVENT, SDL_QUIT, SDL_QUIT))
+            if (renderer.shouldClose())
                 run = false;
-
-            renderer.update(0.016);
+            renderer.update(0.016f);
         }
 
         for (auto mesh : meshes) renderer.remove(mesh);

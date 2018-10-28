@@ -16,7 +16,9 @@ class Renderer final
 {
 public:
     virtual ~Renderer();
-    Renderer(bool gles = false);
+    Renderer();
+
+    bool shouldClose() const;
 
     void add(Model * model);
     void add(Mesh * mesh);
