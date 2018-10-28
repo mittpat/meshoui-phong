@@ -12,8 +12,6 @@
 #include <algorithm>
 #include <set>
 
-#include <SDL2/SDL_image.h>
-
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_opengl3.h>
@@ -32,8 +30,6 @@ Renderer::~Renderer()
     SDL_GL_DeleteContext(d->glContext);
     SDL_DestroyWindow(d->window);
     delete d;
-
-    IMG_Quit();
 }
 
 Renderer::Renderer(bool gles)
@@ -45,7 +41,6 @@ Renderer::Renderer(bool gles)
 {
     // sdl & gl
     SDL_InitSubSystem(SDL_INIT_VIDEO);
-    IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG);
 
     if (gles)
     {
@@ -222,7 +217,7 @@ void Renderer::renderMeshes()
 
         if (!mesh->program->lastError.empty())
         {
-            printf((mesh->program->lastError + "\n").c_str(), 0);
+            printf("%s\n", mesh->program->lastError.c_str());
             exit(1);
         }
 

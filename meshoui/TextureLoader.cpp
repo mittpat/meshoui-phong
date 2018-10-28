@@ -2,6 +2,7 @@
 #include "TextureLoader.h"
 
 #include <SDL2/SDL_image.h>
+#include <lodepng.h>
 #include <nv_dds.h>
 
 #include <experimental/filesystem>
@@ -21,20 +22,24 @@ bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename, bool 
 
     glGenTextures(1, buffer);
 
-    SDL_Surface * image = IMG_Load(filename.c_str());
+    std::vector<unsigned char> image;
+    unsigned width, height;
+    unsigned error = lodepng::decode(image, width, height, filename);
+
+    if (error != 0)
+    {
+        printf("TextureLoader::loadPNG: error '%d' : '%s'\n", error, lodepng_error_text(error));
+        return false;
+    }
 
     glBindTexture(GL_TEXTURE_2D, *buffer);
 
-    GLenum mode = image->format->BytesPerPixel == 4 ? GL_RGBA : GL_RGB;
-
-    glTexImage2D(GL_TEXTURE_2D, 0, mode, image->w, image->h, 0, mode, GL_UNSIGNED_BYTE, image->pixels);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GLsizei(width), GLsizei(height), 0, GL_RGBA, GL_UNSIGNED_BYTE, image.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_BORDER);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
-
-    SDL_FreeSurface(image);
 
     return true;
 }
