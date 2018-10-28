@@ -185,24 +185,17 @@ void Renderer::update(float s)
 
 void Renderer::postUpdate()
 {
-    /*if (d->toFullscreen && !d->fullscreen)
+    if (d->toFullscreen && !d->fullscreen)
     {
-        SDL_DisplayMode mode;
-        SDL_GetWindowDisplayMode(d->window, &mode);
-        mode.w = 1920;
-        mode.h = 1080;
-        SDL_SetWindowDisplayMode(d->window, &mode);
-        SDL_SetWindowFullscreen(d->window, SDL_WINDOW_FULLSCREEN);
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        glfwSetWindowMonitor(d->window, glfwGetPrimaryMonitor(), 0, 0, 1920, 1080, GLFW_DONT_CARE);
     }
     else if (!d->toFullscreen && d->fullscreen)
     {
-        SDL_DisplayMode mode;
-        SDL_GetWindowDisplayMode(d->window, &mode);
-        mode.w = 1920/2;
-        mode.h = 1080/2;
-        SDL_SetWindowDisplayMode(d->window, &mode);
-        SDL_SetWindowFullscreen(d->window, 0);
-    }*/
+        glfwSetWindowMonitor(d->window, nullptr, 80, 80, 1920/2, 1080/2, GLFW_DONT_CARE);
+        glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+    }
+    d->fullscreen = d->toFullscreen;
 }
 
 void Renderer::renderMeshes()
@@ -290,10 +283,10 @@ void Renderer::renderWidgets()
             glfwSetWindowShouldClose(d->window, 1);
         }
     }
-    //if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
-    //{
-    //    ImGui::Checkbox("fullscreen (N/A)", &d->toFullscreen);
-    //}
+    if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("fullscreen", &d->toFullscreen);
+    }
     for (auto * widget : widgets)
     {
         if (widget->window == "Main window")
