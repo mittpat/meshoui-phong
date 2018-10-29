@@ -1,15 +1,18 @@
 #pragma once
 
-#include "hashid.h"
+#include <hashid.h>
 
-class Widget
+namespace Meshoui
 {
-public:
-    virtual ~Widget();
-    Widget();
+    class Widget
+    {
+    public:
+        virtual ~Widget();
+        Widget();
 
-    virtual void draw() = 0;
-    HashId window;
-};
-inline Widget::~Widget() {}
-inline Widget::Widget() : window("Main window") {}
+        virtual void draw() = 0;
+        HashId window;
+    };
+    inline Widget::~Widget() {}
+    inline Widget::Widget() : window("Main window") {}
+}

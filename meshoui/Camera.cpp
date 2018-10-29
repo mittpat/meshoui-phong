@@ -3,6 +3,7 @@
 
 using namespace linalg;
 using namespace linalg::aliases;
+using namespace Meshoui;
 
 void Camera::enable(bool asLight)
 {
@@ -14,10 +15,12 @@ void Camera::disable()
     d->unbindGraphics(this);
 }
 
-float4x4 Camera::modelMatrix() const
+/*float4x4 Camera::modelMatrix() const
 {
-    return mul(translation_matrix(position), mul(rotation_matrix(orientation), scaling_matrix(float3(1.0, 1.0, 1.0))));
-}
+    const float4x4 parentMatrix = mul(translation_matrix(position), mul(rotation_matrix(orientation), scaling_matrix(float3(1.0, 1.0, 1.0))));
+    const float4x4 localMatrix = mul(translation_matrix(localPosition), mul(rotation_matrix(localOrientation), scaling_matrix(float3(1.0, 1.0, 1.0))));
+    return mul(localMatrix, parentMatrix);
+}*/
 
 linalg::aliases::float4x4 Camera::viewMatrix(View::Flags op) const
 {

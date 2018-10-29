@@ -8,6 +8,7 @@
 
 using namespace linalg;
 using namespace linalg::aliases;
+using namespace Meshoui;
 
 size_t Model::meshCount() const
 {

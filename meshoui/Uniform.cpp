@@ -2,6 +2,8 @@
 
 #include "Uniform.h"
 
+using namespace Meshoui;
+
 IUniform *UniformFactory::makeUniform(HashId name, GLenum type, int size)
 {
     IUniform * uniform = nullptr;
@@ -30,12 +32,17 @@ IUniform *UniformFactory::makeUniform(HashId name, GLenum type, int size)
         break;
     case GL_SAMPLER_2D_ARB:
         uniform = new UniformSampler2D(name);
+        break;
     case GL_INT:
-        switch (size) {
-        case 16: uniform = new UniformMiv<16>(name); break;
+        switch (size)
+        {
+        case 16:
+            uniform = new UniformMiv<16>(name);
+            break;
         default:
             break;
         }
+        break;
     default:
         break;
     }

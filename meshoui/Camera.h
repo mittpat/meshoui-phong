@@ -1,27 +1,34 @@
 #pragma once
 
 #include "enums.h"
+#include <hashid.h>
 #include <linalg.h>
 
-class RendererPrivate;
-class Camera
+namespace Meshoui
 {
-public:
-    virtual ~Camera();
-    Camera();
-    void enable(bool asLight = false);
-    void disable();
-    linalg::aliases::float4x4 modelMatrix() const;
-    linalg::aliases::float4x4 viewMatrix(View::Flags op = View::All) const;
+    class RendererPrivate;
+    class Camera
+    {
+    public:
+        virtual ~Camera();
+        Camera();
+        void enable(bool asLight = false);
+        void disable();
+        /*linalg::aliases::float4x4 modelMatrix() const;*/
+        linalg::aliases::float4x4 viewMatrix(View::Flags op = View::All) const;
 
-    linalg::aliases::float4 orientation;
-    linalg::aliases::float3 position;
+        HashId name;
+        linalg::aliases::float4 orientation;
+        linalg::aliases::float3 position;
+        linalg::aliases::float4 localOrientation;
+        linalg::aliases::float3 localPosition;
 
-private:
-    friend class RendererPrivate;
-    RendererPrivate * d;
-};
-inline Camera::Camera() : orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
-inline Camera::~Camera() {}
+    private:
+        friend class RendererPrivate;
+        RendererPrivate * d;
+    };
+    inline Camera::Camera() : orientation(linalg::identity), position(0.f, 0.f, 0.f), localOrientation(linalg::identity), localPosition(0.f, 0.f, 0.f) {}
+    inline Camera::~Camera() {}
 
-typedef Camera Light;
+    typedef Camera Light;
+}

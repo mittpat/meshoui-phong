@@ -17,9 +17,11 @@ add_subdirectory(3rdparty/lodepng)
 add_subdirectory(3rdparty/nv_dds)
 add_subdirectory(3rdparty/octree)
 add_subdirectory(3rdparty/pugixml)
+add_subdirectory(common)
 add_subdirectory(meshoui)
 
 include_directories(3rdparty/linalg)
+include_directories(common)
 include_directories(meshoui)
 
 add_executable(meshouiview main.cpp)

@@ -6,6 +6,7 @@
 
 using namespace linalg;
 using namespace linalg::aliases;
+using namespace Meshoui;
 
 int main(int, char**)
 {
@@ -39,9 +40,10 @@ int main(int, char**)
         bool run = true;
         while (run)
         {
+            light.position = mul(rotation_matrix(qmul(rotation_quat(up, 0.8f + renderer.time), rotation_quat(right, 0.6f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
+            renderer.update(0.016f);
             if (renderer.shouldClose())
                 run = false;
-            renderer.update(0.016f);
         }
 
         for (auto mesh : meshes) renderer.remove(mesh);

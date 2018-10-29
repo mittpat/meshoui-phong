@@ -10,6 +10,7 @@
 
 using namespace nv_dds;
 namespace std { namespace filesystem = experimental::filesystem; }
+using namespace Meshoui;
 
 bool TextureLoader::loadPNG(GLuint * buffer, const std::string & filename, bool repeat)
 {

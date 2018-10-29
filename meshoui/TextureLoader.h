@@ -4,8 +4,11 @@
 
 #include <string>
 
-namespace TextureLoader
+namespace Meshoui
 {
-    bool loadPNG(GLuint * buffer, const std::string & filename, bool repeat = false);
-    bool loadDDS(GLuint * buffer, const std::string & filename, bool repeat = false);
+    namespace TextureLoader
+    {
+        bool loadPNG(GLuint * buffer, const std::string & filename, bool repeat = false);
+        bool loadDDS(GLuint * buffer, const std::string & filename, bool repeat = false);
+    }
 }

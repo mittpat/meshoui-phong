@@ -1,12 +1,13 @@
-#include <glad/glad.h>
-
 #include "Mesh.h"
 #include "Program.h"
 #include "RendererPrivate.h"
 #include "TextureLoader.h"
 #include "Uniform.h"
 
-#include "loose.h"
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+#include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
 #include <fstream>
@@ -18,6 +19,7 @@
 using namespace linalg;
 using namespace linalg::aliases;
 namespace std { namespace filesystem = experimental::filesystem; }
+using namespace Meshoui;
 
 namespace
 {
@@ -87,9 +89,7 @@ namespace
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-#if GL_EXT
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16);
-#endif
             }
             else
             {
@@ -109,9 +109,7 @@ namespace
                     Render::Flags flags = mesh ? mesh->renderFlags : Render::Default;
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, flags & Render::Mipmap ? GL_LINEAR_MIPMAP_LINEAR : (flags & Render::Filtering ? GL_LINEAR : GL_NEAREST));
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, flags & Render::Filtering ? GL_LINEAR : GL_NEAREST);
-#if GL_EXT
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, flags & Render::Anisotropic ? 16 : 1);
-#endif
                 }
                 else
                 {
@@ -397,10 +395,10 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
     {
         for (auto value : material.values)
         {
-            if (enumForVectorSize(value.data.size()) == GL_SAMPLER_2D_ARB && !value.filename.empty())
+            if (value.texture)
             {
-                TextureRegistration textureRegistration = TextureRegistration(value.filename);
-                texture(&textureRegistration.buffer, sibling(value.filename, meshFile.filename), material.repeatTexcoords);
+                TextureRegistration textureRegistration = TextureRegistration(*value.texture);
+                texture(&textureRegistration.buffer, sibling(*value.texture, meshFile.filename), material.repeatTexcoords);
                 textureRegistrations.push_back(textureRegistration);
             }
         }
@@ -578,7 +576,6 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
     {
         const MeshInstance & instance = meshFile.instances[i];
         Mesh * mesh = meshes[i];
-        mesh->name = instance.instanceId;
         mesh->instanceId = instance.instanceId;
         mesh->definitionId = instance.definitionId;
         mesh->filename = meshFile.filename;
@@ -593,11 +590,15 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance.materialId; });
         for (auto value : material->values)
         {
-            auto uniform = UniformFactory::makeUniform(value.name, enumForVectorSize(value.data.size()));
-            uniform->setData(value.data.data());
-            if (auto sampler = dynamic_cast<UniformSampler2D *>(uniform))
+            IUniform * uniform = nullptr;
+            if (value.texture)
             {
-                sampler->filename = value.filename;
+                uniform = new UniformSampler2D(value.sid, *value.texture);
+            }
+            else
+            {
+                uniform = UniformFactory::makeUniform(value.sid, enumForVectorSize(value.data->size()));
+                uniform->setData(value.data->data());
             }
             mesh->add(uniform);
         }

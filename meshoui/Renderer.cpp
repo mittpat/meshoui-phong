@@ -8,7 +8,7 @@
 #include "Uniform.h"
 #include "Widget.h"
 
-#include "loose.h"
+#include <loose.h>
 
 #include <algorithm>
 #include <set>
@@ -27,6 +27,7 @@ namespace
 
 using namespace linalg;
 using namespace linalg::aliases;
+using namespace Meshoui;
 
 Renderer::~Renderer()
 {

@@ -4,8 +4,6 @@ set_source_files_properties(${Resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 add_library(meshouilib
     enums.h
     gltypes.h
-    hashid.h
-    loose.h
     Camera.cpp
     Camera.h
     Mesh.cpp
@@ -43,5 +41,6 @@ include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
 include_directories(../3rdparty/octree)
 include_directories(../3rdparty/pugixml)
+include_directories(../common)
 
-target_link_libraries(meshouilib stdc++fs ${OPENGL_gl_LIBRARY} glad glfw iniparser imgui lodepng pugixml nv_dds)
+target_link_libraries(meshouilib commonlib stdc++fs ${OPENGL_gl_LIBRARY} glad glfw iniparser imgui lodepng pugixml nv_dds)

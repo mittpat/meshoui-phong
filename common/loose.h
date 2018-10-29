@@ -51,6 +51,21 @@ inline const char * remainder(const char *str, const char *match)
     return ret ? &str[strlen(match)] : nullptr;
 }
 
+struct AABB final
+{
+    AABB();
+    void extend(linalg::aliases::float3 p);
+    linalg::aliases::float3 center() const;
+    linalg::aliases::float3 half() const;
+    linalg::aliases::float3 lower;
+    linalg::aliases::float3 upper;
+};
+inline AABB::AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
+                      upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
+inline void AABB::extend(linalg::aliases::float3 p) { lower = linalg::min(lower, p); upper = linalg::max(upper, p); }
+inline linalg::aliases::float3 AABB::center() const { return (lower + upper) * 0.5f; }
+inline linalg::aliases::float3 AABB::half() const { return (upper - lower) * 0.5f; }
+
 namespace conv
 {
     inline float fastExp10(int n)

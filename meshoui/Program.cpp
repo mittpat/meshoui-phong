@@ -4,7 +4,7 @@
 #include "RendererPrivate.h"
 #include "Uniform.h"
 
-#include "loose.h"
+#include <loose.h>
 #include <iniparser.h>
 
 #include <algorithm>
@@ -13,6 +13,7 @@
 
 using namespace linalg;
 using namespace linalg::aliases;
+using namespace Meshoui;
 
 namespace
 {

@@ -2,11 +2,14 @@
 #include "MeshLoader.h"
 
 #include <algorithm>
+#include <collada.h>
 
 using namespace linalg;
 using namespace linalg::aliases;
 
 #include <Octree.h>
+
+using namespace Meshoui;
 
 namespace
 {
@@ -24,42 +27,42 @@ namespace
     inline bool Node::operator==(const Vertex &rhs) const { return vertex.position == rhs.position && vertex.texcoord == rhs.texcoord && linalg::dot(vertex.normal, rhs.normal) > DOT_PRODUCT_THRESHOLD; }
 }
 
-void MeshLoader::buildGeometry(MeshDefinition & definition, const Attributes & attributes, const Geometry & geometry, bool renormalize)
+void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & mesh, bool renormalize)
 {
     std::vector<Node> nodes;
-    nodes.reserve(sqrt(geometry.triangles.size()));
-    Octree<Node> octree(geometry.bbox.center(), geometry.bbox.half());
+    nodes.reserve(sqrt(mesh.triangles.size()));
+    Octree<Node> octree(mesh.bbox.center(), mesh.bbox.half());
 
-    definition.definitionId = geometry.id;
-    definition.doubleSided = geometry.doubleSided;
+    //definition.definitionId = mesh.id;
+    //definition.doubleSided = mesh.doubleSided;
 
     printf("Loading '%s'\n", definition.definitionId.str.empty() ? "(unnamed root)" : definition.definitionId.str.c_str());
 
     // indexed
-    for (size_t i = 0; i < geometry.triangles.size(); ++i)
+    for (size_t i = 0; i < mesh.triangles.size(); ++i)
     {
         std::array<Vertex, 3> avertex;
 
-        uint3 ivertices = geometry.triangles[i].vertices;
-        avertex[0].position = attributes.vertices[ivertices[0]-1];
-        avertex[1].position = attributes.vertices[ivertices[1]-1];
-        avertex[2].position = attributes.vertices[ivertices[2]-1];
+        uint3 ivertices = mesh.triangles[i].vertices;
+        avertex[0].position = mesh.vertices[ivertices[0]-1];
+        avertex[1].position = mesh.vertices[ivertices[1]-1];
+        avertex[2].position = mesh.vertices[ivertices[2]-1];
 
-        uint3 itexcoords = geometry.triangles[i].texcoords;
-        if (itexcoords[0]-1 < attributes.texcoords.size())
-            avertex[0].texcoord = attributes.texcoords[itexcoords[0]-1];
-        if (itexcoords[1]-1 < attributes.texcoords.size())
-            avertex[1].texcoord = attributes.texcoords[itexcoords[1]-1];
-        if (itexcoords[2]-1 < attributes.texcoords.size())
-            avertex[2].texcoord = attributes.texcoords[itexcoords[2]-1];
+        uint3 itexcoords = mesh.triangles[i].texcoords;
+        if (itexcoords[0]-1 < mesh.texcoords.size())
+            avertex[0].texcoord = mesh.texcoords[itexcoords[0]-1];
+        if (itexcoords[1]-1 < mesh.texcoords.size())
+            avertex[1].texcoord = mesh.texcoords[itexcoords[1]-1];
+        if (itexcoords[2]-1 < mesh.texcoords.size())
+            avertex[2].texcoord = mesh.texcoords[itexcoords[2]-1];
 
-        uint3 inormals = geometry.triangles[i].normals;
-        if (inormals[0]-1 < attributes.normals.size())
-            avertex[0].normal = attributes.normals[inormals[0]-1];
-        if (inormals[1]-1 < attributes.normals.size())
-            avertex[1].normal = attributes.normals[inormals[1]-1];
-        if (inormals[2]-1 < attributes.normals.size())
-            avertex[2].normal = attributes.normals[inormals[2]-1];
+        uint3 inormals = mesh.triangles[i].normals;
+        if (inormals[0]-1 < mesh.normals.size())
+            avertex[0].normal = mesh.normals[inormals[0]-1];
+        if (inormals[1]-1 < mesh.normals.size())
+            avertex[1].normal = mesh.normals[inormals[1]-1];
+        if (inormals[2]-1 < mesh.normals.size())
+            avertex[2].normal = mesh.normals[inormals[2]-1];
 
         if (renormalize)
         {
