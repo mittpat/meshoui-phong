@@ -1,4 +1,4 @@
-file(GLOB_RECURSE Resources ${CMAKE_SOURCE_DIR}/meshoui/resources/*)
+file(GLOB_RECURSE Resources ${CMAKE_CURRENT_SOURCE_DIR}/resources/*)
 set_source_files_properties(${Resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 add_library(meshouilib
@@ -26,7 +26,7 @@ add_library(meshouilib
 
 add_custom_target(meshouiresources
     DEPENDS ${Resources}
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/meshoui/resources ${CMAKE_BINARY_DIR}/meshoui/resources)
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources ${CMAKE_BINARY_DIR}/meshoui/resources)
 add_dependencies(meshouilib meshouiresources)
 add_custom_target(meshouilib_data SOURCES ${Resources})
 
