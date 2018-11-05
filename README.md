@@ -7,11 +7,11 @@ Notes
 
 The Collada support is only very very partial. Some Blender files were tested, but other files on the web are known to fail with a blank screen.
 
-Currently the target platform is mostly OpenGL ES 2.0 (desktop OpenGL 3.x).
-It should run on the software mesa renderer (LIBGL_ALWAYS_SOFTWARE), Raspberry PI as well as the old Intel GMA900M.
+This branch targets Vulkan 1.1... its a work in progress. Not currently functional.
 
 Todo
 -------
+* Get up and running with Vulkan
 * Improve Collada file format support
 * Improve Cameras and Lights
 
