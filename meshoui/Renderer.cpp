@@ -1,5 +1,7 @@
-#include <glad/glad.h>
+#define GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <vulkan/vulkan.h>
 
 #include "Renderer.h"
 #include "RendererPrivate.h"
@@ -15,7 +17,7 @@
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
+#include <imgui_impl_vulkan.h>
 
 namespace
 {
@@ -23,6 +25,19 @@ namespace
     {
         printf("Error: %s\n", description);
     }
+
+    static VkAllocationCallbacks*       g_Allocator = VK_NULL_HANDLE;
+    static VkInstance                   g_Instance = VK_NULL_HANDLE;
+    static VkPhysicalDevice             g_PhysicalDevice = VK_NULL_HANDLE;
+    static VkDevice                     g_Device = VK_NULL_HANDLE;
+    static uint32_t                     g_QueueFamily = uint32_t(-1);
+    static VkQueue                      g_Queue = VK_NULL_HANDLE;
+    //static VkDebugReportCallbackEXT     g_DebugReport = VK_NULL_HANDLE;
+    //static VkPipelineCache              g_PipelineCache = VK_NULL_HANDLE;
+    static VkDescriptorPool             g_DescriptorPool = VK_NULL_HANDLE;
+    static ImGui_ImplVulkanH_WindowData g_WindowData;
+    //static bool                         g_ResizeWanted = false;
+    //static int       g_ResizeWidth = 0, g_ResizeHeight = 0;
 }
 
 using namespace linalg;
@@ -32,7 +47,7 @@ using namespace Meshoui;
 Renderer::~Renderer()
 {
     // imgui cleanup
-    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
@@ -49,24 +64,101 @@ Renderer::Renderer()
     , meshes()
     , programs()
 {
-    // glfw & gl
+    // glfw & vulkan
     glfwSetErrorCallback(error_callback);
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     d->window = glfwCreateWindow(1920/2, 1080/2, "Meshoui", nullptr, nullptr);
-
-    // glad
-    glfwMakeContextCurrent(d->window);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glfwSwapInterval(1);
+
+    if (!glfwVulkanSupported())
+    {
+        printf("GLFW: Vulkan Not Supported\n");
+    }
+    uint32_t extensions_count = 0;
+    const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);
+
+    {
+        VkInstanceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        create_info.enabledExtensionCount = extensions_count;
+        create_info.ppEnabledExtensionNames = extensions;
+        vkCreateInstance(&create_info, g_Allocator, &g_Instance);
+    }
+
+    {
+        uint32_t count;
+        vkEnumeratePhysicalDevices(g_Instance, &count, VK_NULL_HANDLE);
+        std::vector<VkPhysicalDevice> gpus(count);
+        vkEnumeratePhysicalDevices(g_Instance, &count, gpus.data());
+        g_PhysicalDevice = gpus[0];
+    }
+
+    {
+        uint32_t count;
+        vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, VK_NULL_HANDLE);
+        std::vector<VkQueueFamilyProperties> queues(count);
+        vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, queues.data());
+        for (uint32_t i = 0; i < count; i++)
+        {
+            if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                g_QueueFamily = i;
+                break;
+            }
+        }
+    }
+
+    {
+        uint32_t device_extensions_count = 1;
+        const char* device_extensions[] = { "VK_KHR_swapchain" };
+        const float queue_priority[] = { 1.0f };
+        VkDeviceQueueCreateInfo queue_info[1] = {};
+        queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info[0].queueFamilyIndex = g_QueueFamily;
+        queue_info[0].queueCount = 1;
+        queue_info[0].pQueuePriorities = queue_priority;
+        VkDeviceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        create_info.queueCreateInfoCount = IM_ARRAYSIZE(queue_info);
+        create_info.pQueueCreateInfos = queue_info;
+        create_info.enabledExtensionCount = device_extensions_count;
+        create_info.ppEnabledExtensionNames = device_extensions;
+        vkCreateDevice(g_PhysicalDevice, &create_info, g_Allocator, &g_Device);
+        vkGetDeviceQueue(g_Device, g_QueueFamily, 0, &g_Queue);
+    }
+
+    {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+        pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        vkCreateDescriptorPool(g_Device, &pool_info, g_Allocator, &g_DescriptorPool);
+    }
 
     // imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForOpenGL(d->window, true);
-    ImGui_ImplOpenGL3_Init("#version 150");
+    ImGui_ImplGlfw_InitForVulkan(d->window, true);
+    //ImGui_ImplVulkan_Init("#version 150");
     ImGui::StyleColorsDark();
 }
 
@@ -158,19 +250,19 @@ void Renderer::remove(Widget * widget)
 
 void Renderer::update(float s)
 {
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glCullFace(GL_BACK);
+    //glClearColor(0.f, 0.f, 0.f, 1.f);
+    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    //glCullFace(GL_BACK);
 
-    int w, h;
-    glfwGetFramebufferSize(d->window, &w, &h);
-    glViewport(0, 0, w, h);
+    //int w, h;
+    //glfwGetFramebufferSize(d->window, &w, &h);
+    //glViewport(0, 0, w, h);
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //glDisable(GL_CULL_FACE);
+    //glDisable(GL_DEPTH_TEST);
+    //glDisable(GL_BLEND);
+    //glDepthMask(GL_TRUE);
 
     renderMeshes();
     renderWidgets();
@@ -213,20 +305,20 @@ void Renderer::renderMeshes()
             exit(1);
         }
 
-        if (mesh->renderFlags & Render::DepthTest)
-            glEnable(GL_DEPTH_TEST);
-
-        if (mesh->renderFlags & Render::Blend)
-            glEnable(GL_BLEND);
-
-        if ((mesh->renderFlags & Render::DepthWrite) == 0)
-            glDepthMask(GL_FALSE);
-
-        if (mesh->renderFlags & Render::BackFaceCulling)
-            glEnable(GL_CULL_FACE);
-
-        if (mesh->renderFlags & Render::Points)
-            glPointSize(mesh->scale.x);
+        //if (mesh->renderFlags & Render::DepthTest)
+        //    glEnable(GL_DEPTH_TEST);
+        //
+        //if (mesh->renderFlags & Render::Blend)
+        //    glEnable(GL_BLEND);
+        //
+        //if ((mesh->renderFlags & Render::DepthWrite) == 0)
+        //    glDepthMask(GL_FALSE);
+        //
+        //if (mesh->renderFlags & Render::BackFaceCulling)
+        //    glEnable(GL_CULL_FACE);
+        //
+        //if (mesh->renderFlags & Render::Points)
+        //    glPointSize(mesh->scale.x);
 
         if (!d->lights.empty())
         {
@@ -262,17 +354,17 @@ void Renderer::renderMeshes()
         mesh->program->unapplyUniforms();
         d->unbindGraphics(mesh->program);
 
-        glPointSize(1.0f);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_BLEND);
-        glDepthMask(GL_TRUE);
+        //glPointSize(1.0f);
+        //glDisable(GL_CULL_FACE);
+        //glDisable(GL_DEPTH_TEST);
+        //glDisable(GL_BLEND);
+        //glDepthMask(GL_TRUE);
     }
 }
 
 void Renderer::renderWidgets()
 {
-    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
@@ -338,5 +430,5 @@ void Renderer::renderWidgets()
 
     // Rendering
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    //ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData());
 }

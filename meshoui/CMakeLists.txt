@@ -30,9 +30,9 @@ add_custom_target(meshouiresources
 add_dependencies(meshouilib meshouiresources)
 add_custom_target(meshouilib_data SOURCES ${Resources})
 
-find_package(OpenGL REQUIRED)
+find_package(Vulkan REQUIRED)
 
-include_directories(../3rdparty/glad/include)
+include_directories(${Vulkan_INCLUDE_DIR})
 include_directories(../3rdparty/glfw/include)
 include_directories(../3rdparty/iniparser)
 include_directories(../3rdparty/imgui)
@@ -43,4 +43,4 @@ include_directories(../3rdparty/octree)
 include_directories(../3rdparty/pugixml)
 include_directories(../common)
 
-target_link_libraries(meshouilib commonlib stdc++fs ${OPENGL_gl_LIBRARY} glad glfw iniparser imgui lodepng pugixml nv_dds)
+target_link_libraries(meshouilib commonlib stdc++fs ${Vulkan_LIBRARIES} glfw iniparser imgui lodepng pugixml nv_dds)

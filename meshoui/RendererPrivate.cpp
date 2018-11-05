@@ -4,17 +4,13 @@
 #include "TextureLoader.h"
 #include "Uniform.h"
 
-#include <glad/glad.h>
+#include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 
 #include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
 #include <fstream>
-
-#ifndef GL_FLOAT_MAT4_ARB
-#define GL_FLOAT_MAT4_ARB GL_FLOAT_MAT4
-#endif
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -62,110 +58,22 @@ namespace
             return;
     }
 
-    void setUniform(const TextureRegistrations & textureRegistrations, Mesh * mesh, IUniform * uniform, const ProgramUniform & programUniform)
+    void setUniform(const TextureRegistrations &, Mesh *, IUniform *, const ProgramUniform &)
     {
-        GLenum type = programUniform.type;
-        switch (type)
-        {
-        case GL_FLOAT_VEC2_ARB:
-            glUniform2fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_VEC3_ARB:
-            glUniform3fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_VEC4_ARB:
-            glUniform4fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_MAT4_ARB:
-            glUniformMatrix4fv(programUniform.index, 1, GL_FALSE, (float*)uniform->data());
-            break;
-        case GL_SAMPLER_2D_ARB:
-            if (programUniform.buffer > 0)
-            {
-                glUniform1i(programUniform.enabler, true);
-                glUniform1i(programUniform.index, programUniform.unit);
-                glActiveTexture(GL_TEXTURE0 + programUniform.unit);
-                glBindTexture(GL_TEXTURE_2D, programUniform.buffer);
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16);
-            }
-            else
-            {
-                HashId textureName = dynamic_cast<UniformSampler2D *>(uniform)->filename;
-                auto textureRegistration = std::find_if(textureRegistrations.begin(), textureRegistrations.end(), [textureName](const TextureRegistration & textureRegistration)
-                {
-                    return textureRegistration.name == textureName;
-                });
-                if (textureRegistration != textureRegistrations.end()
-                    && (*textureRegistration).buffer > 0)
-                {
-                    glUniform1i(programUniform.enabler, true);
-                    glUniform1i(programUniform.index, programUniform.unit);
-                    glActiveTexture(GL_TEXTURE0 + programUniform.unit);
-                    glBindTexture(GL_TEXTURE_2D, (*textureRegistration).buffer);
-
-                    Render::Flags flags = mesh ? mesh->renderFlags : Render::Default;
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, flags & Render::Mipmap ? GL_LINEAR_MIPMAP_LINEAR : (flags & Render::Filtering ? GL_LINEAR : GL_NEAREST));
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, flags & Render::Filtering ? GL_LINEAR : GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, flags & Render::Anisotropic ? 16 : 1);
-                }
-                else
-                {
-                    glUniform1i(programUniform.enabler, false);
-                }
-            }
-            break;
-        case GL_INT:
-            glUniform1iv(programUniform.index, programUniform.size, (int*)uniform->data());
-            break;
-        default:
-            break;
-        }
+        //
     }
 
-    bool registerShader(GLenum shaderType, const std::vector<std::string> & defines, const std::string & shaderSource, GLuint & shader, std::string * const error)
+    bool registerShader(GLenum, const std::vector<std::string> &, const std::string &, GLuint &, std::string * const)
     {
-        shader = glCreateShader(shaderType);
-        std::vector<const char *> shaderSource_str;
-        for (const auto & def : defines)
-            shaderSource_str.push_back(def.c_str());
-        shaderSource_str.push_back(shaderSource.c_str());
+        //
 
-        glShaderSource(shader, shaderSource_str.size(), shaderSource_str.data(), nullptr);
-        glCompileShader(shader);
-
-        GLint shaderCompiled = GL_FALSE;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &shaderCompiled);
-        if (shaderCompiled != GL_TRUE)
-        {
-            if (error != nullptr)
-            {
-                GLint infoLogLength = 0;
-                glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLength );
-                error->resize(infoLogLength);
-                glGetShaderInfoLog(shader, infoLogLength, &infoLogLength, &(*error)[0]);
-            }
-
-            glDeleteShader(shader);
-            return false;
-        }
-        return true;
+        return false;
     }
 }
 
-void RendererPrivate::unregisterProgram(const ProgramRegistration & programRegistration)
+void RendererPrivate::unregisterProgram(const ProgramRegistration &)
 {
-    if (glIsProgram(programRegistration.program))
-    {
-        glDeleteProgram(programRegistration.program);
-    }
-    for (auto uniform : programRegistration.uniforms)
-    {
-        glDeleteTextures(1, &uniform.buffer);
-    }
-    glDeleteVertexArrays(1, &programRegistration.vertexArray);
+    //
 }
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
@@ -177,126 +85,29 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     if (!registerShader(GL_FRAGMENT_SHADER, program->defines, program->fragmentShaderSource, fragment, &program->lastError))
         return false;
 
-    programRegistration.program = glCreateProgram();
-    glAttachShader(programRegistration.program, vertex);
-    glAttachShader(programRegistration.program, fragment);
-    glLinkProgram(programRegistration.program);
+    //
 
-    glDetachShader(programRegistration.program, vertex);
-    glDetachShader(programRegistration.program, fragment);
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    GLint programSuccess = GL_FALSE;
-    glGetProgramiv(programRegistration.program, GL_LINK_STATUS, &programSuccess);
-    if (programSuccess != GL_TRUE)
-    {
-        {
-            GLint infoLogLength = 0;
-            glGetProgramiv(programRegistration.program, GL_INFO_LOG_LENGTH, &infoLogLength);
-            program->lastError.resize(infoLogLength);
-            glGetProgramInfoLog(programRegistration.program, infoLogLength, &infoLogLength, &program->lastError[0]);
-        }
-
-        unregisterProgram(programRegistration);
-        program->linked = false;
-    }
-    else
-    {
-        GLuint unit = 0;
-        GLint count = 0;
-        glGetProgramiv(programRegistration.program, GL_ACTIVE_UNIFORMS, &count);
-        programRegistration.uniforms.resize(count);
-        for (GLint i = 0; i < count; i++)
-        {
-            std::string name;
-            GLsizei nameLength = 32;
-            name.resize(nameLength);
-            glGetActiveUniform(programRegistration.program, i,
-                               nameLength, &nameLength, &programRegistration.uniforms[i].size,
-                               &programRegistration.uniforms[i].type, &name[0]);
-            name.resize(nameLength);
-            programRegistration.uniforms[i].name = name;
-            programRegistration.uniforms[i].index = glGetUniformLocation(programRegistration.program, name.c_str());
-
-            if (!program->uniform(name))
-            {
-                if (auto uniform = UniformFactory::makeUniform(name, programRegistration.uniforms[i].type, programRegistration.uniforms[i].size))
-                {
-                    program->add(uniform);
-                }
-            }
-
-            if (auto sampler = dynamic_cast<UniformSampler2D *>(program->uniform(name)))
-            {
-                programRegistration.uniforms[i].unit = unit++;
-                programRegistration.uniforms[i].enabler = glGetUniformLocation(programRegistration.program, (name + "Active").c_str());
-                if (!sampler->filename.empty())
-                {
-                    texture(&programRegistration.uniforms[i].buffer, sampler->filename, true);
-                }
-            }
-        }
-
-        glGetProgramiv(programRegistration.program, GL_ACTIVE_ATTRIBUTES, &count);
-        programRegistration.attributes.resize(count);
-        for (GLint i = 0; i < count; i++)
-        {
-            std::string name;
-            GLsizei nameLength = 16;
-            name.resize(nameLength);
-            glGetActiveAttrib(programRegistration.program, i,
-                              nameLength, &nameLength, &programRegistration.attributes[i].size,
-                              &programRegistration.attributes[i].type, &name[0]);
-            name.resize(nameLength);
-            programRegistration.attributes[i].name = name;
-            programRegistration.attributes[i].index = glGetAttribLocation(programRegistration.program, name.c_str());
-        }
-
-        glGenVertexArrays(1, &programRegistration.vertexArray);
-    }
-
-    program->linked = true;
-    return program->linked;
+    return false;
 }
 
 void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
 {
-    glUseProgram(programRegistration.program);
-    glBindVertexArray(programRegistration.vertexArray);
+    //
 }
 
 void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistration)
 {
-    glBindVertexArray(0);
-    glUseProgram(0);
+    //
 }
 
 void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 {
-    if (meshRegistration.indexBuffer != 0)
-        glDeleteBuffers(1, &meshRegistration.indexBuffer);
-    if (meshRegistration.vertexBuffer != 0)
-        glDeleteBuffers(1, &meshRegistration.vertexBuffer);
+    //
 }
 
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
-    if (!meshDefinition.indices.empty())
-    {
-        glGenBuffers(1, &meshRegistration.indexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshDefinition.indices.size() * sizeof(unsigned int), nullptr, GL_STATIC_DRAW);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, meshDefinition.indices.size() * sizeof(unsigned int), meshDefinition.indices.data());
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
-
-    glGenBuffers(1, &meshRegistration.vertexBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, meshDefinition.vertices.size() * Vertex::AttributeDataSize, nullptr, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, meshDefinition.vertices.size() * Vertex::AttributeDataSize, meshDefinition.vertices.data());
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    //
 
     meshRegistration.indexBufferSize = meshDefinition.indices.size();
     meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
@@ -305,11 +116,7 @@ void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRe
 
 void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
 {
-    if (meshRegistration.indexBuffer != 0)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-
-    if (meshRegistration.vertexBuffer != 0)
-        glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
+    //
 
     size_t offset = 0;
     for (const Attribute & attributeDef : Vertex::Attributes)
@@ -320,8 +127,7 @@ void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const 
         });
         if (found != programRegistration.attributes.end())
         {
-            glEnableVertexAttribArray((*found).index);
-            glVertexAttribPointer((*found).index, attributeDef.size, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
+            //
         }
         offset += attributeDef.size * sizeof(GLfloat);
     }
@@ -337,12 +143,11 @@ void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistra
         });
         if (found != programRegistration.attributes.end())
         {
-            glDisableVertexAttribArray((*found).index);
+            //
         }
     }
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    //
 }
 
 RendererPrivate::RendererPrivate() 
@@ -522,51 +327,13 @@ void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
     });
     if (programUniform != programRegistration.uniforms.end())
     {
-        static const std::array<GLfloat, 16> blank = {0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f};
-
-        GLenum type = (*programUniform).type;
-        switch (type)
-        {
-        case GL_FLOAT:
-            glUniform1fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC2_ARB:
-            glUniform2fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC3_ARB:
-            glUniform3fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC4_ARB:
-            glUniform4fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_MAT4_ARB:
-            glUniformMatrix4fv((*programUniform).index, 1, GL_FALSE, blank.data());
-            break;
-        case GL_SAMPLER_2D_ARB:
-            glUniform1i((*programUniform).enabler, false);
-            glUniform1i((*programUniform).index, 0);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            break;
-        case GL_INT:
-            glUniform1iv((*programUniform).index, (*programUniform).size, (int*)blank.data());
-            break;
-        default:
-            break;
-        }
+        //
     }
 }
 
 void RendererPrivate::draw(Program *, Mesh * mesh)
 {
-    if (mesh->renderFlags & Render::Points)
-    {
-        glDrawArrays(GL_POINTS, 0, registrationFor(meshRegistrations, mesh).vertexBufferSize);
-    }
-    else
-    {
-        glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
-    }
+    //
 }
 
 void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *> &meshes)
