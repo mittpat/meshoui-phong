@@ -544,10 +544,6 @@ void Renderer::renderWidgets()
     ImGui::Render();
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    static int ui = 0;
-    ui++;
-    if (ui % 2 == 0)
-        clear_color.x = 1.0f;
     memcpy(&g_WindowData.ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
 
     {
