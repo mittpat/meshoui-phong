@@ -1,7 +1,6 @@
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
 
 #include "Renderer.h"
 #include "RendererPrivate.h"
@@ -26,32 +25,16 @@ namespace
         printf("Error: %s\n", description);
     }
 
-    static void check_vk_result(VkResult err)
+    void check_vk_result(VkResult err)
     {
-        if (err == 0) return;
+        if (err == 0)
+            return;
         printf("VkResult %d\n", err);
-        //if (err < 0)
-        //    abort();
+        if (err < 0)
+            abort();
     }
 
-    static VkAllocationCallbacks*       g_Allocator = VK_NULL_HANDLE;
-    static VkInstance                   g_Instance = VK_NULL_HANDLE;
-    static VkPhysicalDevice             g_PhysicalDevice = VK_NULL_HANDLE;
-    static VkDevice                     g_Device = VK_NULL_HANDLE;
-    static uint32_t                     g_QueueFamily = uint32_t(-1);
-    static VkQueue                      g_Queue = VK_NULL_HANDLE;
-    static VkPipelineCache              g_PipelineCache = VK_NULL_HANDLE;
-    static VkDescriptorPool             g_DescriptorPool = VK_NULL_HANDLE;
     static ImGui_ImplVulkanH_WindowData g_WindowData;
-    static bool                         g_ResizeWanted = false;
-    static int       g_ResizeWidth = 0, g_ResizeHeight = 0;
-
-    static void glfw_resize_callback(GLFWwindow*, int w, int h)
-    {
-        g_ResizeWanted = true;
-        g_ResizeWidth = w;
-        g_ResizeHeight = h;
-    }
 }
 
 using namespace linalg;
@@ -61,20 +44,14 @@ using namespace Meshoui;
 Renderer::~Renderer()
 {
     // Cleanup
-    auto err = vkDeviceWaitIdle(g_Device);
+    auto err = vkDeviceWaitIdle(d->device);
     check_vk_result(err);
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    {
-        ImGui_ImplVulkanH_WindowData* wd = &g_WindowData;
-        ImGui_ImplVulkanH_DestroyWindowData(g_Instance, g_Device, wd, g_Allocator);
-        vkDestroyDescriptorPool(g_Device, g_DescriptorPool, g_Allocator);
-
-        vkDestroyDevice(g_Device, g_Allocator);
-        vkDestroyInstance(g_Instance, g_Allocator);
-    }
+    ImGui_ImplVulkanH_DestroyWindowData(d->instance, d->device, &g_WindowData, d->allocator);
+    d->destroyGraphicsSubsystem();
 
     glfwDestroyWindow(d->window);
     glfwTerminate();
@@ -92,115 +69,34 @@ Renderer::Renderer()
     // glfw & vulkan
     glfwSetErrorCallback(error_callback);
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     d->window = glfwCreateWindow(1920/2, 1080/2, "Meshoui", nullptr, nullptr);
-
     if (!glfwVulkanSupported())
     {
         printf("GLFW: Vulkan Not Supported\n");
     }
     uint32_t extensions_count = 0;
-    const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);
-
-    VkResult err;
-
-    {
-        VkInstanceCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        create_info.enabledExtensionCount = extensions_count;
-        create_info.ppEnabledExtensionNames = extensions;
-        err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
-        check_vk_result(err);
-    }
-
-    {
-        uint32_t count;
-        err = vkEnumeratePhysicalDevices(g_Instance, &count, VK_NULL_HANDLE);
-        check_vk_result(err);
-        std::vector<VkPhysicalDevice> gpus(count);
-        err = vkEnumeratePhysicalDevices(g_Instance, &count, gpus.data());
-        check_vk_result(err);
-        g_PhysicalDevice = gpus[0];
-    }
-
-    {
-        uint32_t count;
-        vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, VK_NULL_HANDLE);
-        std::vector<VkQueueFamilyProperties> queues(count);
-        vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, queues.data());
-        for (uint32_t i = 0; i < count; i++)
-        {
-            if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                g_QueueFamily = i;
-                break;
-            }
-        }
-    }
-
-    {
-        uint32_t device_extensions_count = 1;
-        const char* device_extensions[] = { "VK_KHR_swapchain" };
-        const float queue_priority[] = { 1.0f };
-        VkDeviceQueueCreateInfo queue_info[1] = {};
-        queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_info[0].queueFamilyIndex = g_QueueFamily;
-        queue_info[0].queueCount = 1;
-        queue_info[0].pQueuePriorities = queue_priority;
-        VkDeviceCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info.queueCreateInfoCount = IM_ARRAYSIZE(queue_info);
-        create_info.pQueueCreateInfos = queue_info;
-        create_info.enabledExtensionCount = device_extensions_count;
-        create_info.ppEnabledExtensionNames = device_extensions;
-        err = vkCreateDevice(g_PhysicalDevice, &create_info, g_Allocator, &g_Device);
-        check_vk_result(err);
-        vkGetDeviceQueue(g_Device, g_QueueFamily, 0, &g_Queue);
-    }
-
-    {
-        VkDescriptorPoolSize pool_sizes[] =
-        {
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-        };
-        VkDescriptorPoolCreateInfo pool_info = {};
-        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
-        pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
-        pool_info.pPoolSizes = pool_sizes;
-        err = vkCreateDescriptorPool(g_Device, &pool_info, g_Allocator, &g_DescriptorPool);
-        check_vk_result(err);
-    }
+    const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);    
+    d->createGraphicsSubsystem(extensions, extensions_count);
 
     // Create Window Surface
     VkSurfaceKHR surface;
-    err = glfwCreateWindowSurface(g_Instance, d->window, g_Allocator, &surface);
+    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &surface);
     check_vk_result(err);
 
     // Create Framebuffers
-    int w, h;
-    glfwGetFramebufferSize(d->window, &w, &h);
-    glfwSetFramebufferSizeCallback(d->window, glfw_resize_callback);
+    int width = 0, height = 0;
+    while (width == 0 || height == 0)
+    {
+        glfwGetFramebufferSize(d->window, &width, &height);
+        glfwWaitEvents();
+    }
 
     g_WindowData.Surface = surface;
 
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(g_PhysicalDevice, g_QueueFamily, g_WindowData.Surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, g_WindowData.Surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
@@ -210,15 +106,15 @@ Renderer::Renderer()
     // Select Surface Format
     const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    g_WindowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(g_PhysicalDevice, g_WindowData.Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    g_WindowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(d->physicalDevice, g_WindowData.Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
     // Select Present Mode
     VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-    g_WindowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(g_PhysicalDevice, g_WindowData.Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
+    g_WindowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(d->physicalDevice, g_WindowData.Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(g_PhysicalDevice, g_Device, g_QueueFamily, &g_WindowData, g_Allocator);
-    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(g_PhysicalDevice, g_Device, &g_WindowData, g_Allocator, w, h);
+    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(d->physicalDevice, d->device, d->queueFamily, &g_WindowData, d->allocator);
+    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &g_WindowData, d->allocator, width, height);
 
     // imgui
     IMGUI_CHECKVERSION();
@@ -226,14 +122,14 @@ Renderer::Renderer()
     ImGui_ImplGlfw_InitForVulkan(d->window, true);
     {
         ImGui_ImplVulkan_InitInfo init_info = {};
-        init_info.Instance = g_Instance;
-        init_info.PhysicalDevice = g_PhysicalDevice;
-        init_info.Device = g_Device;
-        init_info.QueueFamily = g_QueueFamily;
-        init_info.Queue = g_Queue;
-        init_info.PipelineCache = g_PipelineCache;
-        init_info.DescriptorPool = g_DescriptorPool;
-        init_info.Allocator = g_Allocator;
+        init_info.Instance = d->instance;
+        init_info.PhysicalDevice = d->physicalDevice;
+        init_info.Device = d->device;
+        init_info.QueueFamily = d->queueFamily;
+        init_info.Queue = d->queue;
+        init_info.PipelineCache = d->pipelineCache;
+        init_info.DescriptorPool = d->descriptorPool;
+        init_info.Allocator = d->allocator;
         init_info.CheckVkResultFn = check_vk_result;
         ImGui_ImplVulkan_Init(&init_info, g_WindowData.RenderPass);
     }
@@ -245,7 +141,7 @@ Renderer::Renderer()
         VkCommandPool command_pool = g_WindowData.Frames[g_WindowData.FrameIndex].CommandPool;
         VkCommandBuffer command_buffer = g_WindowData.Frames[g_WindowData.FrameIndex].CommandBuffer;
 
-        err = vkResetCommandPool(g_Device, command_pool, 0);
+        err = vkResetCommandPool(d->device, command_pool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -261,10 +157,10 @@ Renderer::Renderer()
         end_info.pCommandBuffers = &command_buffer;
         err = vkEndCommandBuffer(command_buffer);
         check_vk_result(err);
-        err = vkQueueSubmit(g_Queue, 1, &end_info, VK_NULL_HANDLE);
+        err = vkQueueSubmit(d->queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);
 
-        err = vkDeviceWaitIdle(g_Device);
+        err = vkDeviceWaitIdle(d->device);
         check_vk_result(err);
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
@@ -359,12 +255,6 @@ void Renderer::remove(Widget * widget)
 void Renderer::update(float s)
 {
     glfwPollEvents();
-
-    if (g_ResizeWanted)
-    {
-        ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(g_PhysicalDevice, g_Device, &g_WindowData, g_Allocator, g_ResizeWidth, g_ResizeHeight);
-        g_ResizeWanted = false;
-    }
 
     //glClearColor(0.f, 0.f, 0.f, 1.f);
     //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -543,26 +433,23 @@ void Renderer::renderWidgets()
     // Rendering
     ImGui::Render();
 
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    memcpy(&g_WindowData.ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
-
     {
         VkResult err;
 
         VkSemaphore& image_acquired_semaphore  = g_WindowData.Frames[g_WindowData.FrameIndex].ImageAcquiredSemaphore;
-        err = vkAcquireNextImageKHR(g_Device, g_WindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &g_WindowData.FrameIndex);
+        err = vkAcquireNextImageKHR(d->device, g_WindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &g_WindowData.FrameIndex);
         check_vk_result(err);
 
         ImGui_ImplVulkanH_FrameData* fd = &g_WindowData.Frames[g_WindowData.FrameIndex];
         {
-            err = vkWaitForFences(g_Device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+            err = vkWaitForFences(d->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
             check_vk_result(err);
 
-            err = vkResetFences(g_Device, 1, &fd->Fence);
+            err = vkResetFences(d->device, 1, &fd->Fence);
             check_vk_result(err);
         }
         {
-            err = vkResetCommandPool(g_Device, fd->CommandPool, 0);
+            err = vkResetCommandPool(d->device, fd->CommandPool, 0);
             check_vk_result(err);
             VkCommandBufferBeginInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -601,7 +488,7 @@ void Renderer::renderWidgets()
 
             err = vkEndCommandBuffer(fd->CommandBuffer);
             check_vk_result(err);
-            err = vkQueueSubmit(g_Queue, 1, &info, fd->Fence);
+            err = vkQueueSubmit(d->queue, 1, &info, fd->Fence);
             check_vk_result(err);
         }
     }
@@ -615,7 +502,22 @@ void Renderer::renderWidgets()
         info.swapchainCount = 1;
         info.pSwapchains = &g_WindowData.Swapchain;
         info.pImageIndices = &g_WindowData.FrameIndex;
-        VkResult err = vkQueuePresentKHR(g_Queue, &info);
-        check_vk_result(err);
+        VkResult err = vkQueuePresentKHR(d->queue, &info);
+        if (err == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            int width = 0, height = 0;
+            while (width == 0 || height == 0)
+            {
+                glfwGetFramebufferSize(d->window, &width, &height);
+                glfwWaitEvents();
+            }
+
+            vkDeviceWaitIdle(d->device);
+            ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &g_WindowData, d->allocator, width, height);
+        }
+        else
+        {
+            check_vk_result(err);
+        }
     }
 }

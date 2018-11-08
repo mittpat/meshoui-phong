@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vulkan/vulkan.h>
+
 #include "gltypes.h"
 #include "Camera.h"
 #include "Mesh.h"
@@ -9,7 +11,7 @@
 #include <string>
 #include <vector>
 
-class GLFWwindow;
+struct GLFWwindow;
 namespace Meshoui
 {
     class ProgramUniform final
@@ -109,6 +111,9 @@ namespace Meshoui
         ~RendererPrivate();
         RendererPrivate();
 
+        void destroyGraphicsSubsystem();
+        void createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count);
+
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
         void registerGraphics(Program * program);
@@ -131,7 +136,18 @@ namespace Meshoui
         void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
         const MeshFile & load(const std::string & filename);
 
-        GLFWwindow * window;
+        GLFWwindow*            window;
+        VkAllocationCallbacks* allocator;
+        VkInstance             instance;
+        VkPhysicalDevice       physicalDevice;
+        VkDevice               device;
+        uint32_t               queueFamily;
+        VkQueue                queue;
+        VkPipelineCache        pipelineCache;
+        VkDescriptorPool       descriptorPool;
+        VkSurfaceKHR           surface;
+        VkSurfaceFormatKHR     surfaceFormat;
+        VkPresentModeKHR       presentMode;
 
         ProgramRegistrations programRegistrations;
         MeshRegistrations meshRegistrations;

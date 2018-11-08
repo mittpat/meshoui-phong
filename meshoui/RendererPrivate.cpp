@@ -4,9 +4,6 @@
 #include "TextureLoader.h"
 #include "Uniform.h"
 
-#include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
-
 #include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
@@ -19,6 +16,16 @@ using namespace Meshoui;
 
 namespace
 {
+    void check_vk_result(VkResult err)
+    {
+        if (err == 0) return;
+        printf("VkResult %d\n", err);
+        if (err < 0)
+            abort();
+    }
+
+    #define IM_ARRAYSIZE(_ARR) ((int)(sizeof(_ARR)/sizeof(*_ARR)))
+
     const ProgramRegistration & registrationFor(const ProgramRegistrations & programRegistrations, Program * program)
     {
         auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
@@ -62,13 +69,13 @@ namespace
     {
         //
     }
-
+/*
     bool registerShader(GLenum, const std::vector<std::string> &, const std::string &, GLuint &, std::string * const)
     {
         //
 
         return false;
-    }
+    }*/
 }
 
 void RendererPrivate::unregisterProgram(const ProgramRegistration &)
@@ -78,12 +85,12 @@ void RendererPrivate::unregisterProgram(const ProgramRegistration &)
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
 {
-    GLuint vertex, fragment;
-    if (!registerShader(GL_VERTEX_SHADER, program->defines, program->vertexShaderSource, vertex, &program->lastError))
-        return false;
+    //GLuint vertex, fragment;
+    //if (!registerShader(GL_VERTEX_SHADER, program->defines, program->vertexShaderSource, vertex, &program->lastError))
+    //    return false;
 
-    if (!registerShader(GL_FRAGMENT_SHADER, program->defines, program->fragmentShaderSource, fragment, &program->lastError))
-        return false;
+    //if (!registerShader(GL_FRAGMENT_SHADER, program->defines, program->fragmentShaderSource, fragment, &program->lastError))
+    //    return false;
 
     //
 
@@ -152,12 +159,114 @@ void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistra
 
 RendererPrivate::RendererPrivate() 
     : window(nullptr)
+    , allocator(VK_NULL_HANDLE)
+    , instance(VK_NULL_HANDLE)
+    , physicalDevice(VK_NULL_HANDLE)
+    , device(VK_NULL_HANDLE)
+    , queueFamily(-1)
+    , queue(VK_NULL_HANDLE)
+    , pipelineCache(VK_NULL_HANDLE)
+    , descriptorPool(VK_NULL_HANDLE)
+    , surface(VK_NULL_HANDLE)
+    , surfaceFormat()
+    , presentMode()
     , toFullscreen(false)
     , fullscreen(false)
     , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
     , camera(nullptr)
 {
     
+}
+
+void RendererPrivate::destroyGraphicsSubsystem()
+{
+    vkDestroyDescriptorPool(device, descriptorPool, allocator);
+    vkDestroyDevice(device, allocator);
+    vkDestroyInstance(instance, allocator);
+}
+
+void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count)
+{
+    VkResult err;
+
+    {
+        VkInstanceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        create_info.enabledExtensionCount = extensions_count;
+        create_info.ppEnabledExtensionNames = extensions;
+        err = vkCreateInstance(&create_info, allocator, &instance);
+        check_vk_result(err);
+    }
+
+    {
+        uint32_t count;
+        err = vkEnumeratePhysicalDevices(instance, &count, VK_NULL_HANDLE);
+        check_vk_result(err);
+        std::vector<VkPhysicalDevice> gpus(count);
+        err = vkEnumeratePhysicalDevices(instance, &count, gpus.data());
+        check_vk_result(err);
+        physicalDevice = gpus[0];
+    }
+
+    {
+        uint32_t count;
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, VK_NULL_HANDLE);
+        std::vector<VkQueueFamilyProperties> queues(count);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, queues.data());
+        for (uint32_t i = 0; i < count; i++)
+        {
+            if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                queueFamily = i;
+                break;
+            }
+        }
+    }
+
+    {
+        uint32_t device_extensions_count = 1;
+        const char* device_extensions[] = { "VK_KHR_swapchain" };
+        const float queue_priority[] = { 1.0f };
+        VkDeviceQueueCreateInfo queue_info[1] = {};
+        queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info[0].queueFamilyIndex = queueFamily;
+        queue_info[0].queueCount = 1;
+        queue_info[0].pQueuePriorities = queue_priority;
+        VkDeviceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        create_info.queueCreateInfoCount = IM_ARRAYSIZE(queue_info);
+        create_info.pQueueCreateInfos = queue_info;
+        create_info.enabledExtensionCount = device_extensions_count;
+        create_info.ppEnabledExtensionNames = device_extensions;
+        err = vkCreateDevice(physicalDevice, &create_info, allocator, &device);
+        check_vk_result(err);
+        vkGetDeviceQueue(device, queueFamily, 0, &queue);
+    }
+
+    {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+        pool_info.poolSizeCount = IM_ARRAYSIZE(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        err = vkCreateDescriptorPool(device, &pool_info, allocator, &descriptorPool);
+        check_vk_result(err);
+    }
 }
 
 void RendererPrivate::registerGraphics(Model *model)
