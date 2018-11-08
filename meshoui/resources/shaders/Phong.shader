@@ -12,6 +12,3 @@ uniformSpecular=0.0 0.0 0.0
 uniformEmissive=0.0 0.0 0.0
 uniformFogColor=0.4 0.5 0.75
 uniformFog=100.0 50.0
-[defines]
-version=150
-FOG=1

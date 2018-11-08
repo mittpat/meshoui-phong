@@ -1,20 +1,19 @@
-precision highp float;
+#version 310 es
+precision mediump float;
 
-out vec4 fragment;
+layout(location = 0) out vec4 fragment;
 
-in vec3 vertex;
-in vec3 normal;
-in vec2 texcoord;
-in mat3 TBN;
+layout(location = 0) in vec3 vertex;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in vec2 texcoord;
+layout(location = 3) in mat3 TBN;
 
-#ifdef PARTICLES
-in vec2 gl_PointCoord;
-#endif
+layout(binding = 0) uniform sampler2D uniformTextureDiffuse;
+layout(binding = 1) uniform sampler2D uniformTextureNormal;
+layout(binding = 2) uniform sampler2D uniformTextureSpecular;
 
-uniform sampler2D uniformTextureDiffuse;
-uniform sampler2D uniformTextureNormal;
-uniform sampler2D uniformTextureSpecular;
-
+layout(set=0, binding = 0) uniform Block
+{
 uniform bool uniformTextureDiffuseActive;
 uniform bool uniformTextureNormalActive;
 uniform bool uniformTextureSpecularActive;
@@ -27,29 +26,15 @@ uniform vec3 uniformAmbient;
 uniform vec3 uniformDiffuse;
 uniform vec3 uniformSpecular;
 uniform vec3 uniformEmissive;
-
-#ifdef FOG
-uniform vec3 uniformFogColor;
-uniform vec2 uniformFog;// (100.0, 50.0)
-#endif
+};
 
 void main()
 {
     float fragmentDist = distance(uniformViewPosition, vertex);
 
-#ifdef PARTICLES
-    vec2 texcoorda = gl_PointCoord * max(1.0, sqrt(fragmentDist));
-#else
     vec2 texcoorda = texcoord;
-#endif
 
     vec4 textureDiffuse = texture(uniformTextureDiffuse, vec2(texcoorda.s, 1.0 - texcoorda.t));
-
-#ifndef PARTICLES
-    if (textureDiffuse.a < 0.1)
-        discard;
-    textureDiffuse.a = 1.0;
-#endif
 
     vec3 ambient = (uniformAmbient + uniformLightAmbient) * uniformLightColor;
     textureDiffuse = uniformTextureDiffuseActive ? textureDiffuse : vec4(uniformDiffuse, 1.0);
@@ -73,9 +58,4 @@ void main()
 
         fragment += vec4(diffuse * textureDiffuse.rgb + specular, 0.0);
     }
-
-#ifdef FOG
-    vec3 fogColor = mix(ambient, uniformFogColor, pow(max(dot(vec3(0.0,1.0,0.0), lightDir), 0.0), 0.25));
-    fragment = mix(fragment, vec4(fogColor, fragment.a), clamp((fragmentDist - uniformFog.x) / uniformFog.y, 0.0, 1.0));
-#endif
 }

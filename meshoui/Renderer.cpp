@@ -34,7 +34,7 @@ namespace
             abort();
     }
 
-    static ImGui_ImplVulkanH_WindowData g_WindowData;
+    ImGui_ImplVulkanH_WindowData sWindowData;
 }
 
 using namespace linalg;
@@ -50,7 +50,7 @@ Renderer::~Renderer()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    ImGui_ImplVulkanH_DestroyWindowData(d->instance, d->device, &g_WindowData, d->allocator);
+    ImGui_ImplVulkanH_DestroyWindowData(d->instance, d->device, &sWindowData, d->allocator);
     d->destroyGraphicsSubsystem();
 
     glfwDestroyWindow(d->window);
@@ -80,8 +80,7 @@ Renderer::Renderer()
     d->createGraphicsSubsystem(extensions, extensions_count);
 
     // Create Window Surface
-    VkSurfaceKHR surface;
-    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &surface);
+    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &sWindowData.Surface);
     check_vk_result(err);
 
     // Create Framebuffers
@@ -92,11 +91,9 @@ Renderer::Renderer()
         glfwWaitEvents();
     }
 
-    g_WindowData.Surface = surface;
-
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, g_WindowData.Surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, sWindowData.Surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
@@ -106,15 +103,15 @@ Renderer::Renderer()
     // Select Surface Format
     const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    g_WindowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(d->physicalDevice, g_WindowData.Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    sWindowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(d->physicalDevice, sWindowData.Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
     // Select Present Mode
     VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-    g_WindowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(d->physicalDevice, g_WindowData.Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
+    sWindowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(d->physicalDevice, sWindowData.Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(d->physicalDevice, d->device, d->queueFamily, &g_WindowData, d->allocator);
-    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &g_WindowData, d->allocator, width, height);
+    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(d->physicalDevice, d->device, d->queueFamily, &sWindowData, d->allocator);
+    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &sWindowData, d->allocator, width, height);
 
     // imgui
     IMGUI_CHECKVERSION();
@@ -131,15 +128,15 @@ Renderer::Renderer()
         init_info.DescriptorPool = d->descriptorPool;
         init_info.Allocator = d->allocator;
         init_info.CheckVkResultFn = check_vk_result;
-        ImGui_ImplVulkan_Init(&init_info, g_WindowData.RenderPass);
+        ImGui_ImplVulkan_Init(&init_info, sWindowData.RenderPass);
     }
 
     ImGui::StyleColorsDark();
 
     {
         // Use any command queue
-        VkCommandPool command_pool = g_WindowData.Frames[g_WindowData.FrameIndex].CommandPool;
-        VkCommandBuffer command_buffer = g_WindowData.Frames[g_WindowData.FrameIndex].CommandBuffer;
+        VkCommandPool command_pool = sWindowData.Frames[sWindowData.FrameIndex].CommandPool;
+        VkCommandBuffer command_buffer = sWindowData.Frames[sWindowData.FrameIndex].CommandBuffer;
 
         err = vkResetCommandPool(d->device, command_pool, 0);
         check_vk_result(err);
@@ -436,11 +433,11 @@ void Renderer::renderWidgets()
     {
         VkResult err;
 
-        VkSemaphore& image_acquired_semaphore  = g_WindowData.Frames[g_WindowData.FrameIndex].ImageAcquiredSemaphore;
-        err = vkAcquireNextImageKHR(d->device, g_WindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &g_WindowData.FrameIndex);
+        VkSemaphore& image_acquired_semaphore  = sWindowData.Frames[sWindowData.FrameIndex].ImageAcquiredSemaphore;
+        err = vkAcquireNextImageKHR(d->device, sWindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &sWindowData.FrameIndex);
         check_vk_result(err);
 
-        ImGui_ImplVulkanH_FrameData* fd = &g_WindowData.Frames[g_WindowData.FrameIndex];
+        ImGui_ImplVulkanH_FrameData* fd = &sWindowData.Frames[sWindowData.FrameIndex];
         {
             err = vkWaitForFences(d->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
             check_vk_result(err);
@@ -460,12 +457,12 @@ void Renderer::renderWidgets()
         {
             VkRenderPassBeginInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            info.renderPass = g_WindowData.RenderPass;
-            info.framebuffer = g_WindowData.Framebuffer[g_WindowData.FrameIndex];
-            info.renderArea.extent.width = g_WindowData.Width;
-            info.renderArea.extent.height = g_WindowData.Height;
+            info.renderPass = sWindowData.RenderPass;
+            info.framebuffer = sWindowData.Framebuffer[sWindowData.FrameIndex];
+            info.renderArea.extent.width = sWindowData.Width;
+            info.renderArea.extent.height = sWindowData.Height;
             info.clearValueCount = 1;
-            info.pClearValues = &g_WindowData.ClearValue;
+            info.pClearValues = &sWindowData.ClearValue;
             vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         }
 
@@ -494,14 +491,14 @@ void Renderer::renderWidgets()
     }
 
     {
-        ImGui_ImplVulkanH_FrameData* fd = &g_WindowData.Frames[g_WindowData.FrameIndex];
+        ImGui_ImplVulkanH_FrameData* fd = &sWindowData.Frames[sWindowData.FrameIndex];
         VkPresentInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         info.waitSemaphoreCount = 1;
         info.pWaitSemaphores = &fd->RenderCompleteSemaphore;
         info.swapchainCount = 1;
-        info.pSwapchains = &g_WindowData.Swapchain;
-        info.pImageIndices = &g_WindowData.FrameIndex;
+        info.pSwapchains = &sWindowData.Swapchain;
+        info.pImageIndices = &sWindowData.FrameIndex;
         VkResult err = vkQueuePresentKHR(d->queue, &info);
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -513,7 +510,7 @@ void Renderer::renderWidgets()
             }
 
             vkDeviceWaitIdle(d->device);
-            ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &g_WindowData, d->allocator, width, height);
+            ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &sWindowData, d->allocator, width, height);
         }
         else
         {
