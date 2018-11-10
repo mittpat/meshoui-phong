@@ -1,5 +1,5 @@
-file(GLOB_RECURSE Resources ${CMAKE_CURRENT_SOURCE_DIR}/resources/*)
-set_source_files_properties(${Resources} PROPERTIES HEADER_FILE_ONLY TRUE)
+file(GLOB resources resources/*)
+set_source_files_properties(${resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 add_library(meshouilib
     enums.h
@@ -24,8 +24,12 @@ add_library(meshouilib
     Uniform.h
     Widget.h)
 
+set(shaders resources/shaders/Phong.frag resources/shaders/Phong.vert)
+set(glslang_output_dir ${CMAKE_BINARY_DIR}/meshoui/resources/shaders)
+compile_glsl(spirv ${shaders})
+
 add_custom_target(meshouiresources
-    DEPENDS ${Resources}
+    DEPENDS ${resources}
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources ${CMAKE_BINARY_DIR}/meshoui/resources)
 add_dependencies(meshouilib meshouiresources)
 add_custom_target(meshouilib_data SOURCES ${Resources})
@@ -44,3 +48,6 @@ include_directories(../3rdparty/pugixml)
 include_directories(../common)
 
 target_link_libraries(meshouilib commonlib stdc++fs ${Vulkan_LIBRARIES} glfw iniparser imgui lodepng pugixml nv_dds)
+
+ADD_CUSTOM_TARGET(meshouilib_spirv DEPENDS ${spirv})
+ADD_DEPENDENCIES(meshouilib meshouilib_spirv)
