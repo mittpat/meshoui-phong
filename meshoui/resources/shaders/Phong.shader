@@ -1,7 +1,7 @@
 [vertexShader]
-filename=Phong.vert
+filename=Phong.vert.bin
 [fragmentShader]
-filename=Phong.frag
+filename=Phong.frag.bin
 [uniforms]
 uniformLightPosition=0.0 1.0 0.0
 uniformLightColor=1.0 1.0 1.0

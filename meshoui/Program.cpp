@@ -54,12 +54,12 @@ void Program::load(const std::string & filename)
     {
         std::string shaderFilename = iniparser_getstring(ini, "vertexShader:filename", "");
         std::ifstream fileStream(sibling(shaderFilename, filename));
-        vertexShaderSource = std::string((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        vertexShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
     }
     {
         std::string shaderFilename = iniparser_getstring(ini, "fragmentShader:filename", "");
         std::ifstream fileStream(sibling(shaderFilename, filename));
-        fragmentShaderSource = std::string((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        fragmentShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
     }
     std::vector<const char*> keys(iniparser_getsecnkeys(ini, "uniforms"), nullptr);
     if (iniparser_getseckeys(ini, "uniforms", keys.data()) != nullptr)
@@ -68,18 +68,6 @@ void Program::load(const std::string & filename)
         {
             std::string line = iniparser_getstring(ini, key, "");
             readUniform(filename, split(key, ':')[1], line, this);
-        }
-    }
-    defines.push_back(std::string("#version") + " " + iniparser_getstring(ini, "defines:version", "150") + "\n");
-    std::vector<const char*> defKeys(iniparser_getsecnkeys(ini, "defines"), nullptr);
-    if (iniparser_getseckeys(ini, "defines", defKeys.data()) != nullptr)
-    {
-        for (const char * key : defKeys)
-        {
-            if (strcmp(key, "defines:version") == 0)
-                continue;
-            else
-                defines.push_back(std::string("#define") + " " + split(key, ':')[1] + " " + iniparser_getstring(ini, key, "") + "\n");
         }
     }
     iniparser_freedict(ini);

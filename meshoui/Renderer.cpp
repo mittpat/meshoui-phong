@@ -14,9 +14,14 @@
 #include <algorithm>
 #include <set>
 
+#define USE_IMGUI
+#ifdef USE_IMGUI
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#else
+#define IM_ARRAYSIZE(_ARR)          ((int)(sizeof(_ARR)/sizeof(*_ARR)))         // Size of a static C-style array. Don't use on pointers!
+#endif
 
 namespace
 {
@@ -33,8 +38,6 @@ namespace
         if (err < 0)
             abort();
     }
-
-    ImGui_ImplVulkanH_WindowData sWindowData;
 }
 
 using namespace linalg;
@@ -46,13 +49,16 @@ Renderer::~Renderer()
     // Cleanup
     auto err = vkDeviceWaitIdle(d->device);
     check_vk_result(err);
+#ifdef USE_IMGUI
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-
-    ImGui_ImplVulkanH_DestroyWindowData(d->instance, d->device, &sWindowData, d->allocator);
+#endif
+    d->destroySwapChainAndFramebuffer();
+    d->destroyCommandBuffers();
     d->destroyGraphicsSubsystem();
 
+    vkDestroySurfaceKHR(d->instance, d->surface, d->allocator);
     glfwDestroyWindow(d->window);
     glfwTerminate();
 
@@ -80,7 +86,7 @@ Renderer::Renderer()
     d->createGraphicsSubsystem(extensions, extensions_count);
 
     // Create Window Surface
-    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &sWindowData.Surface);
+    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &d->surface);
     check_vk_result(err);
 
     // Create Framebuffers
@@ -93,7 +99,7 @@ Renderer::Renderer()
 
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, sWindowData.Surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, d->surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
@@ -103,16 +109,16 @@ Renderer::Renderer()
     // Select Surface Format
     const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    sWindowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(d->physicalDevice, sWindowData.Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    d->selectSurfaceFormat(requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
     // Select Present Mode
     VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-    sWindowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(d->physicalDevice, sWindowData.Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
+    d->selectPresentMode(&present_modes[0], IM_ARRAYSIZE(present_modes));
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    ImGui_ImplVulkanH_CreateWindowDataCommandBuffers(d->physicalDevice, d->device, d->queueFamily, &sWindowData, d->allocator);
-    ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &sWindowData, d->allocator, width, height);
-
+    d->createCommandBuffers();
+    d->createSwapChainAndFramebuffer(width, height);
+#ifdef USE_IMGUI
     // imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -128,15 +134,15 @@ Renderer::Renderer()
         init_info.DescriptorPool = d->descriptorPool;
         init_info.Allocator = d->allocator;
         init_info.CheckVkResultFn = check_vk_result;
-        ImGui_ImplVulkan_Init(&init_info, sWindowData.RenderPass);
+        ImGui_ImplVulkan_Init(&init_info, d->renderPass);
     }
 
     ImGui::StyleColorsDark();
 
     {
         // Use any command queue
-        VkCommandPool command_pool = sWindowData.Frames[sWindowData.FrameIndex].CommandPool;
-        VkCommandBuffer command_buffer = sWindowData.Frames[sWindowData.FrameIndex].CommandBuffer;
+        VkCommandPool command_pool = d->frames[d->frameIndex].commandPool;
+        VkCommandBuffer command_buffer = d->frames[d->frameIndex].commandBuffer;
 
         err = vkResetCommandPool(d->device, command_pool, 0);
         check_vk_result(err);
@@ -161,6 +167,7 @@ Renderer::Renderer()
         check_vk_result(err);
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
+#endif
 }
 
 bool Renderer::shouldClose() const
@@ -253,20 +260,6 @@ void Renderer::update(float s)
 {
     glfwPollEvents();
 
-    //glClearColor(0.f, 0.f, 0.f, 1.f);
-    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    //glCullFace(GL_BACK);
-
-    //int w, h;
-    //glfwGetFramebufferSize(d->window, &w, &h);
-    //glViewport(0, 0, w, h);
-
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    //glDisable(GL_CULL_FACE);
-    //glDisable(GL_DEPTH_TEST);
-    //glDisable(GL_BLEND);
-    //glDepthMask(GL_TRUE);
-
     renderMeshes();
     renderWidgets();
 
@@ -297,27 +290,6 @@ void Renderer::renderMeshes()
     {
         if ((mesh->renderFlags & Render::Visible) == 0)
             continue;
-
-        if (!mesh->program->lastError.empty())
-        {
-            printf("%s\n", mesh->program->lastError.c_str());
-            exit(1);
-        }
-
-        //if (mesh->renderFlags & Render::DepthTest)
-        //    glEnable(GL_DEPTH_TEST);
-        //
-        //if (mesh->renderFlags & Render::Blend)
-        //    glEnable(GL_BLEND);
-        //
-        //if ((mesh->renderFlags & Render::DepthWrite) == 0)
-        //    glDepthMask(GL_FALSE);
-        //
-        //if (mesh->renderFlags & Render::BackFaceCulling)
-        //    glEnable(GL_CULL_FACE);
-        //
-        //if (mesh->renderFlags & Render::Points)
-        //    glPointSize(mesh->scale.x);
 
         if (!d->lights.empty())
         {
@@ -352,17 +324,12 @@ void Renderer::renderMeshes()
         mesh->unapplyUniforms();
         mesh->program->unapplyUniforms();
         d->unbindGraphics(mesh->program);
-
-        //glPointSize(1.0f);
-        //glDisable(GL_CULL_FACE);
-        //glDisable(GL_DEPTH_TEST);
-        //glDisable(GL_BLEND);
-        //glDepthMask(GL_TRUE);
     }
 }
 
 void Renderer::renderWidgets()
 {
+#ifdef USE_IMGUI
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -433,44 +400,45 @@ void Renderer::renderWidgets()
     {
         VkResult err;
 
-        VkSemaphore& image_acquired_semaphore  = sWindowData.Frames[sWindowData.FrameIndex].ImageAcquiredSemaphore;
-        err = vkAcquireNextImageKHR(d->device, sWindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &sWindowData.FrameIndex);
+        VkSemaphore& image_acquired_semaphore  = d->frames[d->frameIndex].imageAcquiredSemaphore;
+        err = vkAcquireNextImageKHR(d->device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
         check_vk_result(err);
 
-        ImGui_ImplVulkanH_FrameData* fd = &sWindowData.Frames[sWindowData.FrameIndex];
         {
-            err = vkWaitForFences(d->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+            err = vkWaitForFences(d->device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
             check_vk_result(err);
 
-            err = vkResetFences(d->device, 1, &fd->Fence);
+            err = vkResetFences(d->device, 1, &d->frames[d->frameIndex].fence);
             check_vk_result(err);
         }
         {
-            err = vkResetCommandPool(d->device, fd->CommandPool, 0);
+            err = vkResetCommandPool(d->device, d->frames[d->frameIndex].commandPool, 0);
             check_vk_result(err);
             VkCommandBufferBeginInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            err = vkBeginCommandBuffer(fd->CommandBuffer, &info);
+            err = vkBeginCommandBuffer(d->frames[d->frameIndex].commandBuffer, &info);
             check_vk_result(err);
         }
         {
             VkRenderPassBeginInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            info.renderPass = sWindowData.RenderPass;
-            info.framebuffer = sWindowData.Framebuffer[sWindowData.FrameIndex];
-            info.renderArea.extent.width = sWindowData.Width;
-            info.renderArea.extent.height = sWindowData.Height;
+            info.renderPass = d->renderPass;
+            info.framebuffer = d->framebuffer[d->frameIndex];
+            info.renderArea.extent.width = d->width;
+            info.renderArea.extent.height = d->height;
             info.clearValueCount = 1;
-            info.pClearValues = &sWindowData.ClearValue;
-            vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+            static const VkClearValue ClearValue = {0};
+            info.pClearValues = &ClearValue;
+            vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         }
 
         // Record Imgui Draw Data and draw funcs into command buffer
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), fd->CommandBuffer);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);
 
         // Submit command buffer
-        vkCmdEndRenderPass(fd->CommandBuffer);
+        vkCmdEndRenderPass(d->frames[d->frameIndex].commandBuffer);
         {
             VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             VkSubmitInfo info = {};
@@ -479,26 +447,25 @@ void Renderer::renderWidgets()
             info.pWaitSemaphores = &image_acquired_semaphore;
             info.pWaitDstStageMask = &wait_stage;
             info.commandBufferCount = 1;
-            info.pCommandBuffers = &fd->CommandBuffer;
+            info.pCommandBuffers = &d->frames[d->frameIndex].commandBuffer;
             info.signalSemaphoreCount = 1;
-            info.pSignalSemaphores = &fd->RenderCompleteSemaphore;
+            info.pSignalSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
 
-            err = vkEndCommandBuffer(fd->CommandBuffer);
+            err = vkEndCommandBuffer(d->frames[d->frameIndex].commandBuffer);
             check_vk_result(err);
-            err = vkQueueSubmit(d->queue, 1, &info, fd->Fence);
+            err = vkQueueSubmit(d->queue, 1, &info, d->frames[d->frameIndex].fence);
             check_vk_result(err);
         }
     }
 
     {
-        ImGui_ImplVulkanH_FrameData* fd = &sWindowData.Frames[sWindowData.FrameIndex];
         VkPresentInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &fd->RenderCompleteSemaphore;
+        info.pWaitSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
         info.swapchainCount = 1;
-        info.pSwapchains = &sWindowData.Swapchain;
-        info.pImageIndices = &sWindowData.FrameIndex;
+        info.pSwapchains = &d->swapchain;
+        info.pImageIndices = &d->frameIndex;
         VkResult err = vkQueuePresentKHR(d->queue, &info);
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -510,11 +477,12 @@ void Renderer::renderWidgets()
             }
 
             vkDeviceWaitIdle(d->device);
-            ImGui_ImplVulkanH_CreateWindowDataSwapChainAndFramebuffer(d->physicalDevice, d->device, &sWindowData, d->allocator, width, height);
+            d->createSwapChainAndFramebuffer(width, height);
         }
         else
         {
             check_vk_result(err);
         }
     }
+#endif
 }

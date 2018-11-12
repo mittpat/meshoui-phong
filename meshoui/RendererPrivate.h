@@ -99,8 +99,8 @@ namespace Meshoui
     class RendererPrivate final
     {
     public:
-        static void unregisterProgram(const ProgramRegistration & programRegistration);
-        static bool registerProgram(Program * program, ProgramRegistration & programRegistration);
+        void unregisterProgram(const ProgramRegistration & programRegistration);
+        bool registerProgram(Program * program, ProgramRegistration & programRegistration);
         static void bindProgram(const ProgramRegistration & programRegistration);
         static void unbindProgram(const ProgramRegistration &);
         static void unregisterMesh(const MeshRegistration & meshRegistration);
@@ -111,8 +111,15 @@ namespace Meshoui
         ~RendererPrivate();
         RendererPrivate();
 
+        void selectSurfaceFormat(const VkFormat *request_formats, int request_formats_count, VkColorSpaceKHR request_color_space);
+        void selectPresentMode(const VkPresentModeKHR *request_modes, int request_modes_count);
+
         void destroyGraphicsSubsystem();
         void createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count);
+        void destroyCommandBuffers();
+        void createCommandBuffers();
+        void destroySwapChainAndFramebuffer();
+        void createSwapChainAndFramebuffer(int w, int h);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
@@ -149,8 +156,31 @@ namespace Meshoui
         VkSurfaceFormatKHR     surfaceFormat;
         VkPresentModeKHR       presentMode;
 
+        int                 width;
+        int                 height;
+        VkSwapchainKHR      swapchain;
+        VkRenderPass        renderPass;
+        uint32_t            backBufferCount;
+        VkImage             backBuffer[16];
+        VkImageView         backBufferView[16];
+        VkFramebuffer       framebuffer[16];
+        struct FrameData
+        {
+            uint32_t        backbufferIndex;
+            VkCommandPool   commandPool;
+            VkCommandBuffer commandBuffer;
+            VkFence         fence;
+            VkSemaphore     imageAcquiredSemaphore;
+            VkSemaphore     renderCompleteSemaphore;
+            FrameData();
+        }                   frames[2];
+        uint32_t            frameIndex;
+
+        VkPipelineLayout    meshPipelineLayout; //
+        VkPipeline          meshPipeline;
+
         ProgramRegistrations programRegistrations;
-        MeshRegistrations meshRegistrations;
+        MeshRegistrations    meshRegistrations;
         TextureRegistrations textureRegistrations;
         MeshFiles meshFiles;
 
@@ -162,4 +192,13 @@ namespace Meshoui
         std::vector<Light *> lights;
     };
     inline RendererPrivate::~RendererPrivate() {}
+    inline RendererPrivate::FrameData::FrameData()
+    {
+        backbufferIndex = 0;
+        commandPool = VK_NULL_HANDLE;
+        commandBuffer = VK_NULL_HANDLE;
+        fence = VK_NULL_HANDLE;
+        imageAcquiredSemaphore = VK_NULL_HANDLE;
+        renderCompleteSemaphore = VK_NULL_HANDLE;
+    }
 }

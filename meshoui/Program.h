@@ -26,23 +26,16 @@ namespace Meshoui
         RendererPrivate * d_ptr() const;
 
         // set before adding
-        std::string vertexShaderSource;
-        std::string fragmentShaderSource;
+        std::vector<char> vertexShaderSource;
+        std::vector<char> fragmentShaderSource;
 
         // applied on next frame
         std::vector<IUniform *> uniforms;
-
-        // define constants
-        std::vector<std::string> defines;
-
-        // outputs
-        bool linked;
-        std::string lastError;
 
     private:
         friend class RendererPrivate;
         RendererPrivate * d;
     };
-    inline Program::Program() : linked(false) {}
+    inline Program::Program() {}
     inline RendererPrivate *Program::d_ptr() const { return d; }
 }
