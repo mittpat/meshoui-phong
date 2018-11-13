@@ -1,5 +1,5 @@
 # glfw
-SET(FOO_BUILD_SHARED OFF CACHE BOOL "Build libfoo shared library")
+set(FOO_BUILD_SHARED OFF CACHE BOOL "Build libfoo shared library")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries")
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build the GLFW test programs")

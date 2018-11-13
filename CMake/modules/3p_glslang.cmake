@@ -9,7 +9,7 @@ function(compile_glsl binaries)
   # clear output list
   set(${binaries})
 
-  # generate from each input .proto file
+  # generate from each input .frag/.vert file
   foreach(FIL ${ARGN})
     get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
     get_filename_component(FIL_NAME ${FIL} NAME)
