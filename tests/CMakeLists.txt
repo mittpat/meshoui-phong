@@ -5,7 +5,7 @@ function(my_add_test testFile)
     add_test(NAME ${testName} COMMAND ${testName})
 endfunction()
 
-include_directories(../3rdparty/linalg)
+use_linalg()
 include_directories(../common)
 include_directories(../meshoui)
 

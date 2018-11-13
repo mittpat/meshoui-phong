@@ -10,23 +10,21 @@ add_definitions(-DNV_DDS_NO_GL_SUPPORT)
 
 include_directories(3rdparty/glfw/include)
 
-add_subdirectory(3rdparty/glfw)
-add_subdirectory(3rdparty/imgui)
-add_subdirectory(3rdparty/iniparser)
-add_subdirectory(3rdparty/linalg)
-add_subdirectory(3rdparty/lodepng)
-add_subdirectory(3rdparty/nv_dds)
-add_subdirectory(3rdparty/pugixml)
+add_subdirectory(3rdparty)
 
 include(CMake/modules/3p_glslang.cmake)
+include(CMake/modules/3p_iniparser.cmake)
+include(CMake/modules/3p_linalg.cmake)
+include(CMake/modules/3p_pugixml.cmake)
 
 add_subdirectory(common)
 add_subdirectory(meshoui)
 add_subdirectory(tests)
 
-include_directories(3rdparty/linalg)
 include_directories(common)
 include_directories(meshoui)
+
+use_linalg()
 
 add_executable(meshouiview main.cpp)
 target_link_libraries(meshouiview meshouilib)

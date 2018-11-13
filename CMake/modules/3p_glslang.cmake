@@ -1,8 +1,5 @@
 #glslang: https://github.com/KhronosGroup/glslang
 
-set(glslang_root ${meshoui_root}/3rdparty/glslang)
-find_program(glslang_executable glslangValidator ${glslang_root})
-
 function(compile_glsl binaries)
   if(NOT ARGN)
     message(SEND_ERROR "Error: compile_glsl() called without any glsl files")
@@ -28,11 +25,11 @@ function(compile_glsl binaries)
 
     add_custom_command(
       OUTPUT "${binary}"
-      COMMAND ${glslang_executable}
+      COMMAND glslangValidator
       ARGS -V
            ${ABS_FIL}
            -o ${binary}
-      DEPENDS ${ABS_FIL} ${glslang_executable} glslang_make_output_dir_${FIL_NAME}
+      DEPENDS ${ABS_FIL} glslangValidator glslang_make_output_dir_${FIL_NAME}
       COMMENT "Running glslangValidator on ${FIL_NAME}"
       VERBATIM)
   endforeach()

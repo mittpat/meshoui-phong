@@ -5,7 +5,7 @@ add_library(commonlib
     collada.cpp
     collada.h)
 
-include_directories(../3rdparty/linalg)
-include_directories(../3rdparty/pugixml)
+use_pugixml()
+use_linalg()
 
 target_link_libraries(commonlib stdc++fs pugixml)

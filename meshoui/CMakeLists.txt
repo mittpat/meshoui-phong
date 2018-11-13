@@ -36,14 +36,14 @@ add_custom_target(meshouilib_data SOURCES ${Resources})
 
 find_package(Vulkan REQUIRED)
 
+use_iniparser()
+use_linalg()
+use_pugixml()
 include_directories(${Vulkan_INCLUDE_DIR})
 include_directories(../3rdparty/glfw/include)
-include_directories(../3rdparty/iniparser)
 include_directories(../3rdparty/imgui)
-include_directories(../3rdparty/linalg)
 include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
-include_directories(../3rdparty/pugixml)
 include_directories(../common)
 
 target_link_libraries(meshouilib commonlib stdc++fs ${Vulkan_LIBRARIES} glfw iniparser imgui lodepng pugixml nv_dds)

@@ -1,0 +1,24 @@
+[submodule "3rdparty/glfw"]
+	path = 3rdparty/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "3rdparty/glslang"]
+	path = 3rdparty/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+[submodule "3rdparty/imgui"]
+	path = 3rdparty/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "3rdparty/iniparser"]
+	path = 3rdparty/iniparser
+	url = https://github.com/mittpat/iniparser.git
+[submodule "3rdparty/linalg"]
+	path = 3rdparty/linalg
+	url = https://github.com/mittpat/linalg.git
+[submodule "3rdparty/lodepng"]
+	path = 3rdparty/lodepng
+	url = https://github.com/lvandeve/lodepng.git
+[submodule "3rdparty/nv_dds"]
+	path = 3rdparty/nv_dds
+	url = https://github.com/paroj/nv_dds.git
+[submodule "3rdparty/pugixml"]
+	path = 3rdparty/pugixml
+	url = https://github.com/zeux/pugixml.git

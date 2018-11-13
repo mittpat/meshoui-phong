@@ -71,7 +71,7 @@ namespace DAE
 
     struct Mesh final
     {
-        AABB bbox;
+        linalg::AABB bbox;
         std::vector<Triangle> triangles;
         std::vector<linalg::aliases::float3> vertices;
         std::vector<linalg::aliases::float2> texcoords;
