@@ -43,7 +43,6 @@ include_directories(../3rdparty/imgui)
 include_directories(../3rdparty/linalg)
 include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
-include_directories(../3rdparty/octree)
 include_directories(../3rdparty/pugixml)
 include_directories(../common)
 

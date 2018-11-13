@@ -1,6 +1,7 @@
 add_library(commonlib
     hashid.h
     loose.h
+    octree.h
     collada.cpp
     collada.h)
 

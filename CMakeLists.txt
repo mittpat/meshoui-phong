@@ -16,7 +16,6 @@ add_subdirectory(3rdparty/iniparser)
 add_subdirectory(3rdparty/linalg)
 add_subdirectory(3rdparty/lodepng)
 add_subdirectory(3rdparty/nv_dds)
-add_subdirectory(3rdparty/octree)
 add_subdirectory(3rdparty/pugixml)
 
 include(CMake/modules/3p_glslang.cmake)
