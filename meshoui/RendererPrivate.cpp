@@ -857,7 +857,7 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, float4x4 mo
         VkBuffer vertex_buffers[1] = { fd->VertexBuffer };
         VkDeviceSize vertex_offset[1] = { 0 };
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_offset);
-        vkCmdBindIndexBuffer(command_buffer, fd->IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(command_buffer, fd->IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
     }
 
     // Setup viewport:
