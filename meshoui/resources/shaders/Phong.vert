@@ -12,24 +12,16 @@ layout(location = 2) in vec3 vertexNormal;
 layout(location = 3) in vec3 vertexTangent;
 layout(location = 4) in vec3 vertexBitangent;
 
-layout(set=0, binding = 0) uniform Block
-{
-uniform mat4 uniformModel;
-uniform mat4 uniformView;
-uniform mat4 uniformProjection;
-uniform vec3 uniformLightPosition;
-};
-
 void main()
 {
-    normal = normalize(mat3(transpose(inverse(uniformModel))) * vertexNormal);
+    //normal = vertexNormal;
     texcoord = vertexTexcoord;
-    vec3 T = normalize(vec3(mat3(uniformModel) * vertexTangent));
-    vec3 B = normalize(vec3(mat3(uniformModel) * vertexBitangent));
-    vec3 N = normalize(vec3(mat3(uniformModel) * vertexNormal));
-    TBN = mat3(T, B, N);
+    //vec3 T = vertexTangent;
+    //vec3 B = vertexBitangent;
+    //vec3 N = vertexNormal;
+    //TBN = mat3(T, B, N);
 
-    vertex = vec3(uniformModel * vec4(vertexPosition, 1.0));
+    vertex = vec3(0.0021 * vertexPosition.x - 1.0, 0.0021 * vertexPosition.y - 1.0, vertexPosition.z);
 
-    gl_Position = uniformProjection * uniformView * vec4(vertex, 1.0);
+    gl_Position = vec4(vertex, 1.0);
 }

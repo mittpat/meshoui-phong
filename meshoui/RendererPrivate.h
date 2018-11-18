@@ -11,6 +11,15 @@
 #include <string>
 #include <vector>
 
+typedef Meshoui::Vertex VKVertex;
+
+struct VKDrawable
+{
+    std::vector<unsigned int>   elements;
+    std::vector<unsigned short> indexBuffer;
+    std::vector<VKVertex>       vertexBuffer;
+};
+
 struct GLFWwindow;
 namespace Meshoui
 {
@@ -51,14 +60,16 @@ namespace Meshoui
         ~ProgramRegistration();
         ProgramRegistration();
 
-        GLuint program;
+        VkPipelineLayout pipelineLayout;
+        VkPipeline pipeline;
+        VkDescriptorSetLayout descriptorSetLayout;
+        VkDescriptorSet descriptorSet;
 
         std::vector<ProgramAttribute> attributes;
         std::vector<ProgramUniform> uniforms;
-        GLuint vertexArray;
     };
     inline ProgramRegistration::~ProgramRegistration() {}
-    inline ProgramRegistration::ProgramRegistration() : program(0), vertexArray(0) {}
+    inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
 
     class TextureRegistration final
     {
@@ -99,7 +110,7 @@ namespace Meshoui
     class RendererPrivate final
     {
     public:
-        void unregisterProgram(const ProgramRegistration & programRegistration);
+        void unregisterProgram(ProgramRegistration & programRegistration);
         bool registerProgram(Program * program, ProgramRegistration & programRegistration);
         static void bindProgram(const ProgramRegistration & programRegistration);
         static void unbindProgram(const ProgramRegistration &);
@@ -120,6 +131,10 @@ namespace Meshoui
         void createCommandBuffers();
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h);
+
+        uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
+        void createOrResizeBuffer(VkBuffer &buffer, VkDeviceMemory &buffer_memory, VkDeviceSize &p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage);
+        void renderDrawData(const std::vector<VKDrawable> & drawables, VkCommandBuffer command_buffer, Program *program);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
@@ -175,9 +190,6 @@ namespace Meshoui
             FrameData();
         }                   frames[2];
         uint32_t            frameIndex;
-
-        VkPipelineLayout    meshPipelineLayout; //
-        VkPipeline          meshPipeline;
 
         ProgramRegistrations programRegistrations;
         MeshRegistrations    meshRegistrations;

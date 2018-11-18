@@ -396,6 +396,7 @@ void Renderer::renderWidgets()
 
     // Rendering
     ImGui::Render();
+#endif
 
     {
         VkResult err;
@@ -434,8 +435,32 @@ void Renderer::renderWidgets()
             vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         }
 
-        // Record Imgui Draw Data and draw funcs into command buffer
+        // Fake Drawables
+        std::vector<VKDrawable> drawables;
+        for (int i = 0; i < ImGui::GetDrawData()->CmdListsCount; ++i)
+        {
+            VKDrawable drawable;
+            for (auto elem : ImGui::GetDrawData()->CmdLists[i]->CmdBuffer)
+                drawable.elements.push_back(elem.ElemCount);
+            for (auto idx : ImGui::GetDrawData()->CmdLists[i]->IdxBuffer)
+                drawable.indexBuffer.push_back(idx);
+            for (auto vtx : ImGui::GetDrawData()->CmdLists[i]->VtxBuffer)
+            {
+                VKVertex v;
+                v.position.x = vtx.pos.x;
+                v.position.y = vtx.pos.y;
+                v.texcoord.x = vtx.uv.x;
+                v.texcoord.y = vtx.uv.y;
+                //v.color = vtx.col;
+                drawable.vertexBuffer.push_back(v);
+            }
+            drawables.push_back(drawable);
+        }
+        d->renderDrawData(drawables, d->frames[d->frameIndex].commandBuffer, defaultProgram);
+
+#ifdef USE_IMGUI
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);
+#endif
 
         // Submit command buffer
         vkCmdEndRenderPass(d->frames[d->frameIndex].commandBuffer);
@@ -484,5 +509,4 @@ void Renderer::renderWidgets()
             check_vk_result(err);
         }
     }
-#endif
 }

@@ -70,9 +70,14 @@ namespace
     }
 }
 
-void RendererPrivate::unregisterProgram(const ProgramRegistration &)
+void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
 {
-    //
+    vkDestroyDescriptorSetLayout(device, programRegistration.descriptorSetLayout, allocator);
+    vkDestroyPipelineLayout(device, programRegistration.pipelineLayout, allocator);
+    vkDestroyPipeline(device, programRegistration.pipeline, allocator);
+    programRegistration.descriptorSetLayout = VK_NULL_HANDLE;
+    programRegistration.pipelineLayout = VK_NULL_HANDLE;
+    programRegistration.pipeline = VK_NULL_HANDLE;
 }
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
@@ -94,6 +99,65 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         frag_info.codeSize = program->fragmentShaderSource.size();
         frag_info.pCode = (uint32_t*)program->fragmentShaderSource.data();
         err = vkCreateShaderModule(device, &frag_info, allocator, &frag_module);
+        check_vk_result(err);
+    }
+
+//    if (!g_FontSampler)
+//    {
+//        VkSamplerCreateInfo info = {};
+//        info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+//        info.magFilter = VK_FILTER_LINEAR;
+//        info.minFilter = VK_FILTER_LINEAR;
+//        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+//        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//        info.minLod = -1000;
+//        info.maxLod = 1000;
+//        info.maxAnisotropy = 1.0f;
+//        err = vkCreateSampler(g_Device, &info, g_Allocator, &g_FontSampler);
+//        check_vk_result(err);
+//    }
+
+    {
+        //VkSampler sampler[1] = {g_FontSampler};
+        VkDescriptorSetLayoutBinding binding[1] = {};
+        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding[0].descriptorCount = 1;
+        binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        //binding[0].pImmutableSamplers = sampler;
+        VkDescriptorSetLayoutCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = 1;
+        info.pBindings = binding;
+        err = vkCreateDescriptorSetLayout(device, &info, allocator, &programRegistration.descriptorSetLayout);
+        check_vk_result(err);
+    }
+
+    {
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = descriptorPool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &programRegistration.descriptorSetLayout;
+        err = vkAllocateDescriptorSets(device, &alloc_info, &programRegistration.descriptorSet);
+        check_vk_result(err);
+    }
+
+    {
+        // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full 3d projection matrix
+        VkPushConstantRange push_constants[1] = {};
+        push_constants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        push_constants[0].offset = sizeof(float) * 0;
+        push_constants[0].size = sizeof(float) * 4;
+        VkDescriptorSetLayout set_layout[1] = { programRegistration.descriptorSetLayout };
+        VkPipelineLayoutCreateInfo layout_info = {};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_info.setLayoutCount = 1;
+        layout_info.pSetLayouts = set_layout;
+        layout_info.pushConstantRangeCount = 1;
+        layout_info.pPushConstantRanges = push_constants;
+        err = vkCreatePipelineLayout(device, &layout_info, allocator, &programRegistration.pipelineLayout);
         check_vk_result(err);
     }
 
@@ -198,9 +262,9 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     info.pDepthStencilState = &depth_info;
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
-    info.layout = meshPipelineLayout;
+    info.layout = programRegistration.pipelineLayout;
     info.renderPass = renderPass;
-    err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, &meshPipeline);
+    err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, &programRegistration.pipeline);
     check_vk_result(err);
 
     vkDestroyShaderModule(device, frag_module, nullptr);
@@ -294,8 +358,6 @@ RendererPrivate::RendererPrivate()
     , frames()
     , frameIndex(0)
 
-    , meshPipelineLayout(VK_NULL_HANDLE)
-    , meshPipeline(VK_NULL_HANDLE)
     , toFullscreen(false)
     , fullscreen(false)
     , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
@@ -678,6 +740,176 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
             err = vkCreateFramebuffer(device, &info, allocator, &framebuffer[i]);
             check_vk_result(err);
         }
+    }
+}
+
+uint32_t RendererPrivate::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
+{
+    VkPhysicalDeviceMemoryProperties prop;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
+    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
+        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
+            return i;
+    return 0xFFFFFFFF; // Unable to find memoryType
+}
+
+void RendererPrivate::createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& buffer_memory, VkDeviceSize& p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage)
+{
+    static VkDeviceSize g_BufferMemoryAlignment = 256;
+
+    VkResult err;
+    if (buffer != VK_NULL_HANDLE)
+        vkDestroyBuffer(device, buffer, allocator);
+    if (buffer_memory)
+        vkFreeMemory(device, buffer_memory, allocator);
+
+    VkDeviceSize vertex_buffer_size_aligned = ((new_size - 1) / g_BufferMemoryAlignment + 1) * g_BufferMemoryAlignment;
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = vertex_buffer_size_aligned;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    err = vkCreateBuffer(device, &buffer_info, allocator, &buffer);
+    check_vk_result(err);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(device, buffer, &req);
+    g_BufferMemoryAlignment = (g_BufferMemoryAlignment > req.alignment) ? g_BufferMemoryAlignment : req.alignment;
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = req.size;
+    alloc_info.memoryTypeIndex = memoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
+    err = vkAllocateMemory(device, &alloc_info, allocator, &buffer_memory);
+    check_vk_result(err);
+
+    err = vkBindBufferMemory(device, buffer, buffer_memory, 0);
+    check_vk_result(err);
+    p_buffer_size = new_size;
+}
+
+void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, VkCommandBuffer command_buffer, Program * program)
+{
+    const ProgramRegistration & registration = registrationFor(programRegistrations, program);
+
+#define IMGUI_VK_QUEUED_FRAMES 2
+    struct FrameDataForRender
+    {
+        VkDeviceMemory  VertexBufferMemory;
+        VkDeviceMemory  IndexBufferMemory;
+        VkDeviceSize    VertexBufferSize;
+        VkDeviceSize    IndexBufferSize;
+        VkBuffer        VertexBuffer;
+        VkBuffer        IndexBuffer;
+    };
+    static int                    g_FrameIndex = 0;
+    static FrameDataForRender     g_FramesDataBuffers[IMGUI_VK_QUEUED_FRAMES] = {};
+
+    VkResult err;
+    if (drawables.empty())
+        return;
+
+    FrameDataForRender* fd = &g_FramesDataBuffers[g_FrameIndex];
+    g_FrameIndex = (g_FrameIndex + 1) % IMGUI_VK_QUEUED_FRAMES;
+
+    // Create the Vertex and Index buffers:
+    size_t vertex_size = 0;
+    size_t index_size = 0;
+    for (const VKDrawable& cmd_list : drawables)
+    {
+        vertex_size += cmd_list.vertexBuffer.size() * sizeof(VKVertex);
+        index_size += cmd_list.indexBuffer.size() * sizeof(unsigned short);
+    }
+    if (!fd->VertexBuffer || fd->VertexBufferSize < vertex_size)
+        createOrResizeBuffer(fd->VertexBuffer, fd->VertexBufferMemory, fd->VertexBufferSize, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    if (!fd->IndexBuffer || fd->IndexBufferSize < index_size)
+        createOrResizeBuffer(fd->IndexBuffer, fd->IndexBufferMemory, fd->IndexBufferSize, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+    // Upload Vertex and index Data:
+    {
+        VKVertex* vtx_dst = NULL;
+        unsigned short* idx_dst = NULL;
+        err = vkMapMemory(device, fd->VertexBufferMemory, 0, vertex_size, 0, (void**)(&vtx_dst));
+        check_vk_result(err);
+        err = vkMapMemory(device, fd->IndexBufferMemory, 0, index_size, 0, (void**)(&idx_dst));
+        check_vk_result(err);
+        for (const VKDrawable& cmd_list : drawables)
+        {
+            memcpy(vtx_dst, cmd_list.vertexBuffer.data(), cmd_list.vertexBuffer.size() * sizeof(VKVertex));
+            memcpy(idx_dst, cmd_list.indexBuffer.data(), cmd_list.indexBuffer.size() * sizeof(unsigned short));
+            vtx_dst += cmd_list.vertexBuffer.size();
+            idx_dst += cmd_list.indexBuffer.size();
+        }
+        VkMappedMemoryRange range[2] = {};
+        range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        range[0].memory = fd->VertexBufferMemory;
+        range[0].size = VK_WHOLE_SIZE;
+        range[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        range[1].memory = fd->IndexBufferMemory;
+        range[1].size = VK_WHOLE_SIZE;
+        err = vkFlushMappedMemoryRanges(device, 2, range);
+        check_vk_result(err);
+        vkUnmapMemory(device, fd->VertexBufferMemory);
+        vkUnmapMemory(device, fd->IndexBufferMemory);
+    }
+
+    // Bind pipeline and descriptor sets:
+    {
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, registration.pipeline);
+        VkDescriptorSet desc_set[1] = { registration.descriptorSet };
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, registration.pipelineLayout, 0, 1, desc_set, 0, NULL);
+    }
+
+    // Bind Vertex And Index Buffer:
+    {
+        VkBuffer vertex_buffers[1] = { fd->VertexBuffer };
+        VkDeviceSize vertex_offset[1] = { 0 };
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_offset);
+        vkCmdBindIndexBuffer(command_buffer, fd->IndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    }
+
+    // Setup viewport:
+    {
+        VkViewport viewport;
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = width;
+        viewport.height = height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+    }
+
+    // Setup scale and translation:
+    // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right). DisplayMin is typically (0,0) for single viewport apps.
+    {
+        float scale[2];
+        scale[0] = 2.0f / width;
+        scale[1] = 2.0f / height;
+        float translate[2];
+        translate[0] = -1.0f - 0 * scale[0];
+        translate[1] = -1.0f - 0 * scale[1];
+        vkCmdPushConstants(command_buffer, registration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 2, scale);
+        vkCmdPushConstants(command_buffer, registration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 2, sizeof(float) * 2, translate);
+    }
+
+    VkRect2D scissor;
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent.width = width;
+    scissor.extent.height = height;
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    // Render the command lists:
+    int vtx_offset = 0;
+    int idx_offset = 0;
+    for (const VKDrawable& cmd_list : drawables)
+    {
+        for (auto elem : cmd_list.elements)
+        {
+            vkCmdDrawIndexed(command_buffer, elem, 1, idx_offset, vtx_offset, 0);
+            idx_offset += elem;
+        }
+        vtx_offset += cmd_list.vertexBuffer.size();
     }
 }
 
