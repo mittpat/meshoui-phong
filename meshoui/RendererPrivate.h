@@ -11,15 +11,6 @@
 #include <string>
 #include <vector>
 
-typedef Meshoui::Vertex VKVertex;
-
-struct VKDrawable
-{
-    std::vector<unsigned int>   elements;
-    std::vector<unsigned short> indexBuffer;
-    std::vector<VKVertex>       vertexBuffer;
-};
-
 struct GLFWwindow;
 namespace Meshoui
 {
@@ -92,6 +83,8 @@ namespace Meshoui
         MeshRegistration();
 
         HashId definitionId;
+        std::vector<unsigned int> indices;  //
+        std::vector<Vertex>       vertices; //
         GLuint indexBuffer;
         GLuint vertexBuffer;
         size_t indexBufferSize;
@@ -134,7 +127,7 @@ namespace Meshoui
 
         uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createOrResizeBuffer(VkBuffer &buffer, VkDeviceMemory &buffer_memory, VkDeviceSize &p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage);
-        void renderDrawData(const std::vector<VKDrawable> & drawables, VkCommandBuffer command_buffer, Program *program);
+        void renderDrawData(Program * program, Mesh * mesh, linalg::aliases::float4x4 model, linalg::aliases::float4x4 view, linalg::aliases::float4x4 projection);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);

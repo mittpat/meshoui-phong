@@ -58,7 +58,7 @@ Renderer::~Renderer()
     d->destroyCommandBuffers();
     d->destroyGraphicsSubsystem();
 
-    vkDestroySurfaceKHR(d->instance, d->surface, d->allocator);
+    //vkDestroySurfaceKHR(d->instance, d->surface, d->allocator);
     glfwDestroyWindow(d->window);
     glfwTerminate();
 
@@ -435,28 +435,20 @@ void Renderer::renderWidgets()
             vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
         }
 
-        // Fake Drawables
-        std::vector<VKDrawable> drawables;
-        for (int i = 0; i < ImGui::GetDrawData()->CmdListsCount; ++i)
+        std::stable_sort(meshes.begin(), meshes.end(), [](Mesh *, Mesh * right) { return (right->renderFlags & Render::DepthWrite) == 0; });
+        for (Mesh * mesh : meshes)
         {
-            VKDrawable drawable;
-            for (auto elem : ImGui::GetDrawData()->CmdLists[i]->CmdBuffer)
-                drawable.elements.push_back(elem.ElemCount);
-            for (auto idx : ImGui::GetDrawData()->CmdLists[i]->IdxBuffer)
-                drawable.indexBuffer.push_back(idx);
-            for (auto vtx : ImGui::GetDrawData()->CmdLists[i]->VtxBuffer)
-            {
-                VKVertex v;
-                v.position.x = vtx.pos.x;
-                v.position.y = vtx.pos.y;
-                v.texcoord.x = vtx.uv.x;
-                v.texcoord.y = vtx.uv.y;
-                //v.color = vtx.col;
-                drawable.vertexBuffer.push_back(v);
-            }
-            drawables.push_back(drawable);
+            if ((mesh->renderFlags & Render::Visible) == 0)
+                continue;
+            float4x4 model = identity;
+            float4x4 view = identity;
+            float4x4 projection = identity;
+            model = mesh->modelMatrix();
+            if (d->camera != nullptr)
+                view = d->camera->viewMatrix(mesh->viewFlags);
+            projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
+            d->renderDrawData(mesh->program, mesh, model, view, projection);
         }
-        d->renderDrawData(drawables, d->frames[d->frameIndex].commandBuffer, defaultProgram);
 
 #ifdef USE_IMGUI
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);

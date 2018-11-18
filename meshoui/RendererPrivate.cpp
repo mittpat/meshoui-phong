@@ -145,11 +145,11 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     }
 
     {
-        // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full 3d projection matrix
+        // model, view & projection
         VkPushConstantRange push_constants[1] = {};
         push_constants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        push_constants[0].offset = sizeof(float) * 0;
-        push_constants[0].size = sizeof(float) * 4;
+        push_constants[0].offset = 0;
+        push_constants[0].size = sizeof(float4x4) * 3;
         VkDescriptorSetLayout set_layout[1] = { programRegistration.descriptorSetLayout };
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -291,6 +291,9 @@ void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
     //
+
+    meshRegistration.indices = meshDefinition.indices;
+    meshRegistration.vertices = meshDefinition.vertices;
 
     meshRegistration.indexBufferSize = meshDefinition.indices.size();
     meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
@@ -787,11 +790,13 @@ void RendererPrivate::createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& buf
     p_buffer_size = new_size;
 }
 
-void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, VkCommandBuffer command_buffer, Program * program)
+void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, float4x4 model, float4x4 view, float4x4 projection)
 {
-    const ProgramRegistration & registration = registrationFor(programRegistrations, program);
+    VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
 
-#define IMGUI_VK_QUEUED_FRAMES 2
+    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
+    const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
+
     struct FrameDataForRender
     {
         VkDeviceMemory  VertexBufferMemory;
@@ -801,43 +806,31 @@ void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, 
         VkBuffer        VertexBuffer;
         VkBuffer        IndexBuffer;
     };
-    static int                    g_FrameIndex = 0;
-    static FrameDataForRender     g_FramesDataBuffers[IMGUI_VK_QUEUED_FRAMES] = {};
-
-    VkResult err;
-    if (drawables.empty())
-        return;
-
-    FrameDataForRender* fd = &g_FramesDataBuffers[g_FrameIndex];
-    g_FrameIndex = (g_FrameIndex + 1) % IMGUI_VK_QUEUED_FRAMES;
+    FrameDataForRender g_FramesDataBuffers[2] = {};
+    FrameDataForRender* fd = &g_FramesDataBuffers[frameIndex];
 
     // Create the Vertex and Index buffers:
-    size_t vertex_size = 0;
-    size_t index_size = 0;
-    for (const VKDrawable& cmd_list : drawables)
-    {
-        vertex_size += cmd_list.vertexBuffer.size() * sizeof(VKVertex);
-        index_size += cmd_list.indexBuffer.size() * sizeof(unsigned short);
-    }
+    size_t vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
+    size_t index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
     if (!fd->VertexBuffer || fd->VertexBufferSize < vertex_size)
         createOrResizeBuffer(fd->VertexBuffer, fd->VertexBufferMemory, fd->VertexBufferSize, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     if (!fd->IndexBuffer || fd->IndexBufferSize < index_size)
         createOrResizeBuffer(fd->IndexBuffer, fd->IndexBufferMemory, fd->IndexBufferSize, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
+    VkResult err;
     // Upload Vertex and index Data:
     {
-        VKVertex* vtx_dst = NULL;
-        unsigned short* idx_dst = NULL;
+        Vertex* vtx_dst = NULL;
+        unsigned int* idx_dst = NULL;
         err = vkMapMemory(device, fd->VertexBufferMemory, 0, vertex_size, 0, (void**)(&vtx_dst));
         check_vk_result(err);
         err = vkMapMemory(device, fd->IndexBufferMemory, 0, index_size, 0, (void**)(&idx_dst));
         check_vk_result(err);
-        for (const VKDrawable& cmd_list : drawables)
         {
-            memcpy(vtx_dst, cmd_list.vertexBuffer.data(), cmd_list.vertexBuffer.size() * sizeof(VKVertex));
-            memcpy(idx_dst, cmd_list.indexBuffer.data(), cmd_list.indexBuffer.size() * sizeof(unsigned short));
-            vtx_dst += cmd_list.vertexBuffer.size();
-            idx_dst += cmd_list.indexBuffer.size();
+            memcpy(vtx_dst, meshRegistration.vertices.data(), meshRegistration.vertexBufferSize * sizeof(Vertex));
+            memcpy(idx_dst, meshRegistration.indices.data(), meshRegistration.indexBufferSize * sizeof(unsigned int));
+            vtx_dst += meshRegistration.vertexBufferSize;
+            idx_dst += meshRegistration.indexBufferSize;
         }
         VkMappedMemoryRange range[2] = {};
         range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -854,9 +847,9 @@ void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, 
 
     // Bind pipeline and descriptor sets:
     {
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, registration.pipeline);
-        VkDescriptorSet desc_set[1] = { registration.descriptorSet };
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, registration.pipelineLayout, 0, 1, desc_set, 0, NULL);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
+        VkDescriptorSet desc_set[1] = { programRegistration.descriptorSet };
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, desc_set, 0, NULL);
     }
 
     // Bind Vertex And Index Buffer:
@@ -875,21 +868,14 @@ void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, 
         viewport.width = width;
         viewport.height = height;
         viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+        viewport.maxDepth = 100.0f;
         vkCmdSetViewport(command_buffer, 0, 1, &viewport);
     }
 
-    // Setup scale and translation:
-    // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right). DisplayMin is typically (0,0) for single viewport apps.
     {
-        float scale[2];
-        scale[0] = 2.0f / width;
-        scale[1] = 2.0f / height;
-        float translate[2];
-        translate[0] = -1.0f - 0 * scale[0];
-        translate[1] = -1.0f - 0 * scale[1];
-        vkCmdPushConstants(command_buffer, registration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 0, sizeof(float) * 2, scale);
-        vkCmdPushConstants(command_buffer, registration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 2, sizeof(float) * 2, translate);
+        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 0, sizeof(float4x4), &model);
+        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 1, sizeof(float4x4), &view);
+        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 2, sizeof(float4x4), &projection);
     }
 
     VkRect2D scissor;
@@ -900,17 +886,7 @@ void RendererPrivate::renderDrawData(const std::vector<VKDrawable> & drawables, 
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
     // Render the command lists:
-    int vtx_offset = 0;
-    int idx_offset = 0;
-    for (const VKDrawable& cmd_list : drawables)
-    {
-        for (auto elem : cmd_list.elements)
-        {
-            vkCmdDrawIndexed(command_buffer, elem, 1, idx_offset, vtx_offset, 0);
-            idx_offset += elem;
-        }
-        vtx_offset += cmd_list.vertexBuffer.size();
-    }
+    vkCmdDrawIndexed(command_buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 
 void RendererPrivate::registerGraphics(Model *model)
