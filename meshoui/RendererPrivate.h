@@ -14,36 +14,25 @@
 struct GLFWwindow;
 namespace Meshoui
 {
-    class ProgramUniform final
+    class ProgramReflection final
     {
     public:
-        ~ProgramUniform();
-        ProgramUniform();
+        ~ProgramReflection();
+        ProgramReflection();
 
-        GLuint index;
         HashId name;
-        GLint size;
-        GLenum type;
-        GLuint buffer;
-        GLuint unit;
-        GLuint enabler;
+        int32_t offset;
+        uint32_t type;
+        uint32_t size;
+        int32_t index;
+        int32_t binding;
+        int32_t stages;
     };
-    inline ProgramUniform::~ProgramUniform() {}
-    inline ProgramUniform::ProgramUniform() : index(0), size(0), type(0), buffer(0), unit(0), enabler(0) {}
+    inline ProgramReflection::~ProgramReflection() {}
+    inline ProgramReflection::ProgramReflection() : offset(0), type(0U), size(0U), index(0), binding(0), stages(0) {}
 
-    class ProgramAttribute final
-    {
-    public:
-        ~ProgramAttribute();
-        ProgramAttribute();
-
-        GLuint index;
-        HashId name;
-        GLint size;
-        GLenum type;
-    };
-    inline ProgramAttribute::~ProgramAttribute() {}
-    inline ProgramAttribute::ProgramAttribute() : index(0), size(0), type(0) {}
+    typedef ProgramReflection ProgramUniform;
+    typedef ProgramReflection ProgramAttribute;
 
     class ProgramRegistration final
     {
@@ -56,8 +45,9 @@ namespace Meshoui
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet;
 
-        std::vector<ProgramAttribute> attributes;
-        std::vector<ProgramUniform> uniforms;
+        std::vector<ProgramReflection> attributes;
+        std::vector<ProgramReflection> uniforms;
+        std::vector<ProgramReflection> uniformBlocks;
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}

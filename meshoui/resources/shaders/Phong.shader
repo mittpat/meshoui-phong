@@ -1,4 +1,6 @@
 [vertexShader]
-filename=Phong.vert.bin
+filename=Phong.vert.spv
+reflection=Phong.vert.ref
 [fragmentShader]
-filename=Phong.frag.bin
+filename=Phong.frag.spv
+reflection=Phong.vert.ref

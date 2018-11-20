@@ -27,7 +27,9 @@ namespace Meshoui
 
         // set before adding
         std::vector<char> vertexShaderSource;
+        std::vector<char> vertexShaderReflection;
         std::vector<char> fragmentShaderSource;
+        std::vector<char> fragmentShaderReflection;
 
         // applied on next frame
         std::vector<IUniform *> uniforms;

@@ -22,6 +22,7 @@ typedef int GLclampx;
 #define GL_FLOAT_VEC2_ARB 0x8B50
 #define GL_FLOAT_VEC3_ARB 0x8B51
 #define GL_FLOAT_VEC4_ARB 0x8B52
+#define GL_FLOAT_MAT4_ARB 0x8B5C
 #define GL_SAMPLER_2D_ARB 0x8B5E
 
 inline constexpr GLenum enumForVectorSize(size_t size)

@@ -82,6 +82,87 @@ void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistratio
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
 {
+    {
+        enum Section
+        {
+            Invalid,
+            Uniform_reflection,
+            Uniform_block_reflection,
+            Vertex_attribute_reflection
+        } currentSection = Invalid;
+
+        std::istringstream input(program->vertexShaderReflection.data());
+        for (std::string line; std::getline(input, line); )
+        {
+            if      (line == "Uniform reflection:")          { currentSection = Uniform_reflection;          }
+            else if (line == "Uniform block reflection:")    { currentSection = Uniform_block_reflection;    }
+            else if (line == "Vertex attribute reflection:") { currentSection = Vertex_attribute_reflection; }
+            else
+            {
+                auto uni = split(line, ':');
+                if (uni.size() > 1)
+                {
+                    switch (currentSection)
+                    {
+                    case Uniform_reflection:
+                    {
+                        ProgramReflection uniform;
+                        uniform.name = uni[0];
+                        for (auto entry : split(uni[1], ','))
+                        {
+                            auto pair = split(entry, ' ');
+                            if      (pair[0] == "offset")  uniform.offset  = std::stoi(pair[1]);
+                            else if (pair[0] == "type")    uniform.type    = std::stoul(pair[1], nullptr, 16);
+                            else if (pair[0] == "size")    uniform.size    = std::stoul(pair[1]);
+                            else if (pair[0] == "index")   uniform.index   = std::stoi(pair[1]);
+                            else if (pair[0] == "binding") uniform.binding = std::stoi(pair[1]);
+                            else if (pair[0] == "stages")  uniform.stages  = std::stoi(pair[1]);
+                        }
+                        programRegistration.uniforms.push_back(uniform);
+                        break;
+                    }
+                    case Uniform_block_reflection:
+                    {
+                        ProgramReflection block;
+                        block.name = uni[0];
+                        for (auto entry : split(uni[1], ','))
+                        {
+                            auto pair = split(entry, ' ');
+                            if      (pair[0] == "offset")  block.offset  = std::stoi(pair[1]);
+                            else if (pair[0] == "type")    block.type    = std::stoul(pair[1], nullptr, 16);
+                            else if (pair[0] == "size")    block.size    = std::stoul(pair[1]);
+                            else if (pair[0] == "index")   block.index   = std::stoi(pair[1]);
+                            else if (pair[0] == "binding") block.binding = std::stoi(pair[1]);
+                            else if (pair[0] == "stages")  block.stages  = std::stoi(pair[1]);
+                        }
+                        programRegistration.uniformBlocks.push_back(block);
+                        break;
+                    }
+                    case Vertex_attribute_reflection:
+                    {
+                        ProgramReflection attribute;
+                        attribute.name = uni[0];
+                        for (auto entry : split(uni[1], ','))
+                        {
+                            auto pair = split(entry, ' ');
+                            if      (pair[0] == "offset")  attribute.offset  = std::stoi(pair[1]);
+                            else if (pair[0] == "type")    attribute.type    = std::stoul(pair[1], nullptr, 16);
+                            else if (pair[0] == "size")    attribute.size    = std::stoul(pair[1]);
+                            else if (pair[0] == "index")   attribute.index   = std::stoi(pair[1]);
+                            else if (pair[0] == "binding") attribute.binding = std::stoi(pair[1]);
+                            else if (pair[0] == "stages")  attribute.stages  = std::stoi(pair[1]);
+                        }
+                        programRegistration.attributes.push_back(attribute);
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     VkResult err;
     VkShaderModule vert_module;
     VkShaderModule frag_module;
@@ -146,17 +227,22 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 
     {
         // model, view & projection
-        VkPushConstantRange push_constants[1] = {};
-        push_constants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        push_constants[0].offset = 0;
-        push_constants[0].size = sizeof(float4x4) * 3;
+        std::vector<VkPushConstantRange> push_constants;
+        for (const auto & uniformBlock : programRegistration.uniformBlocks)
+        {
+            VkPushConstantRange pc;
+            pc.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            pc.offset = 0;
+            pc.size = uniformBlock.size;
+            push_constants.push_back(pc);
+        }
         VkDescriptorSetLayout set_layout[1] = { programRegistration.descriptorSetLayout };
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount = 1;
         layout_info.pSetLayouts = set_layout;
-        layout_info.pushConstantRangeCount = 1;
-        layout_info.pPushConstantRanges = push_constants;
+        layout_info.pushConstantRangeCount = push_constants.size();
+        layout_info.pPushConstantRanges = push_constants.data();
         err = vkCreatePipelineLayout(device, &layout_info, allocator, &programRegistration.pipelineLayout);
         check_vk_result(err);
     }
