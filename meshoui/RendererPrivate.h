@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include "glslang.h"
 #include "gltypes.h"
 #include "Camera.h"
 #include "Mesh.h"
@@ -14,25 +15,8 @@
 struct GLFWwindow;
 namespace Meshoui
 {
-    class ProgramReflection final
-    {
-    public:
-        ~ProgramReflection();
-        ProgramReflection();
-
-        HashId name;
-        int32_t offset;
-        uint32_t type;
-        uint32_t size;
-        int32_t index;
-        int32_t binding;
-        int32_t stages;
-    };
-    inline ProgramReflection::~ProgramReflection() {}
-    inline ProgramReflection::ProgramReflection() : offset(0), type(0U), size(0U), index(0), binding(0), stages(0) {}
-
-    typedef ProgramReflection ProgramUniform;
-    typedef ProgramReflection ProgramAttribute;
+    typedef ReflectionInfo ProgramUniform;
+    typedef ReflectionInfo ProgramAttribute;
 
     class ProgramRegistration final
     {
@@ -45,9 +29,7 @@ namespace Meshoui
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet;
 
-        std::vector<ProgramReflection> attributes;
-        std::vector<ProgramReflection> uniforms;
-        std::vector<ProgramReflection> uniformBlocks;
+        PipelineReflectionInfo pipelineReflectionInfo;
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}

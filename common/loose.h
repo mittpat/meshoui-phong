@@ -18,11 +18,10 @@ inline std::vector<std::string> split(const std::string & str, char sep, bool ke
 {
     std::vector<std::string> values;
     std::istringstream splitter(str);
-    std::string s;
-    while (std::getline(splitter, s, sep))
+    for (std::string line; std::getline(splitter, line, sep); )
     {
-        if (keepEmptyParts || !s.empty())
-            values.push_back(s);
+        if (keepEmptyParts || !line.empty())
+            values.push_back(line);
     }
     return values;
 }

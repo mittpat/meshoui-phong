@@ -3,4 +3,4 @@ filename=Phong.vert.spv
 reflection=Phong.vert.ref
 [fragmentShader]
 filename=Phong.frag.spv
-reflection=Phong.vert.ref
+reflection=Phong.frag.ref
