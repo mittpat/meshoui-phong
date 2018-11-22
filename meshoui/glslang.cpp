@@ -33,7 +33,7 @@ void glslLangOutputParse(ShaderModuleReflectionInfo &shaderModuleReflectionInfo,
                         if      (pair[0] == "offset")  uniform.offset  = std::stoi(pair[1]);
                         else if (pair[0] == "type")    uniform.type    = std::stoul(pair[1], nullptr, 16);
                         else if (pair[0] == "size")    uniform.size    = std::stoul(pair[1]);
-                        else if (pair[0] == "index")   uniform.index   = std::stoi(pair[1]);
+                        else if (pair[0] == "index")   uniform.index   = std::stoul(pair[1]);
                         else if (pair[0] == "binding") uniform.binding = std::stoi(pair[1]);
                         else if (pair[0] == "stages")  uniform.stages  = std::stoi(pair[1]);
                     }
@@ -50,7 +50,7 @@ void glslLangOutputParse(ShaderModuleReflectionInfo &shaderModuleReflectionInfo,
                         if      (pair[0] == "offset")  block.offset  = std::stoi(pair[1]);
                         else if (pair[0] == "type")    block.type    = std::stoul(pair[1], nullptr, 16);
                         else if (pair[0] == "size")    block.size    = std::stoul(pair[1]);
-                        else if (pair[0] == "index")   block.index   = std::stoi(pair[1]);
+                        else if (pair[0] == "index")   block.index   = std::stoul(pair[1]);
                         else if (pair[0] == "binding") block.binding = std::stoi(pair[1]);
                         else if (pair[0] == "stages")  block.stages  = std::stoi(pair[1]);
                     }
@@ -67,7 +67,7 @@ void glslLangOutputParse(ShaderModuleReflectionInfo &shaderModuleReflectionInfo,
                         if      (pair[0] == "offset")  attribute.offset  = std::stoi(pair[1]);
                         else if (pair[0] == "type")    attribute.type    = std::stoul(pair[1], nullptr, 16);
                         else if (pair[0] == "size")    attribute.size    = std::stoul(pair[1]);
-                        else if (pair[0] == "index")   attribute.index   = std::stoi(pair[1]);
+                        else if (pair[0] == "index")   attribute.index   = std::stoul(pair[1]);
                         else if (pair[0] == "binding") attribute.binding = std::stoi(pair[1]);
                         else if (pair[0] == "stages")  attribute.stages  = std::stoi(pair[1]);
                     }

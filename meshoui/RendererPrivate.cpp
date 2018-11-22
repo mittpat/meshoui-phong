@@ -183,34 +183,27 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     binding_desc[0].stride = sizeof(Vertex);
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    VkVertexInputAttributeDescription attribute_desc[5] = {};
-    attribute_desc[0].location = 0;
-    attribute_desc[0].binding = binding_desc[0].binding;
-    attribute_desc[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attribute_desc[0].offset = offsetof(struct Vertex, position);
-    attribute_desc[1].location = 1;
-    attribute_desc[1].binding = binding_desc[0].binding;
-    attribute_desc[1].format = VK_FORMAT_R32G32_SFLOAT;
-    attribute_desc[1].offset = offsetof(struct Vertex, texcoord);
-    attribute_desc[2].location = 2;
-    attribute_desc[2].binding = binding_desc[0].binding;
-    attribute_desc[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attribute_desc[2].offset = offsetof(struct Vertex, normal);
-    attribute_desc[3].location = 3;
-    attribute_desc[3].binding = binding_desc[0].binding;
-    attribute_desc[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attribute_desc[3].offset = offsetof(struct Vertex, tangent);
-    attribute_desc[4].location = 4;
-    attribute_desc[4].binding = binding_desc[0].binding;
-    attribute_desc[4].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attribute_desc[4].offset = offsetof(struct Vertex, bitangent);
+    std::vector<VkVertexInputAttributeDescription> attribute_desc;
+    attribute_desc.reserve(programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection.size());
+    for (const auto & vertexAttribute : programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection)
+    {
+        VkFormat format = VK_FORMAT_R32G32B32_SFLOAT;
+        switch (vertexAttribute.type)
+        {
+        case GL_FLOAT_VEC2_ARB: format = VK_FORMAT_R32G32_SFLOAT;       break;
+        case GL_FLOAT_VEC3_ARB: format = VK_FORMAT_R32G32B32_SFLOAT;    break;
+        case GL_FLOAT_VEC4_ARB: format = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+        default:                format = VK_FORMAT_R32_SFLOAT;          break;
+        }
+        attribute_desc.emplace_back(VkVertexInputAttributeDescription{vertexAttribute.index, binding_desc[0].binding, format, Vertex::describe(vertexAttribute.name).offset});
+    }
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_info.vertexBindingDescriptionCount = 1;
     vertex_info.pVertexBindingDescriptions = binding_desc;
-    vertex_info.vertexAttributeDescriptionCount = 5;
-    vertex_info.pVertexAttributeDescriptions = attribute_desc;
+    vertex_info.vertexAttributeDescriptionCount = attribute_desc.size();
+    vertex_info.pVertexAttributeDescriptions = attribute_desc.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -225,8 +218,8 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     VkPipelineRasterizationStateCreateInfo raster_info = {};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_info.cullMode = VK_CULL_MODE_NONE;
-    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster_info.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms_info = {};
@@ -312,36 +305,36 @@ void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const 
 {
     //
 
-    size_t offset = 0;
-    for (const Attribute & attributeDef : Vertex::Attributes)
-    {
-        const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
-        auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
-        {
-            return attribute.name == attributeDef.name;
-        });
-        if (found != vertexAttributeReflection.end())
-        {
-            //
-        }
-        offset += attributeDef.size * sizeof(GLfloat);
-    }
+    //size_t offset = 0;
+    //for (const Attribute & attributeDef : Vertex::Attributes)
+    //{
+    //    const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
+    //    auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
+    //    {
+    //        return attribute.name == attributeDef.name;
+    //    });
+    //    if (found != vertexAttributeReflection.end())
+    //    {
+    //        //
+    //    }
+    //    offset += attributeDef.size * sizeof(GLfloat);
+    //}
 }
 
 void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
 {
-    for (const Attribute & attributeDef : Vertex::Attributes)
-    {
-        const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
-        auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
-        {
-            return attribute.name == attributeDef.name;
-        });
-        if (found != vertexAttributeReflection.end())
-        {
-            //
-        }
-    }
+    //for (const Attribute & attributeDef : Vertex::Attributes)
+    //{
+    //    const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
+    //    auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
+    //    {
+    //        return attribute.name == attributeDef.name;
+    //    });
+    //    if (found != vertexAttributeReflection.end())
+    //    {
+    //        //
+    //    }
+    //}
 
     //
 }

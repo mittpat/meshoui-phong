@@ -16,12 +16,12 @@ public:
     int32_t offset;
     uint32_t type;
     uint32_t size;
-    int32_t index;
+    uint32_t index;
     int32_t binding;
     int32_t stages;
 };
 inline ReflectionInfo::~ReflectionInfo() {}
-inline ReflectionInfo::ReflectionInfo() : offset(0), type(0U), size(0U), index(0), binding(0), stages(0) {}
+inline ReflectionInfo::ReflectionInfo() : offset(0), type(0U), size(0U), index(0U), binding(0), stages(0) {}
 
 class ShaderModuleReflectionInfo final
 {

@@ -31,7 +31,7 @@ namespace Meshoui
     struct Attribute final
     {
         HashId name;
-        std::size_t size;
+        uint32_t offset;
     };
 
     struct Vertex final
@@ -46,7 +46,7 @@ namespace Meshoui
         linalg::aliases::float3 bitangent;
 
         static const std::array<Attribute, 5> Attributes;
-        static const size_t AttributeDataSize;
+        static const Attribute & describe(HashId attribute);
     };
     inline Vertex::~Vertex() {}
     inline Vertex::Vertex() : position(linalg::zero), texcoord(linalg::zero), normal(linalg::aliases::float3(0.f, 1.f, 0.f)), tangent(linalg::aliases::float3(1.f, 0.f, 0.f)), bitangent(linalg::aliases::float3(0.f, 0.f, 1.f)) {}

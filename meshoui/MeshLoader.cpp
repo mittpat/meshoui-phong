@@ -11,12 +11,18 @@ using namespace linalg::aliases;
 using namespace Meshoui;
 
 const std::array<Attribute, 5> Vertex::Attributes =
-{ Attribute{"vertexPosition",  3},
-  Attribute{"vertexTexcoord",  2},
-  Attribute{"vertexNormal",    3},
-  Attribute{"vertexTangent",   3},
-  Attribute{"vertexBitangent", 3} };
-const size_t Vertex::AttributeDataSize = sizeof(Vertex);
+{ Attribute{"vertexPosition",  offsetof(struct Vertex, position)},
+  Attribute{"vertexTexcoord",  offsetof(struct Vertex, texcoord)},
+  Attribute{"vertexNormal",    offsetof(struct Vertex, normal)},
+  Attribute{"vertexTangent",   offsetof(struct Vertex, tangent)},
+  Attribute{"vertexBitangent", offsetof(struct Vertex, bitangent)} };
+const Attribute &Vertex::describe(HashId attribute)
+{
+    return *std::find_if(Attributes.begin(), Attributes.end(), [attribute](const Attribute & attr)
+    {
+        return attr.name == attribute;
+    });
+}
 
 const MeshMaterial MeshMaterial::kDefault = MeshMaterial(HashId(),
                                        {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
