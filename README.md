@@ -1,6 +1,6 @@
 # meshoui - Simple Collada parser and viewer
 
-[![sample viewer_output](http://img.youtube.com/vi/u8a1UOh-dHY/0.jpg)](http://www.youtube.com/watch?v=u8a1UOh-dHY "Sample video")
+![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/screenshot.png)
 
 Notes
 -------
