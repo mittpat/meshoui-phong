@@ -447,7 +447,7 @@ void Renderer::renderWidgets()
             if (d->camera != nullptr)
                 view = d->camera->viewMatrix(mesh->viewFlags);
             projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
-            d->renderDrawData(mesh->program, mesh, model, view, projection);
+            d->renderDrawData(mesh->program, mesh, model, view, projection, d->camera->position, d->lights[0]->position);
         }
 
 #ifdef USE_IMGUI

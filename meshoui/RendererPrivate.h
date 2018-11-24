@@ -99,7 +99,9 @@ namespace Meshoui
 
         uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createOrResizeBuffer(VkBuffer &buffer, VkDeviceMemory &buffer_memory, VkDeviceSize &p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage);
-        void renderDrawData(Program * program, Mesh * mesh, linalg::aliases::float4x4 model, linalg::aliases::float4x4 view, linalg::aliases::float4x4 projection);
+        void renderDrawData(Program * program, Mesh * mesh,
+                            const linalg::aliases::float4x4 &model, const linalg::aliases::float4x4 &view, const linalg::aliases::float4x4 &projection,
+                            const linalg::aliases::float3 &position, const linalg::aliases::float3 &light);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);

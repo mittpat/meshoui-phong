@@ -151,13 +151,9 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         // model, view & projection
         std::vector<VkPushConstantRange> push_constants;
         for (const auto & uniformBlock : programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformBlockReflection)
-        {
-            VkPushConstantRange pc;
-            pc.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-            pc.offset = 0;
-            pc.size = uniformBlock.size;
-            push_constants.push_back(pc);
-        }
+            push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, uniformBlock.size});
+        for (const auto & uniformBlock : programRegistration.pipelineReflectionInfo.fragmentShaderStage.uniformBlockReflection)
+            push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, uniformBlock.size});
         VkDescriptorSetLayout set_layout[1] = { programRegistration.descriptorSetLayout };
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -793,7 +789,9 @@ void RendererPrivate::createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& buf
     p_buffer_size = new_size;
 }
 
-void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, float4x4 model, float4x4 view, float4x4 projection)
+void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
+                                     const float4x4 & model, const float4x4 & view, const float4x4 & projection,
+                                     const float3 & camera, const float3 & light)
 {
     VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
 
@@ -876,9 +874,12 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, float4x4 mo
     }
 
     {
+        // maximum push constant size is between 128 and 256... this is 192...
         vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 0, sizeof(float4x4), &model);
         vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 1, sizeof(float4x4), &view);
         vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 2, sizeof(float4x4), &projection);
+        //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 0, sizeof(float3), &camera);
+        //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 1, sizeof(float3), &light);
     }
 
     VkRect2D scissor;
