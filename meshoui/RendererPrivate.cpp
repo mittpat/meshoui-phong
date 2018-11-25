@@ -288,11 +288,10 @@ void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
     meshRegistration.indexBufferSize = meshDefinition.indices.size();
-    meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
     meshRegistration.definitionId = meshDefinition.definitionId;
 
-    VkDeviceSize vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
-    VkDeviceSize index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
+    VkDeviceSize vertex_size = meshDefinition.vertices.size() * sizeof(Vertex);
+    VkDeviceSize index_size = meshDefinition.indices.size() * sizeof(unsigned int);
     renderDevice.createBuffer(meshRegistration.vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     renderDevice.createBuffer(meshRegistration.indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     renderDevice.uploadBuffer(meshRegistration.vertexBuffer, vertex_size, meshDefinition.vertices.data());

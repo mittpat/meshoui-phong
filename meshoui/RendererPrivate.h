@@ -59,11 +59,10 @@ namespace Meshoui
         DeviceBuffer vertexBuffer;
         DeviceBuffer indexBuffer;
         size_t indexBufferSize;
-        size_t vertexBufferSize;
         size_t referenceCount;
     };
     inline MeshRegistration::~MeshRegistration() {}
-    inline MeshRegistration::MeshRegistration() : indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
+    inline MeshRegistration::MeshRegistration() : indexBufferSize(0), referenceCount(0) {}
 
     class IGraphics;
     class IUniform;

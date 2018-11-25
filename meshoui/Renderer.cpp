@@ -260,8 +260,90 @@ void Renderer::update(float s)
 {
     glfwPollEvents();
 
+    VkResult err;
+
+    VkSemaphore& image_acquired_semaphore  = d->frames[d->frameIndex].imageAcquiredSemaphore;
+    err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
+    check_vk_result(err);
+
+    {
+        err = vkWaitForFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+        check_vk_result(err);
+
+        err = vkResetFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence);
+        check_vk_result(err);
+    }
+    {
+        err = vkResetCommandPool(d->renderDevice.device, d->frames[d->frameIndex].commandPool, 0);
+        check_vk_result(err);
+        VkCommandBufferBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        err = vkBeginCommandBuffer(d->frames[d->frameIndex].commandBuffer, &info);
+        check_vk_result(err);
+    }
+    {
+        VkRenderPassBeginInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        info.renderPass = d->renderPass;
+        info.framebuffer = d->framebuffer[d->frameIndex];
+        info.renderArea.extent.width = d->width;
+        info.renderArea.extent.height = d->height;
+        info.clearValueCount = 1;
+
+        static const VkClearValue ClearValue = {0};
+        info.pClearValues = &ClearValue;
+        vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+    }
+
     renderMeshes();
     renderWidgets();
+
+    vkCmdEndRenderPass(d->frames[d->frameIndex].commandBuffer);
+    {
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.waitSemaphoreCount = 1;
+        info.pWaitSemaphores = &image_acquired_semaphore;
+        info.pWaitDstStageMask = &wait_stage;
+        info.commandBufferCount = 1;
+        info.pCommandBuffers = &d->frames[d->frameIndex].commandBuffer;
+        info.signalSemaphoreCount = 1;
+        info.pSignalSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
+
+        VkResult err = vkEndCommandBuffer(d->frames[d->frameIndex].commandBuffer);
+        check_vk_result(err);
+        err = vkQueueSubmit(d->queue, 1, &info, d->frames[d->frameIndex].fence);
+        check_vk_result(err);
+    }
+
+    {
+        VkPresentInfoKHR info = {};
+        info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        info.waitSemaphoreCount = 1;
+        info.pWaitSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
+        info.swapchainCount = 1;
+        info.pSwapchains = &d->swapchain;
+        info.pImageIndices = &d->frameIndex;
+        VkResult err = vkQueuePresentKHR(d->queue, &info);
+        if (err == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            int width = 0, height = 0;
+            while (width == 0 || height == 0)
+            {
+                glfwGetFramebufferSize(d->window, &width, &height);
+                glfwWaitEvents();
+            }
+
+            vkDeviceWaitIdle(d->renderDevice.device);
+            d->createSwapChainAndFramebuffer(width, height);
+        }
+        else
+        {
+            check_vk_result(err);
+        }
+    }
 
     postUpdate();
 
@@ -319,6 +401,23 @@ void Renderer::renderMeshes()
         mesh->program->applyUniforms();
         mesh->applyUniforms();
         d->bindGraphics(mesh);
+
+
+
+//
+        float4x4 model = identity;
+        float4x4 view = identity;
+        float4x4 projection = identity;
+        model = mesh->modelMatrix();
+        if (d->camera != nullptr)
+            view = d->camera->viewMatrix(mesh->viewFlags);
+        projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
+        d->renderDrawData(mesh->program, mesh, model, view, projection, d->camera->position, d->lights[0]->position);
+//
+
+
+
+
         mesh->program->draw(mesh);
         d->unbindGraphics(mesh);
         mesh->unapplyUniforms();
@@ -396,109 +495,7 @@ void Renderer::renderWidgets()
 
     // Rendering
     ImGui::Render();
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);
 #endif
-
-    {
-        VkResult err;
-
-        VkSemaphore& image_acquired_semaphore  = d->frames[d->frameIndex].imageAcquiredSemaphore;
-        err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
-        check_vk_result(err);
-
-        {
-            err = vkWaitForFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
-            check_vk_result(err);
-
-            err = vkResetFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence);
-            check_vk_result(err);
-        }
-        {
-            err = vkResetCommandPool(d->renderDevice.device, d->frames[d->frameIndex].commandPool, 0);
-            check_vk_result(err);
-            VkCommandBufferBeginInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            err = vkBeginCommandBuffer(d->frames[d->frameIndex].commandBuffer, &info);
-            check_vk_result(err);
-        }
-        {
-            VkRenderPassBeginInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            info.renderPass = d->renderPass;
-            info.framebuffer = d->framebuffer[d->frameIndex];
-            info.renderArea.extent.width = d->width;
-            info.renderArea.extent.height = d->height;
-            info.clearValueCount = 1;
-
-            static const VkClearValue ClearValue = {0};
-            info.pClearValues = &ClearValue;
-            vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-        }
-
-        std::stable_sort(meshes.begin(), meshes.end(), [](Mesh *, Mesh * right) { return (right->renderFlags & Render::DepthWrite) == 0; });
-        for (Mesh * mesh : meshes)
-        {
-            if ((mesh->renderFlags & Render::Visible) == 0)
-                continue;
-            float4x4 model = identity;
-            float4x4 view = identity;
-            float4x4 projection = identity;
-            model = mesh->modelMatrix();
-            if (d->camera != nullptr)
-                view = d->camera->viewMatrix(mesh->viewFlags);
-            projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
-            d->renderDrawData(mesh->program, mesh, model, view, projection, d->camera->position, d->lights[0]->position);
-        }
-
-#ifdef USE_IMGUI
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);
-#endif
-
-        // Submit command buffer
-        vkCmdEndRenderPass(d->frames[d->frameIndex].commandBuffer);
-        {
-            VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            VkSubmitInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            info.waitSemaphoreCount = 1;
-            info.pWaitSemaphores = &image_acquired_semaphore;
-            info.pWaitDstStageMask = &wait_stage;
-            info.commandBufferCount = 1;
-            info.pCommandBuffers = &d->frames[d->frameIndex].commandBuffer;
-            info.signalSemaphoreCount = 1;
-            info.pSignalSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
-
-            err = vkEndCommandBuffer(d->frames[d->frameIndex].commandBuffer);
-            check_vk_result(err);
-            err = vkQueueSubmit(d->queue, 1, &info, d->frames[d->frameIndex].fence);
-            check_vk_result(err);
-        }
-    }
-
-    {
-        VkPresentInfoKHR info = {};
-        info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
-        info.swapchainCount = 1;
-        info.pSwapchains = &d->swapchain;
-        info.pImageIndices = &d->frameIndex;
-        VkResult err = vkQueuePresentKHR(d->queue, &info);
-        if (err == VK_ERROR_OUT_OF_DATE_KHR)
-        {
-            int width = 0, height = 0;
-            while (width == 0 || height == 0)
-            {
-                glfwGetFramebufferSize(d->window, &width, &height);
-                glfwWaitEvents();
-            }
-
-            vkDeviceWaitIdle(d->renderDevice.device);
-            d->createSwapChainAndFramebuffer(width, height);
-        }
-        else
-        {
-            check_vk_result(err);
-        }
-    }
 }
