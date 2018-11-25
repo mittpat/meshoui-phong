@@ -287,14 +287,16 @@ void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
 {
-    //
-
-    meshRegistration.indices = meshDefinition.indices;
-    meshRegistration.vertices = meshDefinition.vertices;
-
     meshRegistration.indexBufferSize = meshDefinition.indices.size();
     meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
     meshRegistration.definitionId = meshDefinition.definitionId;
+
+    VkDeviceSize vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
+    VkDeviceSize index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
+    renderDevice.createBuffer(meshRegistration.vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    renderDevice.createBuffer(meshRegistration.indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    renderDevice.uploadBuffer(meshRegistration.vertexBuffer, vertex_size, meshDefinition.vertices.data());
+    renderDevice.uploadBuffer(meshRegistration.indexBuffer, index_size, meshDefinition.indices.data());
 }
 
 void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
@@ -747,28 +749,10 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
                                      const float4x4 & model, const float4x4 & view, const float4x4 & projection,
                                      const float3 & camera, const float3 & light)
 {
-    VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
-
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
 
-    struct FrameDataForRender
-    {
-        DeviceBuffer vertexBuffer;
-        DeviceBuffer indexBuffer;
-    };
-    FrameDataForRender g_FramesDataBuffers[2] = {};
-    FrameDataForRender* fd = &g_FramesDataBuffers[frameIndex];
-
-    // Create the Vertex and Index buffers:
-    VkDeviceSize vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
-    VkDeviceSize index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
-    renderDevice.createBuffer(fd->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    renderDevice.createBuffer(fd->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    // Upload Vertex and index Data:
-    renderDevice.uploadBuffer(fd->vertexBuffer, vertex_size, meshRegistration.vertices.data());
-    renderDevice.uploadBuffer(fd->indexBuffer, index_size, meshRegistration.indices.data());
-
+    VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
     // Bind pipeline and descriptor sets:
     {
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
@@ -778,10 +762,10 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
 
     // Bind Vertex And Index Buffer:
     {
-        VkBuffer vertex_buffers[1] = { fd->vertexBuffer.buffer };
+        VkBuffer vertex_buffers[1] = { meshRegistration.vertexBuffer.buffer };
         VkDeviceSize vertex_offset[1] = { 0 };
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_offset);
-        vkCmdBindIndexBuffer(command_buffer, fd->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(command_buffer, meshRegistration.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     }
 
     // Setup viewport:

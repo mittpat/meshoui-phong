@@ -56,16 +56,14 @@ namespace Meshoui
         MeshRegistration();
 
         HashId definitionId;
-        std::vector<unsigned int> indices;  //
-        std::vector<Vertex>       vertices; //
-        GLuint indexBuffer;
-        GLuint vertexBuffer;
+        DeviceBuffer vertexBuffer;
+        DeviceBuffer indexBuffer;
         size_t indexBufferSize;
         size_t vertexBufferSize;
         size_t referenceCount;
     };
     inline MeshRegistration::~MeshRegistration() {}
-    inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
+    inline MeshRegistration::MeshRegistration() : indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
 
     class IGraphics;
     class IUniform;
@@ -78,12 +76,12 @@ namespace Meshoui
     public:
         void unregisterProgram(ProgramRegistration & programRegistration);
         bool registerProgram(Program * program, ProgramRegistration & programRegistration);
-        static void bindProgram(const ProgramRegistration & programRegistration);
-        static void unbindProgram(const ProgramRegistration &);
-        static void unregisterMesh(const MeshRegistration & meshRegistration);
-        static void registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration);
-        static void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
-        static void unbindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
+        void bindProgram(const ProgramRegistration & programRegistration);
+        void unbindProgram(const ProgramRegistration &);
+        void unregisterMesh(const MeshRegistration & meshRegistration);
+        void registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration);
+        void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
+        void unbindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
 
         ~RendererPrivate();
         RendererPrivate();
