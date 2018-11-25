@@ -72,9 +72,9 @@ namespace
 
 void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
 {
-    vkDestroyDescriptorSetLayout(device, programRegistration.descriptorSetLayout, allocator);
-    vkDestroyPipelineLayout(device, programRegistration.pipelineLayout, allocator);
-    vkDestroyPipeline(device, programRegistration.pipeline, allocator);
+    vkDestroyDescriptorSetLayout(renderDevice.device, programRegistration.descriptorSetLayout, renderDevice.allocator);
+    vkDestroyPipelineLayout(renderDevice.device, programRegistration.pipelineLayout, renderDevice.allocator);
+    vkDestroyPipeline(renderDevice.device, programRegistration.pipeline, renderDevice.allocator);
     programRegistration.descriptorSetLayout = VK_NULL_HANDLE;
     programRegistration.pipelineLayout = VK_NULL_HANDLE;
     programRegistration.pipeline = VK_NULL_HANDLE;
@@ -95,13 +95,13 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         vert_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         vert_info.codeSize = program->vertexShaderSource.size();
         vert_info.pCode = (uint32_t*)program->vertexShaderSource.data();
-        err = vkCreateShaderModule(device, &vert_info, allocator, &vert_module);
+        err = vkCreateShaderModule(renderDevice.device, &vert_info, renderDevice.allocator, &vert_module);
         check_vk_result(err);
         VkShaderModuleCreateInfo frag_info = {};
         frag_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         frag_info.codeSize = program->fragmentShaderSource.size();
         frag_info.pCode = (uint32_t*)program->fragmentShaderSource.data();
-        err = vkCreateShaderModule(device, &frag_info, allocator, &frag_module);
+        err = vkCreateShaderModule(renderDevice.device, &frag_info, renderDevice.allocator, &frag_module);
         check_vk_result(err);
     }
 
@@ -133,7 +133,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = 1;
         info.pBindings = binding;
-        err = vkCreateDescriptorSetLayout(device, &info, allocator, &programRegistration.descriptorSetLayout);
+        err = vkCreateDescriptorSetLayout(renderDevice.device, &info, renderDevice.allocator, &programRegistration.descriptorSetLayout);
         check_vk_result(err);
     }
 
@@ -143,7 +143,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         alloc_info.descriptorPool = descriptorPool;
         alloc_info.descriptorSetCount = 1;
         alloc_info.pSetLayouts = &programRegistration.descriptorSetLayout;
-        err = vkAllocateDescriptorSets(device, &alloc_info, &programRegistration.descriptorSet);
+        err = vkAllocateDescriptorSets(renderDevice.device, &alloc_info, &programRegistration.descriptorSet);
         check_vk_result(err);
     }
 
@@ -161,7 +161,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         layout_info.pSetLayouts = set_layout;
         layout_info.pushConstantRangeCount = push_constants.size();
         layout_info.pPushConstantRanges = push_constants.data();
-        err = vkCreatePipelineLayout(device, &layout_info, allocator, &programRegistration.pipelineLayout);
+        err = vkCreatePipelineLayout(renderDevice.device, &layout_info, renderDevice.allocator, &programRegistration.pipelineLayout);
         check_vk_result(err);
     }
 
@@ -261,11 +261,11 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     info.pDynamicState = &dynamic_state;
     info.layout = programRegistration.pipelineLayout;
     info.renderPass = renderPass;
-    err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, &programRegistration.pipeline);
+    err = vkCreateGraphicsPipelines(renderDevice.device, pipelineCache, 1, &info, renderDevice.allocator, &programRegistration.pipeline);
     check_vk_result(err);
 
-    vkDestroyShaderModule(device, frag_module, nullptr);
-    vkDestroyShaderModule(device, vert_module, nullptr);
+    vkDestroyShaderModule(renderDevice.device, frag_module, nullptr);
+    vkDestroyShaderModule(renderDevice.device, vert_module, nullptr);
 
     return true;
 }
@@ -337,10 +337,8 @@ void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistra
 
 RendererPrivate::RendererPrivate() 
     : window(nullptr)
-    , allocator(VK_NULL_HANDLE)
     , instance(VK_NULL_HANDLE)
-    , physicalDevice(VK_NULL_HANDLE)
-    , device(VK_NULL_HANDLE)
+    , renderDevice()
     , queueFamily(-1)
     , queue(VK_NULL_HANDLE)
     , pipelineCache(VK_NULL_HANDLE)
@@ -377,10 +375,10 @@ void RendererPrivate::selectSurfaceFormat(const VkFormat* request_formats, int r
     surfaceFormat.format = VK_FORMAT_UNDEFINED;
 
     uint32_t avail_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(renderDevice.physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
     ImVector<VkSurfaceFormatKHR> avail_format;
     avail_format.resize((int)avail_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &avail_count, avail_format.Data);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(renderDevice.physicalDevice, surface, &avail_count, avail_format.Data);
 
     if (avail_count == 1)
     {
@@ -413,10 +411,10 @@ void RendererPrivate::selectSurfaceFormat(const VkFormat* request_formats, int r
 void RendererPrivate::selectPresentMode(const VkPresentModeKHR* request_modes, int request_modes_count)
 {
     uint32_t avail_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(renderDevice.physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
     ImVector<VkPresentModeKHR> avail_modes;
     avail_modes.resize((int)avail_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &avail_count, avail_modes.Data);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(renderDevice.physicalDevice, surface, &avail_count, avail_modes.Data);
 
     presentMode = VK_PRESENT_MODE_FIFO_KHR;
     for (int request_i = 0; request_i < request_modes_count; request_i++)
@@ -433,9 +431,9 @@ void RendererPrivate::selectPresentMode(const VkPresentModeKHR* request_modes, i
 
 void RendererPrivate::destroyGraphicsSubsystem()
 {
-    vkDestroyDescriptorPool(device, descriptorPool, allocator);
-    vkDestroyDevice(device, allocator);
-    vkDestroyInstance(instance, allocator);
+    vkDestroyDescriptorPool(renderDevice.device, descriptorPool, renderDevice.allocator);
+    vkDestroyDevice(renderDevice.device, renderDevice.allocator);
+    vkDestroyInstance(instance, renderDevice.allocator);
 }
 
 void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count)
@@ -447,7 +445,7 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.enabledExtensionCount = extensions_count;
         create_info.ppEnabledExtensionNames = extensions;
-        err = vkCreateInstance(&create_info, allocator, &instance);
+        err = vkCreateInstance(&create_info, renderDevice.allocator, &instance);
         check_vk_result(err);
     }
 
@@ -458,14 +456,14 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         std::vector<VkPhysicalDevice> gpus(count);
         err = vkEnumeratePhysicalDevices(instance, &count, gpus.data());
         check_vk_result(err);
-        physicalDevice = gpus[0];
+        renderDevice.physicalDevice = gpus[0];
     }
 
     {
         uint32_t count;
-        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, VK_NULL_HANDLE);
+        vkGetPhysicalDeviceQueueFamilyProperties(renderDevice.physicalDevice, &count, VK_NULL_HANDLE);
         std::vector<VkQueueFamilyProperties> queues(count);
-        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, queues.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(renderDevice.physicalDevice, &count, queues.data());
         for (uint32_t i = 0; i < count; i++)
         {
             if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -491,9 +489,9 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         create_info.pQueueCreateInfos = queue_info;
         create_info.enabledExtensionCount = device_extensions_count;
         create_info.ppEnabledExtensionNames = device_extensions;
-        err = vkCreateDevice(physicalDevice, &create_info, allocator, &device);
+        err = vkCreateDevice(renderDevice.physicalDevice, &create_info, renderDevice.allocator, &renderDevice.device);
         check_vk_result(err);
-        vkGetDeviceQueue(device, queueFamily, 0, &queue);
+        vkGetDeviceQueue(renderDevice.device, queueFamily, 0, &queue);
     }
 
     {
@@ -517,7 +515,7 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
         pool_info.poolSizeCount = IM_ARRAYSIZE(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
-        err = vkCreateDescriptorPool(device, &pool_info, allocator, &descriptorPool);
+        err = vkCreateDescriptorPool(renderDevice.device, &pool_info, renderDevice.allocator, &descriptorPool);
         check_vk_result(err);
     }
 }
@@ -527,11 +525,11 @@ void RendererPrivate::destroyCommandBuffers()
     vkQueueWaitIdle(queue);
     for (int i = 0; i < 2; i++)
     {
-        vkDestroyFence(device, frames[i].fence, allocator);
-        vkFreeCommandBuffers(device, frames[i].commandPool, 1, &frames[i].commandBuffer);
-        vkDestroyCommandPool(device, frames[i].commandPool, allocator);
-        vkDestroySemaphore(device, frames[i].imageAcquiredSemaphore, allocator);
-        vkDestroySemaphore(device, frames[i].renderCompleteSemaphore, allocator);
+        vkDestroyFence(renderDevice.device, frames[i].fence, renderDevice.allocator);
+        vkFreeCommandBuffers(renderDevice.device, frames[i].commandPool, 1, &frames[i].commandBuffer);
+        vkDestroyCommandPool(renderDevice.device, frames[i].commandPool, renderDevice.allocator);
+        vkDestroySemaphore(renderDevice.device, frames[i].imageAcquiredSemaphore, renderDevice.allocator);
+        vkDestroySemaphore(renderDevice.device, frames[i].renderCompleteSemaphore, renderDevice.allocator);
     }
 }
 
@@ -546,7 +544,7 @@ void RendererPrivate::createCommandBuffers()
             info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
             info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
             info.queueFamilyIndex = queueFamily;
-            err = vkCreateCommandPool(device, &info, allocator, &fd->commandPool);
+            err = vkCreateCommandPool(renderDevice.device, &info, renderDevice.allocator, &fd->commandPool);
             check_vk_result(err);
         }
         {
@@ -555,22 +553,22 @@ void RendererPrivate::createCommandBuffers()
             info.commandPool = fd->commandPool;
             info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
             info.commandBufferCount = 1;
-            err = vkAllocateCommandBuffers(device, &info, &fd->commandBuffer);
+            err = vkAllocateCommandBuffers(renderDevice.device, &info, &fd->commandBuffer);
             check_vk_result(err);
         }
         {
             VkFenceCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
             info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-            err = vkCreateFence(device, &info, allocator, &fd->fence);
+            err = vkCreateFence(renderDevice.device, &info, renderDevice.allocator, &fd->fence);
             check_vk_result(err);
         }
         {
             VkSemaphoreCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            err = vkCreateSemaphore(device, &info, allocator, &fd->imageAcquiredSemaphore);
+            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &fd->imageAcquiredSemaphore);
             check_vk_result(err);
-            err = vkCreateSemaphore(device, &info, allocator, &fd->renderCompleteSemaphore);
+            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &fd->renderCompleteSemaphore);
             check_vk_result(err);
         }
     }
@@ -581,12 +579,12 @@ void RendererPrivate::destroySwapChainAndFramebuffer()
     vkQueueWaitIdle(queue);
     for (uint32_t i = 0; i < backBufferCount; i++)
     {
-        vkDestroyImageView(device, backBufferView[i], allocator);
-        vkDestroyFramebuffer(device, framebuffer[i], allocator);
+        vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
+        vkDestroyFramebuffer(renderDevice.device, framebuffer[i], renderDevice.allocator);
     }
-    vkDestroyRenderPass(device, renderPass, allocator);
-    vkDestroySwapchainKHR(device, swapchain, allocator);
-    vkDestroySurfaceKHR(instance, surface, allocator);
+    vkDestroyRenderPass(renderDevice.device, renderPass, renderDevice.allocator);
+    vkDestroySwapchainKHR(renderDevice.device, swapchain, renderDevice.allocator);
+    vkDestroySurfaceKHR(instance, surface, renderDevice.allocator);
 }
 
 void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
@@ -595,20 +593,20 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
 
     VkResult err;
     VkSwapchainKHR old_swapchain = swapchain;
-    err = vkDeviceWaitIdle(device);
+    err = vkDeviceWaitIdle(renderDevice.device);
     check_vk_result(err);
 
     for (uint32_t i = 0; i < backBufferCount; i++)
     {
         if (backBufferView[i])
-            vkDestroyImageView(device, backBufferView[i], allocator);
+            vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
         if (framebuffer[i])
-            vkDestroyFramebuffer(device, framebuffer[i], allocator);
+            vkDestroyFramebuffer(renderDevice.device, framebuffer[i], renderDevice.allocator);
     }
     backBufferCount = 0;
     if (renderPass)
     {
-        vkDestroyRenderPass(device, renderPass, allocator);
+        vkDestroyRenderPass(renderDevice.device, renderPass, renderDevice.allocator);
     }
 
     if (min_image_count == 0)
@@ -644,7 +642,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.clipped = VK_TRUE;
         info.oldSwapchain = old_swapchain;
         VkSurfaceCapabilitiesKHR cap;
-        err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &cap);
+        err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderDevice.physicalDevice, surface, &cap);
         check_vk_result(err);
         if (info.minImageCount < cap.minImageCount)
             info.minImageCount = cap.minImageCount;
@@ -661,16 +659,16 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
             info.imageExtent.width = width = cap.currentExtent.width;
             info.imageExtent.height = height = cap.currentExtent.height;
         }
-        err = vkCreateSwapchainKHR(device, &info, allocator, &swapchain);
+        err = vkCreateSwapchainKHR(renderDevice.device, &info, renderDevice.allocator, &swapchain);
         check_vk_result(err);
-        err = vkGetSwapchainImagesKHR(device, swapchain, &backBufferCount, NULL);
+        err = vkGetSwapchainImagesKHR(renderDevice.device, swapchain, &backBufferCount, NULL);
         check_vk_result(err);
-        err = vkGetSwapchainImagesKHR(device, swapchain, &backBufferCount, backBuffer);
+        err = vkGetSwapchainImagesKHR(renderDevice.device, swapchain, &backBufferCount, backBuffer);
         check_vk_result(err);
     }
     if (old_swapchain)
     {
-        vkDestroySwapchainKHR(device, old_swapchain, allocator);
+        vkDestroySwapchainKHR(renderDevice.device, old_swapchain, renderDevice.allocator);
     }
 
     {
@@ -705,7 +703,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.pSubpasses = &subpass;
         info.dependencyCount = 1;
         info.pDependencies = &dependency;
-        err = vkCreateRenderPass(device, &info, allocator, &renderPass);
+        err = vkCreateRenderPass(renderDevice.device, &info, renderDevice.allocator, &renderPass);
         check_vk_result(err);
     }
     {
@@ -722,7 +720,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         for (uint32_t i = 0; i < backBufferCount; i++)
         {
             info.image = backBuffer[i];
-            err = vkCreateImageView(device, &info, allocator, &backBufferView[i]);
+            err = vkCreateImageView(renderDevice.device, &info, renderDevice.allocator, &backBufferView[i]);
             check_vk_result(err);
         }
     }
@@ -739,54 +737,10 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         for (uint32_t i = 0; i < backBufferCount; i++)
         {
             attachment[0] = backBufferView[i];
-            err = vkCreateFramebuffer(device, &info, allocator, &framebuffer[i]);
+            err = vkCreateFramebuffer(renderDevice.device, &info, renderDevice.allocator, &framebuffer[i]);
             check_vk_result(err);
         }
     }
-}
-
-uint32_t RendererPrivate::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
-{
-    VkPhysicalDeviceMemoryProperties prop;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
-    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
-            return i;
-    return 0xFFFFFFFF; // Unable to find memoryType
-}
-
-void RendererPrivate::createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& buffer_memory, VkDeviceSize& p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage)
-{
-    static VkDeviceSize g_BufferMemoryAlignment = 256;
-
-    VkResult err;
-    if (buffer != VK_NULL_HANDLE)
-        vkDestroyBuffer(device, buffer, allocator);
-    if (buffer_memory)
-        vkFreeMemory(device, buffer_memory, allocator);
-
-    VkDeviceSize vertex_buffer_size_aligned = ((new_size - 1) / g_BufferMemoryAlignment + 1) * g_BufferMemoryAlignment;
-    VkBufferCreateInfo buffer_info = {};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = vertex_buffer_size_aligned;
-    buffer_info.usage = usage;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    err = vkCreateBuffer(device, &buffer_info, allocator, &buffer);
-    check_vk_result(err);
-
-    VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(device, buffer, &req);
-    g_BufferMemoryAlignment = (g_BufferMemoryAlignment > req.alignment) ? g_BufferMemoryAlignment : req.alignment;
-    VkMemoryAllocateInfo alloc_info = {};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = req.size;
-    alloc_info.memoryTypeIndex = memoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-    err = vkAllocateMemory(device, &alloc_info, allocator, &buffer_memory);
-    check_vk_result(err);
-
-    err = vkBindBufferMemory(device, buffer, buffer_memory, 0);
-    check_vk_result(err);
-    p_buffer_size = new_size;
 }
 
 void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
@@ -800,51 +754,20 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
 
     struct FrameDataForRender
     {
-        VkDeviceMemory  VertexBufferMemory;
-        VkDeviceMemory  IndexBufferMemory;
-        VkDeviceSize    VertexBufferSize;
-        VkDeviceSize    IndexBufferSize;
-        VkBuffer        VertexBuffer;
-        VkBuffer        IndexBuffer;
+        DeviceBuffer vertexBuffer;
+        DeviceBuffer indexBuffer;
     };
     FrameDataForRender g_FramesDataBuffers[2] = {};
     FrameDataForRender* fd = &g_FramesDataBuffers[frameIndex];
 
     // Create the Vertex and Index buffers:
-    size_t vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
-    size_t index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
-    if (!fd->VertexBuffer || fd->VertexBufferSize < vertex_size)
-        createOrResizeBuffer(fd->VertexBuffer, fd->VertexBufferMemory, fd->VertexBufferSize, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    if (!fd->IndexBuffer || fd->IndexBufferSize < index_size)
-        createOrResizeBuffer(fd->IndexBuffer, fd->IndexBufferMemory, fd->IndexBufferSize, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-
-    VkResult err;
+    VkDeviceSize vertex_size = meshRegistration.vertexBufferSize * sizeof(Vertex);
+    VkDeviceSize index_size = meshRegistration.indexBufferSize * sizeof(unsigned int);
+    renderDevice.createBuffer(fd->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    renderDevice.createBuffer(fd->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     // Upload Vertex and index Data:
-    {
-        Vertex* vtx_dst = NULL;
-        unsigned int* idx_dst = NULL;
-        err = vkMapMemory(device, fd->VertexBufferMemory, 0, vertex_size, 0, (void**)(&vtx_dst));
-        check_vk_result(err);
-        err = vkMapMemory(device, fd->IndexBufferMemory, 0, index_size, 0, (void**)(&idx_dst));
-        check_vk_result(err);
-        {
-            memcpy(vtx_dst, meshRegistration.vertices.data(), meshRegistration.vertexBufferSize * sizeof(Vertex));
-            memcpy(idx_dst, meshRegistration.indices.data(), meshRegistration.indexBufferSize * sizeof(unsigned int));
-            vtx_dst += meshRegistration.vertexBufferSize;
-            idx_dst += meshRegistration.indexBufferSize;
-        }
-        VkMappedMemoryRange range[2] = {};
-        range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        range[0].memory = fd->VertexBufferMemory;
-        range[0].size = VK_WHOLE_SIZE;
-        range[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        range[1].memory = fd->IndexBufferMemory;
-        range[1].size = VK_WHOLE_SIZE;
-        err = vkFlushMappedMemoryRanges(device, 2, range);
-        check_vk_result(err);
-        vkUnmapMemory(device, fd->VertexBufferMemory);
-        vkUnmapMemory(device, fd->IndexBufferMemory);
-    }
+    renderDevice.uploadBuffer(fd->vertexBuffer, vertex_size, meshRegistration.vertices.data());
+    renderDevice.uploadBuffer(fd->indexBuffer, index_size, meshRegistration.indices.data());
 
     // Bind pipeline and descriptor sets:
     {
@@ -855,21 +778,15 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
 
     // Bind Vertex And Index Buffer:
     {
-        VkBuffer vertex_buffers[1] = { fd->VertexBuffer };
+        VkBuffer vertex_buffers[1] = { fd->vertexBuffer.buffer };
         VkDeviceSize vertex_offset[1] = { 0 };
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_offset);
-        vkCmdBindIndexBuffer(command_buffer, fd->IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(command_buffer, fd->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     }
 
     // Setup viewport:
     {
-        VkViewport viewport;
-        viewport.x = 0;
-        viewport.y = 0;
-        viewport.width = width;
-        viewport.height = height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 100.0f;
+        VkViewport viewport{0, 0, float(width), float(height), 0.f, 100.f};
         vkCmdSetViewport(command_buffer, 0, 1, &viewport);
     }
 
@@ -882,11 +799,7 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
         //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 1, sizeof(float3), &light);
     }
 
-    VkRect2D scissor;
-    scissor.offset.x = 0;
-    scissor.offset.y = 0;
-    scissor.extent.width = width;
-    scissor.extent.height = height;
+    VkRect2D scissor{0, 0, width, height};
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
     // Render the command lists:

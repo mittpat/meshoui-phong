@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
+#include "RenderDevice.h"
 
 #include <hashid.h>
 #include <string>
@@ -97,8 +98,6 @@ namespace Meshoui
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h);
 
-        uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
-        void createOrResizeBuffer(VkBuffer &buffer, VkDeviceMemory &buffer_memory, VkDeviceSize &p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage);
         void renderDrawData(Program * program, Mesh * mesh,
                             const linalg::aliases::float4x4 &model, const linalg::aliases::float4x4 &view, const linalg::aliases::float4x4 &projection,
                             const linalg::aliases::float3 &position, const linalg::aliases::float3 &light);
@@ -126,10 +125,8 @@ namespace Meshoui
         const MeshFile & load(const std::string & filename);
 
         GLFWwindow*            window;
-        VkAllocationCallbacks* allocator;
         VkInstance             instance;
-        VkPhysicalDevice       physicalDevice;
-        VkDevice               device;
+        RenderDevice           renderDevice;
         uint32_t               queueFamily;
         VkQueue                queue;
         VkPipelineCache        pipelineCache;
@@ -138,8 +135,8 @@ namespace Meshoui
         VkSurfaceFormatKHR     surfaceFormat;
         VkPresentModeKHR       presentMode;
 
-        int                 width;
-        int                 height;
+        uint32_t            width;
+        uint32_t            height;
         VkSwapchainKHR      swapchain;
         VkRenderPass        renderPass;
         uint32_t            backBufferCount;

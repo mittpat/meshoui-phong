@@ -47,7 +47,7 @@ using namespace Meshoui;
 Renderer::~Renderer()
 {
     // Cleanup
-    auto err = vkDeviceWaitIdle(d->device);
+    auto err = vkDeviceWaitIdle(d->renderDevice.device);
     check_vk_result(err);
 #ifdef USE_IMGUI
     ImGui_ImplVulkan_Shutdown();
@@ -58,7 +58,7 @@ Renderer::~Renderer()
     d->destroyCommandBuffers();
     d->destroyGraphicsSubsystem();
 
-    //vkDestroySurfaceKHR(d->instance, d->surface, d->allocator);
+    //vkDestroySurfaceKHR(d->instance, d->surface, d->renderDevice.allocator);
     glfwDestroyWindow(d->window);
     glfwTerminate();
 
@@ -86,7 +86,7 @@ Renderer::Renderer()
     d->createGraphicsSubsystem(extensions, extensions_count);
 
     // Create Window Surface
-    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->allocator, &d->surface);
+    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->renderDevice.allocator, &d->surface);
     check_vk_result(err);
 
     // Create Framebuffers
@@ -99,7 +99,7 @@ Renderer::Renderer()
 
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(d->physicalDevice, d->queueFamily, d->surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->renderDevice.physicalDevice, d->queueFamily, d->surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
@@ -126,13 +126,13 @@ Renderer::Renderer()
     {
         ImGui_ImplVulkan_InitInfo init_info = {};
         init_info.Instance = d->instance;
-        init_info.PhysicalDevice = d->physicalDevice;
-        init_info.Device = d->device;
+        init_info.PhysicalDevice = d->renderDevice.physicalDevice;
+        init_info.Device = d->renderDevice.device;
         init_info.QueueFamily = d->queueFamily;
         init_info.Queue = d->queue;
         init_info.PipelineCache = d->pipelineCache;
         init_info.DescriptorPool = d->descriptorPool;
-        init_info.Allocator = d->allocator;
+        init_info.Allocator = d->renderDevice.allocator;
         init_info.CheckVkResultFn = check_vk_result;
         ImGui_ImplVulkan_Init(&init_info, d->renderPass);
     }
@@ -144,7 +144,7 @@ Renderer::Renderer()
         VkCommandPool command_pool = d->frames[d->frameIndex].commandPool;
         VkCommandBuffer command_buffer = d->frames[d->frameIndex].commandBuffer;
 
-        err = vkResetCommandPool(d->device, command_pool, 0);
+        err = vkResetCommandPool(d->renderDevice.device, command_pool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -163,7 +163,7 @@ Renderer::Renderer()
         err = vkQueueSubmit(d->queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);
 
-        err = vkDeviceWaitIdle(d->device);
+        err = vkDeviceWaitIdle(d->renderDevice.device);
         check_vk_result(err);
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
@@ -402,18 +402,18 @@ void Renderer::renderWidgets()
         VkResult err;
 
         VkSemaphore& image_acquired_semaphore  = d->frames[d->frameIndex].imageAcquiredSemaphore;
-        err = vkAcquireNextImageKHR(d->device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
+        err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
         check_vk_result(err);
 
         {
-            err = vkWaitForFences(d->device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+            err = vkWaitForFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
             check_vk_result(err);
 
-            err = vkResetFences(d->device, 1, &d->frames[d->frameIndex].fence);
+            err = vkResetFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence);
             check_vk_result(err);
         }
         {
-            err = vkResetCommandPool(d->device, d->frames[d->frameIndex].commandPool, 0);
+            err = vkResetCommandPool(d->renderDevice.device, d->frames[d->frameIndex].commandPool, 0);
             check_vk_result(err);
             VkCommandBufferBeginInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -493,7 +493,7 @@ void Renderer::renderWidgets()
                 glfwWaitEvents();
             }
 
-            vkDeviceWaitIdle(d->device);
+            vkDeviceWaitIdle(d->renderDevice.device);
             d->createSwapChainAndFramebuffer(width, height);
         }
         else

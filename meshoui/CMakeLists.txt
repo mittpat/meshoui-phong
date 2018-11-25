@@ -16,6 +16,8 @@ add_library(meshouilib
     MeshLoaderPrivate.h
     Program.cpp
     Program.h
+    RenderDevice.cpp
+    RenderDevice.h
     Renderer.cpp
     Renderer.h
     RendererPrivate.cpp
