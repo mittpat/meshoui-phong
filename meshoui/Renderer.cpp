@@ -402,21 +402,14 @@ void Renderer::renderMeshes()
         mesh->applyUniforms();
         d->bindGraphics(mesh);
 
-
-
 //
-        float4x4 model = identity;
-        float4x4 view = identity;
-        float4x4 projection = identity;
-        model = mesh->modelMatrix();
+        PushConstant pushConstants;
+        pushConstants.model = mesh->modelMatrix();
         if (d->camera != nullptr)
-            view = d->camera->viewMatrix(mesh->viewFlags);
-        projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
-        d->renderDrawData(mesh->program, mesh, model, view, projection, d->camera->position, d->lights[0]->position);
+            pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
+        pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
+        d->renderDrawData(mesh->program, mesh, pushConstants, d->camera->position, d->lights[0]->position);
 //
-
-
-
 
         mesh->program->draw(mesh);
         d->unbindGraphics(mesh);

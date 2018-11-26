@@ -21,14 +21,12 @@ function(compile_glsl binaries)
     add_custom_target(glslang_make_output_dir_${FIL_NAME} COMMAND ${CMAKE_COMMAND} -E make_directory ${glslang_output_dir})
 
     set(binary "${glslang_output_dir}/${FIL_NAME}.spv")
-    set(reflection "${glslang_output_dir}/${FIL_NAME}.ref")
     list(APPEND ${binaries} "${binary}")
 
     add_custom_command(
       OUTPUT "${binary}"
-      COMMAND glslangValidator > "${reflection}"
+      COMMAND glslangValidator
       ARGS -V
-           -q
            ${ABS_FIL}
            -o ${binary}
       DEPENDS ${ABS_FIL} glslangValidator glslang_make_output_dir_${FIL_NAME}

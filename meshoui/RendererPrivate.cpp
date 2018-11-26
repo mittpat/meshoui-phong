@@ -64,10 +64,10 @@ namespace
             return;
     }
 
-    void setUniform(const TextureRegistrations &, Mesh *, IUniform *, const ProgramUniform &)
+    /*void setUniform(const TextureRegistrations &, Mesh *, IUniform *, const ProgramUniform &)
     {
         //
-    }
+    }*/
 }
 
 void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
@@ -82,9 +82,6 @@ void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistratio
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
 {
-    glslLangOutputParse(programRegistration.pipelineReflectionInfo.vertexShaderStage, program->vertexShaderReflection.data());
-    glslLangOutputParse(programRegistration.pipelineReflectionInfo.fragmentShaderStage, program->fragmentShaderReflection.data());
-
     VkResult err;
     VkShaderModule vert_module;
     VkShaderModule frag_module;
@@ -150,15 +147,13 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     {
         // model, view & projection
         std::vector<VkPushConstantRange> push_constants;
-        for (const auto & uniformBlock : programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformBlockReflection)
-            push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, uniformBlock.size});
-        for (const auto & uniformBlock : programRegistration.pipelineReflectionInfo.fragmentShaderStage.uniformBlockReflection)
-            push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, uniformBlock.size});
-        VkDescriptorSetLayout set_layout[1] = { programRegistration.descriptorSetLayout };
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().model});
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().view});
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().projection});
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount = 1;
-        layout_info.pSetLayouts = set_layout;
+        layout_info.pSetLayouts = &programRegistration.descriptorSetLayout;
         layout_info.pushConstantRangeCount = push_constants.size();
         layout_info.pPushConstantRanges = push_constants.data();
         err = vkCreatePipelineLayout(renderDevice.device, &layout_info, renderDevice.allocator, &programRegistration.pipelineLayout);
@@ -180,19 +175,11 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
-    attribute_desc.reserve(programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection.size());
-    for (const auto & vertexAttribute : programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection)
-    {
-        VkFormat format = VK_FORMAT_R32G32B32_SFLOAT;
-        switch (vertexAttribute.type)
-        {
-        case GL_FLOAT_VEC2_ARB: format = VK_FORMAT_R32G32_SFLOAT;       break;
-        case GL_FLOAT_VEC3_ARB: format = VK_FORMAT_R32G32B32_SFLOAT;    break;
-        case GL_FLOAT_VEC4_ARB: format = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-        default:                format = VK_FORMAT_R32_SFLOAT;          break;
-        }
-        attribute_desc.emplace_back(VkVertexInputAttributeDescription{vertexAttribute.index, binding_desc[0].binding, format, Vertex::describe(vertexAttribute.name).offset});
-    }
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, position)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct Vertex, texcoord)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, normal)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, tangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, bitangent)});
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -720,8 +707,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
     }
 }
 
-void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
-                                     const float4x4 & model, const float4x4 & view, const float4x4 & projection,
+void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const PushConstant & pushConstants,
                                      const float3 & camera, const float3 & light)
 {
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
@@ -737,9 +723,7 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
 
     {
         // maximum push constant size is between 128 and 256... this is 192...
-        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 0, sizeof(float4x4), &model);
-        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 1, sizeof(float4x4), &view);
-        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float4x4) * 2, sizeof(float4x4), &projection);
+        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), &pushConstants);
         //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 0, sizeof(float3), &camera);
         //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 1, sizeof(float3), &light);
     }
@@ -886,19 +870,19 @@ void RendererPrivate::unbindGraphics(Camera *cam)
 
 void RendererPrivate::setProgramUniforms(Mesh * mesh)
 {
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, mesh->program);
+    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, mesh->program);
     for (const ProgramUniform & programUniform : programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection)
     {
         if (auto * uniform = mesh->uniform(programUniform.name))
         {
             setUniform(textureRegistrations, mesh, uniform, programUniform);
         }
-    }
+    }*/
 }
 
 void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
 {
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
+    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     const auto & uniformReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection;
     auto programUniform = std::find_if(uniformReflection.begin(), uniformReflection.end(), [uniform](const ProgramUniform & programUniform)
     {
@@ -907,12 +891,12 @@ void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
     if (programUniform != uniformReflection.end())
     {
         setUniform(textureRegistrations, nullptr, uniform, *programUniform);
-    }
+    }*/
 }
 
 void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
 {
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
+    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     const auto & uniformReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection;
     auto programUniform = std::find_if(uniformReflection.begin(), uniformReflection.end(), [uniform](const ProgramUniform & programUniform)
     {
@@ -921,7 +905,7 @@ void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
     if (programUniform != uniformReflection.end())
     {
         //
-    }
+    }*/
 }
 
 void RendererPrivate::draw(Program *, Mesh *)

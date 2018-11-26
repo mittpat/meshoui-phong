@@ -10,20 +10,6 @@ using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
-const std::array<Attribute, 5> Vertex::Attributes =
-{ Attribute{"vertexPosition",  offsetof(struct Vertex, position)},
-  Attribute{"vertexTexcoord",  offsetof(struct Vertex, texcoord)},
-  Attribute{"vertexNormal",    offsetof(struct Vertex, normal)},
-  Attribute{"vertexTangent",   offsetof(struct Vertex, tangent)},
-  Attribute{"vertexBitangent", offsetof(struct Vertex, bitangent)} };
-const Attribute &Vertex::describe(HashId attribute)
-{
-    return *std::find_if(Attributes.begin(), Attributes.end(), [attribute](const Attribute & attr)
-    {
-        return attr.name == attribute;
-    });
-}
-
 const MeshMaterial MeshMaterial::kDefault = MeshMaterial(HashId(),
                                        {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
                                         MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")),

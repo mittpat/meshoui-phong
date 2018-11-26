@@ -2,7 +2,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include "glslang.h"
 #include "gltypes.h"
 #include "Camera.h"
 #include "Mesh.h"
@@ -16,8 +15,17 @@
 struct GLFWwindow;
 namespace Meshoui
 {
-    typedef ReflectionInfo ProgramUniform;
-    typedef ReflectionInfo ProgramAttribute;
+    struct PushConstant
+    {
+        ~PushConstant();
+        PushConstant();
+
+        linalg::aliases::float4x4 model;
+        linalg::aliases::float4x4 view;
+        linalg::aliases::float4x4 projection;
+    };
+    inline PushConstant::~PushConstant() {}
+    inline PushConstant::PushConstant() : model(linalg::identity), view(linalg::identity), projection(linalg::identity) {}
 
     class ProgramRegistration final
     {
@@ -29,8 +37,6 @@ namespace Meshoui
         VkPipeline pipeline;
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet;
-
-        PipelineReflectionInfo pipelineReflectionInfo;
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
@@ -95,8 +101,7 @@ namespace Meshoui
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h);
 
-        void renderDrawData(Program * program, Mesh * mesh,
-                            const linalg::aliases::float4x4 &model, const linalg::aliases::float4x4 &view, const linalg::aliases::float4x4 &projection,
+        void renderDrawData(Program * program, Mesh * mesh, const PushConstant & pushConstants,
                             const linalg::aliases::float3 &position, const linalg::aliases::float3 &light);
 
         void registerGraphics(Model * model);

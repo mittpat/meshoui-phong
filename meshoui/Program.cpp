@@ -57,19 +57,9 @@ void Program::load(const std::string & filename)
         vertexShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
     }
     {
-        std::string shaderFilename = iniparser_getstring(ini, "vertexShader:reflection", "");
-        std::ifstream fileStream(sibling(shaderFilename, filename));
-        vertexShaderReflection = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-    }
-    {
         std::string shaderFilename = iniparser_getstring(ini, "fragmentShader:filename", "");
         std::ifstream fileStream(sibling(shaderFilename, filename));
         fragmentShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-    }
-    {
-        std::string shaderFilename = iniparser_getstring(ini, "fragmentShader:reflection", "");
-        std::ifstream fileStream(sibling(shaderFilename, filename));
-        fragmentShaderReflection = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
     }
     std::vector<const char*> keys(iniparser_getsecnkeys(ini, "uniforms"), nullptr);
     if (iniparser_getseckeys(ini, "uniforms", keys.data()) != nullptr)
