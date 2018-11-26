@@ -30,10 +30,6 @@ using namespace Meshoui;
 void RenderDevice::createBuffer(DeviceBuffer &deviceBuffer, size_t size, VkBufferUsageFlags usage)
 {
     VkResult err;
-    if (deviceBuffer.buffer != VK_NULL_HANDLE)
-        vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
-    if (deviceBuffer.bufferMemory)
-        vkFreeMemory(device, deviceBuffer.bufferMemory, allocator);
 
     VkDeviceSize vertex_buffer_size_aligned = ((size - 1) / bufferMemoryAlignment + 1) * bufferMemoryAlignment;
     VkBufferCreateInfo buffer_info = {};
@@ -75,4 +71,12 @@ void RenderDevice::uploadBuffer(const DeviceBuffer &deviceBuffer, VkDeviceSize s
     err = vkFlushMappedMemoryRanges(device, 1, &range);
     check_vk_result(err);
     vkUnmapMemory(device, deviceBuffer.bufferMemory);
+}
+
+void RenderDevice::deleteBuffer(const DeviceBuffer &deviceBuffer)
+{
+    if (deviceBuffer.buffer != VK_NULL_HANDLE)
+        vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
+    if (deviceBuffer.bufferMemory)
+        vkFreeMemory(device, deviceBuffer.bufferMemory, allocator);
 }

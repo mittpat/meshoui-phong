@@ -272,7 +272,8 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 
 void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
 {
-    //
+    vkCmdBindPipeline(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
+    vkCmdBindDescriptorSets(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet, 0, nullptr);
 }
 
 void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistration)
@@ -282,7 +283,8 @@ void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistrat
 
 void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 {
-    //
+    renderDevice.deleteBuffer(meshRegistration.vertexBuffer);
+    renderDevice.deleteBuffer(meshRegistration.indexBuffer);
 }
 
 void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
@@ -298,41 +300,15 @@ void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRe
     renderDevice.uploadBuffer(meshRegistration.indexBuffer, index_size, meshDefinition.indices.data());
 }
 
-void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
+void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration &)
 {
-    //
-
-    //size_t offset = 0;
-    //for (const Attribute & attributeDef : Vertex::Attributes)
-    //{
-    //    const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
-    //    auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
-    //    {
-    //        return attribute.name == attributeDef.name;
-    //    });
-    //    if (found != vertexAttributeReflection.end())
-    //    {
-    //        //
-    //    }
-    //    offset += attributeDef.size * sizeof(GLfloat);
-    //}
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(frames[frameIndex].commandBuffer, 0, 1, &meshRegistration.vertexBuffer.buffer, &offset);
+    vkCmdBindIndexBuffer(frames[frameIndex].commandBuffer, meshRegistration.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
-void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
+void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration &)
 {
-    //for (const Attribute & attributeDef : Vertex::Attributes)
-    //{
-    //    const auto & vertexAttributeReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.vertexAttributeReflection;
-    //    auto found = std::find_if(vertexAttributeReflection.begin(), vertexAttributeReflection.end(), [attributeDef](const ProgramAttribute & attribute)
-    //    {
-    //        return attribute.name == attributeDef.name;
-    //    });
-    //    if (found != vertexAttributeReflection.end())
-    //    {
-    //        //
-    //    }
-    //}
-
     //
 }
 
@@ -752,20 +728,6 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh,
     const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
 
     VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
-    // Bind pipeline and descriptor sets:
-    {
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
-        VkDescriptorSet desc_set[1] = { programRegistration.descriptorSet };
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, desc_set, 0, NULL);
-    }
-
-    // Bind Vertex And Index Buffer:
-    {
-        VkBuffer vertex_buffers[1] = { meshRegistration.vertexBuffer.buffer };
-        VkDeviceSize vertex_offset[1] = { 0 };
-        vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, vertex_offset);
-        vkCmdBindIndexBuffer(command_buffer, meshRegistration.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    }
 
     // Setup viewport:
     {

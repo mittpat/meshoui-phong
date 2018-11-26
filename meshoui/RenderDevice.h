@@ -23,6 +23,7 @@ namespace Meshoui
         RenderDevice(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
         void createBuffer(DeviceBuffer &deviceBuffer, size_t size, VkBufferUsageFlags usage);
         void uploadBuffer(const DeviceBuffer &deviceBuffer, VkDeviceSize size, const void *data);
+        void deleteBuffer(const DeviceBuffer &deviceBuffer);
 
         VkPhysicalDevice physicalDevice;
         VkDevice device;

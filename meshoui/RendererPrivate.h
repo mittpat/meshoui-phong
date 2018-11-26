@@ -79,8 +79,8 @@ namespace Meshoui
         void unbindProgram(const ProgramRegistration &);
         void unregisterMesh(const MeshRegistration & meshRegistration);
         void registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration);
-        void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
-        void unbindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
+        void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration &);
+        void unbindMesh(const MeshRegistration &, const ProgramRegistration &);
 
         ~RendererPrivate();
         RendererPrivate();
