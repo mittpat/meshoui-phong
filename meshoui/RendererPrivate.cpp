@@ -55,11 +55,11 @@ namespace
         return Invalid;
     }
 
-    void texture(GLuint * buffer, const std::string & filename, bool repeat)
+    void texture(/*GLuint * buffer, */const std::string & filename, bool repeat)
     {
-        if (TextureLoader::loadDDS(buffer, std::filesystem::path(filename).replace_extension(".dds"), repeat))
+        if (TextureLoader::loadDDS(/*buffer, */std::filesystem::path(filename).replace_extension(".dds"), repeat))
             return;
-        if (TextureLoader::loadPNG(buffer, std::filesystem::path(filename).replace_extension(".png"), repeat))
+        if (TextureLoader::loadPNG(/*buffer, */std::filesystem::path(filename).replace_extension(".png"), repeat))
             return;
     }
 
@@ -146,9 +146,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     {
         // model, view & projection
         std::vector<VkPushConstantRange> push_constants;
-        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().model});
-        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().view});
-        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof PushConstant().projection});
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant)});
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount = 1;
@@ -262,7 +260,7 @@ void RendererPrivate::bindProgram(const ProgramRegistration & programRegistratio
     vkCmdBindDescriptorSets(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet, 0, nullptr);
 }
 
-void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistration)
+void RendererPrivate::unbindProgram(const ProgramRegistration &)
 {
     //
 }
@@ -308,8 +306,6 @@ RendererPrivate::RendererPrivate()
     , descriptorPool(VK_NULL_HANDLE)
     , surface(VK_NULL_HANDLE)
     , surfaceFormat()
-    , presentMode(VK_PRESENT_MODE_MAX_ENUM_KHR)
-
     , width(0)
     , height(0)
     , swapchain(VK_NULL_HANDLE)
@@ -320,7 +316,6 @@ RendererPrivate::RendererPrivate()
     , framebuffer()
     , frames()
     , frameIndex(0)
-
     , toFullscreen(false)
     , fullscreen(false)
     , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
@@ -366,27 +361,6 @@ void RendererPrivate::selectSurfaceFormat(const VkFormat* request_formats, int r
                 {
                     surfaceFormat = avail_format[avail_i];
                 }
-            }
-        }
-    }
-}
-
-void RendererPrivate::selectPresentMode(const VkPresentModeKHR* request_modes, int request_modes_count)
-{
-    uint32_t avail_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(renderDevice.physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
-    ImVector<VkPresentModeKHR> avail_modes;
-    avail_modes.resize((int)avail_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(renderDevice.physicalDevice, surface, &avail_count, avail_modes.Data);
-
-    presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    for (int request_i = 0; request_i < request_modes_count; request_i++)
-    {
-        for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
-        {
-            if (request_modes[request_i] == avail_modes[avail_i])
-            {
-                presentMode = request_modes[request_i];
             }
         }
     }
@@ -552,8 +526,6 @@ void RendererPrivate::destroySwapChainAndFramebuffer()
 
 void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
 {
-    uint32_t min_image_count = 2;
-
     VkResult err;
     VkSwapchainKHR old_swapchain = swapchain;
     err = vkDeviceWaitIdle(renderDevice.device);
@@ -572,28 +544,11 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         vkDestroyRenderPass(renderDevice.device, renderPass, renderDevice.allocator);
     }
 
-    if (min_image_count == 0)
-    {
-        switch (presentMode)
-        {
-        case VK_PRESENT_MODE_MAILBOX_KHR:
-            min_image_count = 3;
-            break;
-        case VK_PRESENT_MODE_FIFO_KHR:
-        case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
-            min_image_count = 2;
-            break;
-        default:
-            min_image_count = 1;
-            break;
-        }
-    }
-
     {
         VkSwapchainCreateInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = surface;
-        info.minImageCount = min_image_count;
+        info.minImageCount = FrameCount;
         info.imageFormat = surfaceFormat.format;
         info.imageColorSpace = surfaceFormat.colorSpace;
         info.imageArrayLayers = 1;
@@ -601,7 +556,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;           // Assume that graphics family == present family
         info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        info.presentMode = presentMode;
+        info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
         info.clipped = VK_TRUE;
         info.oldSwapchain = old_swapchain;
         VkSurfaceCapabilitiesKHR cap;
@@ -777,7 +732,7 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
             if (value.texture)
             {
                 TextureRegistration textureRegistration = TextureRegistration(*value.texture);
-                texture(&textureRegistration.buffer, sibling(*value.texture, meshFile.filename), material.repeatTexcoords);
+                texture(/*&textureRegistration.buffer, */sibling(*value.texture, meshFile.filename), material.repeatTexcoords);
                 textureRegistrations.push_back(textureRegistration);
             }
         }

@@ -110,10 +110,6 @@ Renderer::Renderer()
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     d->selectSurfaceFormat(requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
-    // Select Present Mode
-    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-    d->selectPresentMode(&present_modes[0], IM_ARRAYSIZE(present_modes));
-
     // Create SwapChain, RenderPass, Framebuffer, etc.
     d->createCommandBuffers();
     d->createSwapChainAndFramebuffer(width, height);

@@ -2,7 +2,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include "gltypes.h"
 #include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
@@ -49,11 +48,11 @@ namespace Meshoui
         TextureRegistration(HashId n);
 
         HashId name;
-        GLuint buffer;
+        //
     };
     inline TextureRegistration::~TextureRegistration() {}
-    inline TextureRegistration::TextureRegistration() : buffer(0) {}
-    inline TextureRegistration::TextureRegistration(HashId n) : name(n), buffer(0) {}
+    inline TextureRegistration::TextureRegistration() {}
+    inline TextureRegistration::TextureRegistration(HashId n) : name(n) {}
 
     class MeshRegistration final
     {
@@ -79,6 +78,8 @@ namespace Meshoui
     class RendererPrivate final
     {
     public:
+        static const int FrameCount = 2;
+
         void unregisterProgram(ProgramRegistration & programRegistration);
         bool registerProgram(Program * program, ProgramRegistration & programRegistration);
         void bindProgram(const ProgramRegistration & programRegistration);
@@ -92,8 +93,6 @@ namespace Meshoui
         RendererPrivate();
 
         void selectSurfaceFormat(const VkFormat *request_formats, int request_formats_count, VkColorSpaceKHR request_color_space);
-        void selectPresentMode(const VkPresentModeKHR *request_modes, int request_modes_count);
-
         void destroyGraphicsSubsystem();
         void createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count);
         void destroyCommandBuffers();
@@ -132,7 +131,6 @@ namespace Meshoui
         VkDescriptorPool       descriptorPool;
         VkSurfaceKHR           surface;
         VkSurfaceFormatKHR     surfaceFormat;
-        VkPresentModeKHR       presentMode;
 
         uint32_t            width;
         uint32_t            height;
@@ -151,7 +149,7 @@ namespace Meshoui
             VkSemaphore     imageAcquiredSemaphore;
             VkSemaphore     renderCompleteSemaphore;
             FrameData();
-        }                   frames[2];
+        }                   frames[FrameCount];
         uint32_t            frameIndex;
 
         ProgramRegistrations programRegistrations;

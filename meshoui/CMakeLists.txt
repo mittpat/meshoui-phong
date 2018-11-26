@@ -3,7 +3,6 @@ set_source_files_properties(${resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 add_library(meshouilib
     enums.h
-    gltypes.h
     Camera.cpp
     Camera.h
     Mesh.cpp

@@ -12,7 +12,7 @@ using namespace nv_dds;
 namespace std { namespace filesystem = experimental::filesystem; }
 using namespace Meshoui;
 
-bool TextureLoader::loadPNG(GLuint *, const std::string & filename, bool)
+bool TextureLoader::loadPNG(/*GLuint *, */const std::string & filename, bool)
 {
     if (std::filesystem::path(filename).extension() != ".png")
         return false;
@@ -44,7 +44,7 @@ bool TextureLoader::loadPNG(GLuint *, const std::string & filename, bool)
     return true;
 }
 
-bool TextureLoader::loadDDS(GLuint *, const std::string & filename, bool)
+bool TextureLoader::loadDDS(/*GLuint *, */const std::string & filename, bool)
 {
     if (std::filesystem::path(filename).extension() != ".dds")
         return false;
