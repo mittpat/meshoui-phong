@@ -7,7 +7,6 @@
 
 namespace Meshoui
 {
-    class IUniform;
     class Mesh;
     class RendererPrivate;
     class Program
@@ -17,20 +16,12 @@ namespace Meshoui
         Program();
 
         void load(const std::string & filename);
-        void add(IUniform * uniform);
-        void remove(IUniform * uniform);
-        void applyUniforms();
-        void unapplyUniforms();
         void draw(Mesh * mesh);
-        IUniform * uniform(HashId name) const;
         RendererPrivate * d_ptr() const;
 
         // set before adding
         std::vector<char> vertexShaderSource;
         std::vector<char> fragmentShaderSource;
-
-        // applied on next frame
-        std::vector<IUniform *> uniforms;
 
     private:
         friend class RendererPrivate;

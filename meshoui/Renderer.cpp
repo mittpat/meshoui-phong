@@ -6,7 +6,6 @@
 #include "RendererPrivate.h"
 #include "Camera.h"
 #include "Program.h"
-#include "Uniform.h"
 #include "Widget.h"
 
 #include <loose.h>
@@ -373,33 +372,7 @@ void Renderer::renderMeshes()
         if ((mesh->renderFlags & Render::Visible) == 0)
             continue;
 
-        if (!d->lights.empty())
-        {
-            if (auto uniform = dynamic_cast<Uniform3fv *>(mesh->program->uniform("sunPosition")))
-                uniform->value = normalize(d->lights[0]->position);
-            if (auto uniform = dynamic_cast<Uniform3fv *>(mesh->program->uniform("uniformLightPosition")))
-                uniform->value = d->lights[0]->position;
-        }
-
-        if (d->camera != nullptr)
-        {
-            if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformView")))
-                uniform->value = d->camera->viewMatrix(mesh->viewFlags);
-            if (auto uniform = dynamic_cast<Uniform3fv*>(mesh->program->uniform("uniformViewPosition")))
-                uniform->value = d->camera->position;
-        }
-
-        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformModel")))
-            uniform->value = mesh->modelMatrix();
-        if (auto uniform = dynamic_cast<Uniform44fm*>(mesh->program->uniform("uniformProjection")))
-            uniform->value = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
-
-        if (auto uniform = dynamic_cast<Uniform2fv*>(mesh->program->uniform("uniformTime")))
-            uniform->value = float2(time, 0.016f);
-
         d->bindGraphics(mesh->program);
-        mesh->program->applyUniforms();
-        mesh->applyUniforms();
         d->bindGraphics(mesh);
 
 //
@@ -413,8 +386,6 @@ void Renderer::renderMeshes()
 
         mesh->program->draw(mesh);
         d->unbindGraphics(mesh);
-        mesh->unapplyUniforms();
-        mesh->program->unapplyUniforms();
         d->unbindGraphics(mesh->program);
     }
 }

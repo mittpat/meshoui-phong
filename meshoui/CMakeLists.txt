@@ -22,8 +22,6 @@ add_library(meshouilib
     RendererPrivate.h
     TextureLoader.cpp
     TextureLoader.h
-    Uniform.cpp
-    Uniform.h
     Widget.h)
 
 set(shaders resources/shaders/Phong.frag resources/shaders/Phong.vert)

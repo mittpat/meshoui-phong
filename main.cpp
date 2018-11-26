@@ -1,7 +1,6 @@
 #include <Camera.h>
 #include <Renderer.h>
 #include <Program.h>
-#include <Uniform.h>
 #include <Mesh.h>
 
 using namespace linalg;

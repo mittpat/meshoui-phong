@@ -12,18 +12,12 @@ namespace Meshoui
 {
     class Program;
     class RendererPrivate;
-    class IUniform;
     class Mesh
     {
     public:
         virtual ~Mesh();
         Mesh();
 
-        void add(IUniform * uniform);
-        void remove(IUniform * uniform);
-        void applyUniforms();
-        void unapplyUniforms();
-        IUniform * uniform(HashId name) const;
         linalg::aliases::float4x4 modelMatrix() const;
         RendererPrivate * d_ptr() const;
 
@@ -31,8 +25,6 @@ namespace Meshoui
         HashId definitionId;
         std::string filename;
         Program * program;
-
-        std::vector<IUniform *> uniforms;
 
         linalg::aliases::float3 scale;
         linalg::aliases::float4 orientation;

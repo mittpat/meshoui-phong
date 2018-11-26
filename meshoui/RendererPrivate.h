@@ -119,9 +119,6 @@ namespace Meshoui
         void unbindGraphics(Mesh * mesh);
         void unbindGraphics(Program * program);
         void unbindGraphics(Camera * cam);
-        void setProgramUniforms(Mesh * mesh);
-        void setProgramUniform(Program * program, IUniform * uniform);
-        void unsetProgramUniform(Program * program, IUniform * uniform);
         void draw(Program * program, Mesh * mesh);
         void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
         const MeshFile & load(const std::string & filename);

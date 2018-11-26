@@ -2,7 +2,6 @@
 #include "Program.h"
 #include "RendererPrivate.h"
 #include "TextureLoader.h"
-#include "Uniform.h"
 
 #include <imgui.h>
 #include <loose.h>
@@ -807,8 +806,6 @@ void RendererPrivate::unregisterGraphics(Mesh * mesh)
             meshRegistrations.erase(found);
         }
     }
-    for (auto * uniform : mesh->uniforms) { delete uniform; }
-    mesh->uniforms.clear();
     mesh->d = nullptr;
 }
 
@@ -868,46 +865,6 @@ void RendererPrivate::unbindGraphics(Camera *cam)
         lights.erase(std::remove(lights.begin(), lights.end(), cam));
 }
 
-void RendererPrivate::setProgramUniforms(Mesh * mesh)
-{
-    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, mesh->program);
-    for (const ProgramUniform & programUniform : programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection)
-    {
-        if (auto * uniform = mesh->uniform(programUniform.name))
-        {
-            setUniform(textureRegistrations, mesh, uniform, programUniform);
-        }
-    }*/
-}
-
-void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
-{
-    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
-    const auto & uniformReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection;
-    auto programUniform = std::find_if(uniformReflection.begin(), uniformReflection.end(), [uniform](const ProgramUniform & programUniform)
-    {
-        return programUniform.name == uniform->name;
-    });
-    if (programUniform != uniformReflection.end())
-    {
-        setUniform(textureRegistrations, nullptr, uniform, *programUniform);
-    }*/
-}
-
-void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
-{
-    /*const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
-    const auto & uniformReflection = programRegistration.pipelineReflectionInfo.vertexShaderStage.uniformReflection;
-    auto programUniform = std::find_if(uniformReflection.begin(), uniformReflection.end(), [uniform](const ProgramUniform & programUniform)
-    {
-        return programUniform.name == uniform->name;
-    });
-    if (programUniform != uniformReflection.end())
-    {
-        //
-    }*/
-}
-
 void RendererPrivate::draw(Program *, Mesh *)
 {
     //
@@ -934,17 +891,7 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance.materialId; });
         for (auto value : material->values)
         {
-            IUniform * uniform = nullptr;
-            if (value.texture)
-            {
-                uniform = new UniformSampler2D(value.sid, *value.texture);
-            }
-            else
-            {
-                uniform = UniformFactory::makeUniform(value.sid, enumForVectorSize(value.data->size()));
-                uniform->setData(value.data->data());
-            }
-            mesh->add(uniform);
+            //
         }
     }
 }
