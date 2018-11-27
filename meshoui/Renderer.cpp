@@ -372,12 +372,17 @@ void Renderer::renderMeshes()
         d->bindGraphics(mesh);
 
 //
-        PushConstant pushConstants;
+        Blocks::PushConstant pushConstants;
         pushConstants.model = mesh->modelMatrix();
         if (d->camera != nullptr)
             pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
         pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
-        d->renderDrawData(mesh->program, mesh, pushConstants, d->camera->position, d->lights[0]->position);
+
+        Blocks::Uniform uniforms;
+        uniforms.position = d->camera->position;
+        uniforms.light = d->lights[0]->position;
+
+        d->renderDrawData(mesh->program, mesh, pushConstants, uniforms);
 //
 
         mesh->program->draw(mesh);

@@ -62,21 +62,19 @@ namespace
         if (TextureLoader::loadPNG(/*buffer, */std::filesystem::path(filename).replace_extension(".png"), repeat))
             return;
     }
-
-    /*void setUniform(const TextureRegistrations &, Mesh *, IUniform *, const ProgramUniform &)
-    {
-        //
-    }*/
 }
 
 void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
 {
+    renderDevice.deleteBuffer(programRegistration.uniformBuffer);
+
     vkDestroyDescriptorSetLayout(renderDevice.device, programRegistration.descriptorSetLayout, renderDevice.allocator);
     vkDestroyPipelineLayout(renderDevice.device, programRegistration.pipelineLayout, renderDevice.allocator);
     vkDestroyPipeline(renderDevice.device, programRegistration.pipeline, renderDevice.allocator);
     programRegistration.descriptorSetLayout = VK_NULL_HANDLE;
     programRegistration.pipelineLayout = VK_NULL_HANDLE;
     programRegistration.pipeline = VK_NULL_HANDLE;
+    programRegistration.uniformBuffer = {};
 }
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
@@ -119,12 +117,10 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 //    }
 
     {
-        //VkSampler sampler[1] = {g_FontSampler};
         VkDescriptorSetLayoutBinding binding[1] = {};
-        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         binding[0].descriptorCount = 1;
         binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        //binding[0].pImmutableSamplers = sampler;
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = 1;
@@ -143,10 +139,30 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
         check_vk_result(err);
     }
 
+    renderDevice.createBuffer(programRegistration.uniformBuffer, sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+    {
+        VkDescriptorBufferInfo bufferInfo = {};
+        bufferInfo.buffer = programRegistration.uniformBuffer.buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(Blocks::Uniform);
+
+        VkWriteDescriptorSet descriptorWrite = {};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = programRegistration.descriptorSet;
+        descriptorWrite.dstBinding = 0;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(renderDevice.device, 1, &descriptorWrite, 0, nullptr);
+    }
+
     {
         // model, view & projection
         std::vector<VkPushConstantRange> push_constants;
-        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant)});
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant)});
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount = 1;
@@ -198,8 +214,8 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     VkPipelineRasterizationStateCreateInfo raster_info = {};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
-    raster_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    raster_info.cullMode = VK_CULL_MODE_NONE;//VK_CULL_MODE_BACK_BIT;
+    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_info.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms_info = {};
@@ -661,31 +677,23 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
     }
 }
 
-void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const PushConstant & pushConstants,
-                                     const float3 & camera, const float3 & light)
+void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const Blocks::PushConstant & pushConstants, const Blocks::Uniform & uniforms)
 {
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
 
     VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
 
-    // Setup viewport:
-    {
-        VkViewport viewport{0, 0, float(width), float(height), 0.f, 100.f};
-        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
-    }
+    VkViewport viewport{0, 0, float(width), float(height), 0.01f, 100.f};
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
-    {
-        // maximum push constant size is between 128 and 256... this is 192...
-        vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), &pushConstants);
-        //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 0, sizeof(float3), &camera);
-        //vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(float3) * 1, sizeof(float3), &light);
-    }
+    vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
+
+    renderDevice.uploadBuffer(programRegistration.uniformBuffer, sizeof(Blocks::Uniform), &uniforms);
 
     VkRect2D scissor{0, 0, width, height};
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    // Render the command lists:
     vkCmdDrawIndexed(command_buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 

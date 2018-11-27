@@ -11,20 +11,36 @@
 #include <string>
 #include <vector>
 
+#define FrameCount 2
+
 struct GLFWwindow;
 namespace Meshoui
 {
-    struct PushConstant
+    namespace Blocks
     {
-        ~PushConstant();
-        PushConstant();
+        struct PushConstant
+        {
+            ~PushConstant();
+            PushConstant();
 
-        linalg::aliases::float4x4 model;
-        linalg::aliases::float4x4 view;
-        linalg::aliases::float4x4 projection;
-    };
-    inline PushConstant::~PushConstant() {}
-    inline PushConstant::PushConstant() : model(linalg::identity), view(linalg::identity), projection(linalg::identity) {}
+            linalg::aliases::float4x4 model;
+            linalg::aliases::float4x4 view;
+            linalg::aliases::float4x4 projection;
+        };
+        inline PushConstant::~PushConstant() {}
+        inline PushConstant::PushConstant() : model(linalg::identity), view(linalg::identity), projection(linalg::identity) {}
+
+        struct Uniform
+        {
+            ~Uniform();
+            Uniform();
+
+            linalg::aliases::float3 position;
+            linalg::aliases::float3 light;
+        };
+        inline Uniform::~Uniform() {}
+        inline Uniform::Uniform() : position(linalg::zero), light(linalg::zero) {}
+    }
 
     class ProgramRegistration final
     {
@@ -36,6 +52,7 @@ namespace Meshoui
         VkPipeline pipeline;
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet;
+        DeviceBuffer uniformBuffer;
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
@@ -78,8 +95,6 @@ namespace Meshoui
     class RendererPrivate final
     {
     public:
-        static const int FrameCount = 2;
-
         void unregisterProgram(ProgramRegistration & programRegistration);
         bool registerProgram(Program * program, ProgramRegistration & programRegistration);
         void bindProgram(const ProgramRegistration & programRegistration);
@@ -100,8 +115,7 @@ namespace Meshoui
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h);
 
-        void renderDrawData(Program * program, Mesh * mesh, const PushConstant & pushConstants,
-                            const linalg::aliases::float3 &position, const linalg::aliases::float3 &light);
+        void renderDrawData(Program * program, Mesh * mesh, const Blocks::PushConstant & pushConstants, const Blocks::Uniform & uniforms);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
