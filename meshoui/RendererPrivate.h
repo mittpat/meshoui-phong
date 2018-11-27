@@ -51,11 +51,11 @@ namespace Meshoui
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
         VkDescriptorSetLayout descriptorSetLayout;
-        VkDescriptorSet descriptorSet;
-        DeviceBuffer uniformBuffer;
+        VkDescriptorSet descriptorSet[FrameCount];
+        DeviceBuffer uniformBuffer[FrameCount];
     };
     inline ProgramRegistration::~ProgramRegistration() {}
-    inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
+    inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
 
     class TextureRegistration final
     {

@@ -66,7 +66,8 @@ namespace
 
 void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
 {
-    renderDevice.deleteBuffer(programRegistration.uniformBuffer);
+    for (size_t i = 0; i < FrameCount; ++i)
+        renderDevice.deleteBuffer(programRegistration.uniformBuffer[i]);
 
     vkDestroyDescriptorSetLayout(renderDevice.device, programRegistration.descriptorSetLayout, renderDevice.allocator);
     vkDestroyPipelineLayout(renderDevice.device, programRegistration.pipelineLayout, renderDevice.allocator);
@@ -74,7 +75,8 @@ void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistratio
     programRegistration.descriptorSetLayout = VK_NULL_HANDLE;
     programRegistration.pipelineLayout = VK_NULL_HANDLE;
     programRegistration.pipeline = VK_NULL_HANDLE;
-    programRegistration.uniformBuffer = {};
+    memset(&programRegistration.uniformBuffer, 0, sizeof(programRegistration.uniformBuffer));
+    memset(&programRegistration.descriptorSet, 0, sizeof(programRegistration.descriptorSet));
 }
 
 bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
@@ -130,26 +132,30 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     }
 
     {
+        VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
+        for (size_t i = 0; i < FrameCount; ++i)
+            descriptorSetLayout[i] = programRegistration.descriptorSetLayout;
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         alloc_info.descriptorPool = descriptorPool;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &programRegistration.descriptorSetLayout;
-        err = vkAllocateDescriptorSets(renderDevice.device, &alloc_info, &programRegistration.descriptorSet);
+        alloc_info.descriptorSetCount = FrameCount;
+        alloc_info.pSetLayouts = descriptorSetLayout;
+        err = vkAllocateDescriptorSets(renderDevice.device, &alloc_info, programRegistration.descriptorSet);
         check_vk_result(err);
     }
 
-    renderDevice.createBuffer(programRegistration.uniformBuffer, sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-
+    for (size_t i = 0; i < FrameCount; ++i)
     {
+        renderDevice.createBuffer(programRegistration.uniformBuffer[i], sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
         VkDescriptorBufferInfo bufferInfo = {};
-        bufferInfo.buffer = programRegistration.uniformBuffer.buffer;
+        bufferInfo.buffer = programRegistration.uniformBuffer[i].buffer;
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(Blocks::Uniform);
 
         VkWriteDescriptorSet descriptorWrite = {};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = programRegistration.descriptorSet;
+        descriptorWrite.dstSet = programRegistration.descriptorSet[i];
         descriptorWrite.dstBinding = 0;
         descriptorWrite.dstArrayElement = 0;
         descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -273,7 +279,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
 {
     vkCmdBindPipeline(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
-    vkCmdBindDescriptorSets(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(frames[frameIndex].commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet[frameIndex], 0, nullptr);
 }
 
 void RendererPrivate::unbindProgram(const ProgramRegistration &)
@@ -689,7 +695,7 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const Block
 
     vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
 
-    renderDevice.uploadBuffer(programRegistration.uniformBuffer, sizeof(Blocks::Uniform), &uniforms);
+    renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
 
     VkRect2D scissor{0, 0, width, height};
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
