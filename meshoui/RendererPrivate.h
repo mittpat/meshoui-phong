@@ -150,6 +150,9 @@ namespace Meshoui
         uint32_t            height;
         VkSwapchainKHR      swapchain;
         VkRenderPass        renderPass;
+        VkImage             depthBuffer;
+        VkDeviceMemory      depthBufferMemory;
+        VkImageView         depthBufferView;
         uint32_t            backBufferCount;
         VkImage             backBuffer[16];
         VkImageView         backBufferView[16];

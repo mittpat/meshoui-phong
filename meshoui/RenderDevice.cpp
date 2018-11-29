@@ -13,19 +13,19 @@ namespace
         if (err < 0)
             abort();
     }
-
-    uint32_t memoryType(VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits)
-    {
-        VkPhysicalDeviceMemoryProperties prop;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
-        for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-            if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
-                return i;
-        return 0xFFFFFFFF;
-    }
 }
 
 using namespace Meshoui;
+
+uint32_t RenderDevice::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
+{
+    VkPhysicalDeviceMemoryProperties prop;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
+    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
+        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
+            return i;
+    return 0xFFFFFFFF;
+}
 
 void RenderDevice::createBuffer(DeviceBuffer &deviceBuffer, size_t size, VkBufferUsageFlags usage)
 {
@@ -46,7 +46,7 @@ void RenderDevice::createBuffer(DeviceBuffer &deviceBuffer, size_t size, VkBuffe
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = req.size;
-    alloc_info.memoryTypeIndex = memoryType(physicalDevice, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
+    alloc_info.memoryTypeIndex = memoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
     err = vkAllocateMemory(device, &alloc_info, allocator, &deviceBuffer.bufferMemory);
     check_vk_result(err);
 

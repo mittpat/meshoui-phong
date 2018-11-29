@@ -26,7 +26,7 @@ int main(int, char**)
     light.position = mul(rotation_matrix(qmul(rotation_quat(up, 0.8f), rotation_quat(right, 0.6f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
     renderer.add(&light);
 
-    Model model("meshoui/resources/models/bricks.dae");
+    Model model("meshoui/resources/models/crates.dae");
     renderer.add(&model);
 
     {

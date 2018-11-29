@@ -284,10 +284,11 @@ void Renderer::update(float s)
         info.framebuffer = d->framebuffer[d->frameIndex];
         info.renderArea.extent.width = d->width;
         info.renderArea.extent.height = d->height;
-        info.clearValueCount = 1;
-
-        static const VkClearValue ClearValue = {0};
-        info.pClearValues = &ClearValue;
+        VkClearValue clearValue[2] = {0};
+        clearValue[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
+        clearValue[1].depthStencil = {1.0f, 0};
+        info.pClearValues = clearValue;
+        info.clearValueCount = 2;
         vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 

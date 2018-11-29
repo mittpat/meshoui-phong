@@ -21,6 +21,7 @@ namespace Meshoui
         ~RenderDevice();
         RenderDevice();
         RenderDevice(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
+        uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createBuffer(DeviceBuffer &deviceBuffer, size_t size, VkBufferUsageFlags usage);
         void uploadBuffer(const DeviceBuffer &deviceBuffer, VkDeviceSize size, const void *data);
         void deleteBuffer(const DeviceBuffer &deviceBuffer);

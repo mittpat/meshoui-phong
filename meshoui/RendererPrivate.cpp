@@ -220,8 +220,8 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     VkPipelineRasterizationStateCreateInfo raster_info = {};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_info.cullMode = VK_CULL_MODE_NONE;//VK_CULL_MODE_BACK_BIT;
-    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster_info.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms_info = {};
@@ -238,9 +238,6 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     color_attachment[0].alphaBlendOp = VK_BLEND_OP_ADD;
     color_attachment[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-    VkPipelineDepthStencilStateCreateInfo depth_info = {};
-    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-
     VkPipelineColorBlendStateCreateInfo blend_info = {};
     blend_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend_info.attachmentCount = 1;
@@ -251,6 +248,18 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_state.dynamicStateCount = (uint32_t)IM_ARRAYSIZE(dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
+
+    VkPipelineDepthStencilStateCreateInfo depth_info = {};
+    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_info.depthTestEnable = VK_TRUE;
+    depth_info.depthWriteEnable = VK_TRUE;
+    depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_info.depthBoundsTestEnable = VK_FALSE;
+    //depth_info.minDepthBounds = 0.0f; // Optional
+    //depth_info.maxDepthBounds = 1.0f; // Optional
+    depth_info.stencilTestEnable = VK_FALSE;
+    //depth_info.front = {}; // Optional
+    //depth_info.back = {}; // Optional
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -332,6 +341,9 @@ RendererPrivate::RendererPrivate()
     , height(0)
     , swapchain(VK_NULL_HANDLE)
     , renderPass(VK_NULL_HANDLE)
+    , depthBuffer(VK_NULL_HANDLE)
+    , depthBufferMemory(VK_NULL_HANDLE)
+    , depthBufferView(VK_NULL_HANDLE)
     , backBufferCount(0)
     , backBuffer()
     , backBufferView()
@@ -536,6 +548,9 @@ void RendererPrivate::createCommandBuffers()
 void RendererPrivate::destroySwapChainAndFramebuffer()
 {
     vkQueueWaitIdle(queue);
+    vkDestroyImageView(renderDevice.device, depthBufferView, renderDevice.allocator);
+    vkDestroyImage(renderDevice.device, depthBuffer, renderDevice.allocator);
+    vkFreeMemory(renderDevice.device, depthBufferMemory, renderDevice.allocator);
     for (uint32_t i = 0; i < backBufferCount; i++)
     {
         vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
@@ -612,37 +627,43 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
     }
 
     {
-        VkAttachmentDescription attachment = {};
-        attachment.format = surfaceFormat.format;
-        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        VkAttachmentDescription attachment[2] = {};
+        attachment[0].format = surfaceFormat.format;
+        attachment[0].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachment[1].format = VK_FORMAT_D16_UNORM;
+        attachment[1].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
         VkAttachmentReference color_attachment = {};
         color_attachment.attachment = 0;
-        color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;        
+        VkAttachmentReference depth_attachment = {};
+        depth_attachment.attachment = 1;
+        depth_attachment.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpass = {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment;
-        VkSubpassDependency dependency = {};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass = 0;
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask = 0;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        subpass.pDepthStencilAttachment = &depth_attachment;
+
         VkRenderPassCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        info.attachmentCount = 1;
-        info.pAttachments = &attachment;
+        info.attachmentCount = 2;
+        info.pAttachments = attachment;
         info.subpassCount = 1;
         info.pSubpasses = &subpass;
-        info.dependencyCount = 1;
-        info.pDependencies = &dependency;
         err = vkCreateRenderPass(renderDevice.device, &info, renderDevice.allocator, &renderPass);
         check_vk_result(err);
     }
@@ -664,12 +685,60 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
             check_vk_result(err);
         }
     }
+
+    // depth buffer
     {
-        VkImageView attachment[1];
+        VkImageCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        info.imageType = VK_IMAGE_TYPE_2D;
+        info.format = VK_FORMAT_D16_UNORM;
+        info.extent.width = width;
+        info.extent.height = height;
+        info.extent.depth = 1;
+        info.mipLevels = 1;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        err = vkCreateImage(renderDevice.device, &info, renderDevice.allocator, &depthBuffer);
+        check_vk_result(err);
+        VkMemoryRequirements req;
+        vkGetImageMemoryRequirements(renderDevice.device, depthBuffer, &req);
+        VkMemoryAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc_info.allocationSize = req.size;
+        alloc_info.memoryTypeIndex = renderDevice.memoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
+        err = vkAllocateMemory(renderDevice.device, &alloc_info, renderDevice.allocator, &depthBufferMemory);
+        check_vk_result(err);
+        err = vkBindImageMemory(renderDevice.device, depthBuffer, depthBufferMemory, 0);
+        check_vk_result(err);
+
+        VkImageViewCreateInfo view_info = {};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image = depthBuffer;
+        view_info.format = VK_FORMAT_D16_UNORM;
+        view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+        view_info.components.g = VK_COMPONENT_SWIZZLE_G;
+        view_info.components.b = VK_COMPONENT_SWIZZLE_B;
+        view_info.components.a = VK_COMPONENT_SWIZZLE_A;
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.baseArrayLayer = 0;
+        view_info.subresourceRange.layerCount = 1;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        err = vkCreateImageView(renderDevice.device, &view_info, nullptr, &depthBufferView);
+        check_vk_result(err);
+    }
+
+    {
+        VkImageView attachment[2] = {0, depthBufferView};
         VkFramebufferCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         info.renderPass = renderPass;
-        info.attachmentCount = 1;
+        info.attachmentCount = 2;
         info.pAttachments = attachment;
         info.width = width;
         info.height = height;
@@ -690,7 +759,7 @@ void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const Block
 
     VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
 
-    VkViewport viewport{0, 0, float(width), float(height), 0.01f, 100.f};
+    VkViewport viewport{0, 0, float(width), float(height), 0.f, 1.f};
     vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
     vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);

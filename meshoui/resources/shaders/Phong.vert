@@ -32,4 +32,5 @@ void main()
     outData.TBN = mat3(T, B, N);
     
     gl_Position = pc.uniformProjection * pc.uniformView * vec4(outData.vertex, 1.0);
+    gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }
