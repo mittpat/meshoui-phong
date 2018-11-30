@@ -28,6 +28,7 @@ function(compile_glsl binaries)
       COMMAND glslangValidator
       ARGS -V
            ${ABS_FIL}
+           -q
            -o ${binary}
       DEPENDS ${ABS_FIL} glslangValidator glslang_make_output_dir_${FIL_NAME}
       COMMENT "Running glslangValidator on ${FIL_NAME}"

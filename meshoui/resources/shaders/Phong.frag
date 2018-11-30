@@ -10,7 +10,7 @@ layout(location = 0) in VertexData
     mat3 TBN;
 } inData;
 
-layout(set = 0, binding = 0) uniform Block
+layout(std140, binding = 0) uniform Block
 {
     uniform vec3 viewPosition;
     uniform vec3 lightPosition;

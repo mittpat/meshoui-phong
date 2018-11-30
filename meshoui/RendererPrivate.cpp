@@ -16,6 +16,11 @@ using namespace Meshoui;
 
 namespace
 {
+    const float4x4 vkCorrMatrix = {{1.0f, 0.0f, 0.0f, 0.0f},
+                                   {0.0f,-1.0f, 0.0f, 0.0f},
+                                   {0.0f, 0.0f, 0.5f, 0.0f},
+                                   {0.0f, 0.0f, 0.5f, 1.0f}};
+
     void check_vk_result(VkResult err)
     {
         if (err == 0) return;
@@ -221,7 +226,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.polygonMode = VK_POLYGON_MODE_FILL;
     raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
-    raster_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_info.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms_info = {};
@@ -255,11 +260,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     depth_info.depthWriteEnable = VK_TRUE;
     depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
     depth_info.depthBoundsTestEnable = VK_FALSE;
-    //depth_info.minDepthBounds = 0.0f; // Optional
-    //depth_info.maxDepthBounds = 1.0f; // Optional
     depth_info.stencilTestEnable = VK_FALSE;
-    //depth_info.front = {}; // Optional
-    //depth_info.back = {}; // Optional
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -352,7 +353,7 @@ RendererPrivate::RendererPrivate()
     , frameIndex(0)
     , toFullscreen(false)
     , fullscreen(false)
-    , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
+    , projectionMatrix(mul(vkCorrMatrix, linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f)))
     , camera(nullptr)
 {
     memset(&surfaceFormat, 0, sizeof(surfaceFormat));

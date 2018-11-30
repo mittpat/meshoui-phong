@@ -35,8 +35,8 @@ namespace Meshoui
             ~Uniform();
             Uniform();
 
-            linalg::aliases::float3 position;
-            linalg::aliases::float3 light;
+            alignas(16) linalg::aliases::float3 position;
+            alignas(16) linalg::aliases::float3 light;
         };
         inline Uniform::~Uniform() {}
         inline Uniform::Uniform() : position(linalg::zero), light(linalg::zero) {}

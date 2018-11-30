@@ -31,6 +31,5 @@ void main()
     vec3 N = normalize(vec3(mat3(pc.uniformModel) * vertexNormal));
     outData.TBN = mat3(T, B, N);
     
-    gl_Position = pc.uniformProjection * pc.uniformView * vec4(outData.vertex, 1.0);
-    gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+    gl_Position = pc.uniformProjection * pc.uniformView * pc.uniformModel * vec4(vertexPosition, 1.0);
 }
