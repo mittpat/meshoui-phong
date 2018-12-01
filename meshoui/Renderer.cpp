@@ -93,6 +93,7 @@ Renderer::Renderer()
     while (width == 0 || height == 0)
     {
         glfwGetFramebufferSize(d->window, &width, &height);
+        glfwPostEmptyEvent();
         glfwWaitEvents();
     }
 
@@ -330,6 +331,7 @@ void Renderer::update(float s)
             while (width == 0 || height == 0)
             {
                 glfwGetFramebufferSize(d->window, &width, &height);
+                glfwPostEmptyEvent();
                 glfwWaitEvents();
             }
 
