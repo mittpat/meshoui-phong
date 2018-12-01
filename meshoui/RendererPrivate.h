@@ -5,7 +5,7 @@
 #include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
-#include "RenderDevice.h"
+#include "RenderDeviceVk.h"
 
 #include <hashid.h>
 #include <string>
@@ -52,7 +52,7 @@ namespace Meshoui
         VkPipeline pipeline;
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet[FrameCount];
-        DeviceBuffer uniformBuffer[FrameCount];
+        DeviceBufferVk uniformBuffer[FrameCount];
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
@@ -78,8 +78,8 @@ namespace Meshoui
         MeshRegistration();
 
         HashId definitionId;
-        DeviceBuffer vertexBuffer;
-        DeviceBuffer indexBuffer;
+        DeviceBufferVk vertexBuffer;
+        DeviceBufferVk indexBuffer;
         size_t indexBufferSize;
         size_t referenceCount;
     };
@@ -115,8 +115,6 @@ namespace Meshoui
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h);
 
-        void renderDrawData(Program * program, Mesh * mesh, const Blocks::PushConstant & pushConstants, const Blocks::Uniform & uniforms);
-
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
         void registerGraphics(Program * program);
@@ -136,36 +134,36 @@ namespace Meshoui
         void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
         const MeshFile & load(const std::string & filename);
 
-        GLFWwindow*            window;
-        VkInstance             instance;
-        RenderDevice           renderDevice;
-        uint32_t               queueFamily;
-        VkQueue                queue;
-        VkPipelineCache        pipelineCache;
-        VkDescriptorPool       descriptorPool;
-        VkSurfaceKHR           surface;
-        VkSurfaceFormatKHR     surfaceFormat;
+        GLFWwindow*        window;
+        VkInstance         instance;
+        RenderDeviceVk     renderDevice;
+        uint32_t           queueFamily;
+        VkQueue            queue;
+        VkPipelineCache    pipelineCache;
+        VkDescriptorPool   descriptorPool;
+        VkSurfaceKHR       surface;
+        VkSurfaceFormatKHR surfaceFormat;
 
-        uint32_t            width;
-        uint32_t            height;
-        VkSwapchainKHR      swapchain;
-        VkRenderPass        renderPass;
-        VkImage             depthBuffer;
-        VkDeviceMemory      depthBufferMemory;
-        VkImageView         depthBufferView;
-        uint32_t            backBufferCount;
-        VkImage             backBuffer[16];
-        VkImageView         backBufferView[16];
-        VkFramebuffer       framebuffer[16];
+        uint32_t       width;
+        uint32_t       height;
+        VkSwapchainKHR swapchain;
+        VkRenderPass   renderPass;
+        ImageBufferVk  depthBuffer;
+        uint32_t       backBufferCount;
+        VkImage        backBuffer[16];
+        VkImageView    backBufferView[16];
+        VkFramebuffer  framebuffer[16];
         struct FrameData
         {
+            ~FrameData();
+            FrameData();
+
             uint32_t        backbufferIndex;
             VkCommandPool   commandPool;
             VkCommandBuffer commandBuffer;
             VkFence         fence;
             VkSemaphore     imageAcquiredSemaphore;
             VkSemaphore     renderCompleteSemaphore;
-            FrameData();
         }                   frames[FrameCount];
         uint32_t            frameIndex;
 
@@ -180,15 +178,12 @@ namespace Meshoui
         linalg::aliases::float4x4 projectionMatrix;
         Camera * camera;
         std::vector<Light *> lights;
+
+        Blocks::PushConstant pushConstants;
+        Blocks::Uniform uniforms;
     };
-    inline RendererPrivate::~RendererPrivate() {}
-    inline RendererPrivate::FrameData::FrameData()
-    {
-        backbufferIndex = 0;
-        commandPool = VK_NULL_HANDLE;
-        commandBuffer = VK_NULL_HANDLE;
-        fence = VK_NULL_HANDLE;
-        imageAcquiredSemaphore = VK_NULL_HANDLE;
-        renderCompleteSemaphore = VK_NULL_HANDLE;
-    }
 }
+
+inline Meshoui::RendererPrivate::~RendererPrivate() {}
+inline Meshoui::RendererPrivate::FrameData::~FrameData() {}
+inline Meshoui::RendererPrivate::FrameData::FrameData() : backbufferIndex(0), commandPool(VK_NULL_HANDLE), commandBuffer(VK_NULL_HANDLE), fence(VK_NULL_HANDLE), imageAcquiredSemaphore(VK_NULL_HANDLE), renderCompleteSemaphore(VK_NULL_HANDLE) {}

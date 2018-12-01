@@ -342,9 +342,7 @@ RendererPrivate::RendererPrivate()
     , height(0)
     , swapchain(VK_NULL_HANDLE)
     , renderPass(VK_NULL_HANDLE)
-    , depthBuffer(VK_NULL_HANDLE)
-    , depthBufferMemory(VK_NULL_HANDLE)
-    , depthBufferView(VK_NULL_HANDLE)
+    , depthBuffer()
     , backBufferCount(0)
     , backBuffer()
     , backBufferView()
@@ -549,9 +547,7 @@ void RendererPrivate::createCommandBuffers()
 void RendererPrivate::destroySwapChainAndFramebuffer()
 {
     vkQueueWaitIdle(queue);
-    vkDestroyImageView(renderDevice.device, depthBufferView, renderDevice.allocator);
-    vkDestroyImage(renderDevice.device, depthBuffer, renderDevice.allocator);
-    vkFreeMemory(renderDevice.device, depthBufferMemory, renderDevice.allocator);
+    renderDevice.deleteBuffer(depthBuffer);
     for (uint32_t i = 0; i < backBufferCount; i++)
     {
         vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
@@ -688,54 +684,10 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
     }
 
     // depth buffer
-    {
-        VkImageCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        info.imageType = VK_IMAGE_TYPE_2D;
-        info.format = VK_FORMAT_D16_UNORM;
-        info.extent.width = width;
-        info.extent.height = height;
-        info.extent.depth = 1;
-        info.mipLevels = 1;
-        info.arrayLayers = 1;
-        info.samples = VK_SAMPLE_COUNT_1_BIT;
-        info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        err = vkCreateImage(renderDevice.device, &info, renderDevice.allocator, &depthBuffer);
-        check_vk_result(err);
-        VkMemoryRequirements req;
-        vkGetImageMemoryRequirements(renderDevice.device, depthBuffer, &req);
-        VkMemoryAllocateInfo alloc_info = {};
-        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        alloc_info.allocationSize = req.size;
-        alloc_info.memoryTypeIndex = renderDevice.memoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
-        err = vkAllocateMemory(renderDevice.device, &alloc_info, renderDevice.allocator, &depthBufferMemory);
-        check_vk_result(err);
-        err = vkBindImageMemory(renderDevice.device, depthBuffer, depthBufferMemory, 0);
-        check_vk_result(err);
-
-        VkImageViewCreateInfo view_info = {};
-        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_info.image = depthBuffer;
-        view_info.format = VK_FORMAT_D16_UNORM;
-        view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-        view_info.components.g = VK_COMPONENT_SWIZZLE_G;
-        view_info.components.b = VK_COMPONENT_SWIZZLE_B;
-        view_info.components.a = VK_COMPONENT_SWIZZLE_A;
-        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        view_info.subresourceRange.baseMipLevel = 0;
-        view_info.subresourceRange.levelCount = 1;
-        view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = 1;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        err = vkCreateImageView(renderDevice.device, &view_info, nullptr, &depthBufferView);
-        check_vk_result(err);
-    }
+    renderDevice.createBuffer(depthBuffer, {width, height, 1}, VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     {
-        VkImageView attachment[2] = {0, depthBufferView};
+        VkImageView attachment[2] = {0, depthBuffer.imageView};
         VkFramebufferCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         info.renderPass = renderPass;
@@ -751,26 +703,6 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
             check_vk_result(err);
         }
     }
-}
-
-void RendererPrivate::renderDrawData(Program * program, Mesh * mesh, const Blocks::PushConstant & pushConstants, const Blocks::Uniform & uniforms)
-{
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
-    const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
-
-    VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
-
-    VkViewport viewport{0, 0, float(width), float(height), 0.f, 1.f};
-    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
-
-    vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
-
-    renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
-
-    VkRect2D scissor{0, 0, width, height};
-    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-
-    vkCmdDrawIndexed(command_buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 
 void RendererPrivate::registerGraphics(Model *model)
@@ -904,9 +836,24 @@ void RendererPrivate::unbindGraphics(Camera *cam)
         lights.erase(std::remove(lights.begin(), lights.end(), cam));
 }
 
-void RendererPrivate::draw(Program *, Mesh *)
+void RendererPrivate::draw(Program *program, Mesh *mesh)
 {
-    //
+    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
+    const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
+
+    VkCommandBuffer & command_buffer = frames[frameIndex].commandBuffer;
+
+    VkViewport viewport{0, 0, float(width), float(height), 0.f, 1.f};
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+    vkCmdPushConstants(command_buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
+
+    renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
+
+    VkRect2D scissor{0, 0, width, height};
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    vkCmdDrawIndexed(command_buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 
 void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *> &meshes)
