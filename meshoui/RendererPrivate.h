@@ -114,7 +114,7 @@ namespace Meshoui
         void destroyCommandBuffers();
         void createCommandBuffers();
         void destroySwapChainAndFramebuffer();
-        void createSwapChainAndFramebuffer(int w, int h);
+        void createSwapChainAndFramebuffer(int w, int h, bool vsync);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
@@ -139,6 +139,7 @@ namespace Meshoui
         VkInstance         instance;
         RenderDeviceVk     renderDevice;
         SwapChainVk        swapChain;
+        uint32_t           frameIndex;
         uint32_t           queueFamily;
         VkQueue            queue;
         VkPipelineCache    pipelineCache;
@@ -151,12 +152,6 @@ namespace Meshoui
         VkSwapchainKHR swapChainKHR;
         VkRenderPass   renderPass;
         ImageBufferVk  depthBuffer;
-        uint32_t       backBufferCount;
-        VkImage        backBuffer[16];
-        VkImageView    backBufferView[16];
-        VkFramebuffer  framebuffer[16];
-
-        uint32_t       frameIndex;
 
         ProgramRegistrations programRegistrations;
         MeshRegistrations    meshRegistrations;
@@ -164,7 +159,10 @@ namespace Meshoui
         MeshFiles meshFiles;
 
         bool toFullscreen;
-        bool fullscreen;
+        bool isFullscreen;
+
+        bool toVSync;
+        bool isVSync;
 
         linalg::aliases::float4x4 projectionMatrix;
         Camera * camera;

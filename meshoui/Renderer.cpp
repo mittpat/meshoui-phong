@@ -112,7 +112,8 @@ Renderer::Renderer()
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
     d->createCommandBuffers();
-    d->createSwapChainAndFramebuffer(width, height);
+    d->createSwapChainAndFramebuffer(width, height, d->toVSync);
+    d->toVSync = d->isVSync;
 #ifdef USE_IMGUI
     // imgui
     IMGUI_CHECKVERSION();
@@ -136,8 +137,8 @@ Renderer::Renderer()
 
     {
         // Use any command queue
-        VkCommandPool command_pool = d->swapChain.commandBuffers[d->frameIndex].commandPool;
-        VkCommandBuffer command_buffer = d->swapChain.commandBuffers[d->frameIndex].commandBuffer;
+        VkCommandPool command_pool = d->swapChain.frames[d->frameIndex].pool;
+        VkCommandBuffer command_buffer = d->swapChain.frames[d->frameIndex].buffer;
 
         err = vkResetCommandPool(d->renderDevice.device, command_pool, 0);
         check_vk_result(err);
@@ -257,31 +258,31 @@ void Renderer::update(float s)
 
     VkResult err;
 
-    VkSemaphore& image_acquired_semaphore  = d->swapChain.commandBuffers[d->frameIndex].imageAcquiredSemaphore;
+    VkSemaphore& image_acquired_semaphore  = d->swapChain.frames[d->frameIndex].acquired;
     err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapChainKHR, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
     check_vk_result(err);
 
     {
-        err = vkWaitForFences(d->renderDevice.device, 1, &d->swapChain.commandBuffers[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+        err = vkWaitForFences(d->renderDevice.device, 1, &d->swapChain.frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
         check_vk_result(err);
 
-        err = vkResetFences(d->renderDevice.device, 1, &d->swapChain.commandBuffers[d->frameIndex].fence);
+        err = vkResetFences(d->renderDevice.device, 1, &d->swapChain.frames[d->frameIndex].fence);
         check_vk_result(err);
     }
     {
-        err = vkResetCommandPool(d->renderDevice.device, d->swapChain.commandBuffers[d->frameIndex].commandPool, 0);
+        err = vkResetCommandPool(d->renderDevice.device, d->swapChain.frames[d->frameIndex].pool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(d->swapChain.commandBuffers[d->frameIndex].commandBuffer, &info);
+        err = vkBeginCommandBuffer(d->swapChain.frames[d->frameIndex].buffer, &info);
         check_vk_result(err);
     }
     {
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = d->renderPass;
-        info.framebuffer = d->framebuffer[d->frameIndex];
+        info.framebuffer = d->swapChain.images[d->frameIndex].front;
         info.renderArea.extent.width = d->width;
         info.renderArea.extent.height = d->height;
         VkClearValue clearValue[2] = {0};
@@ -289,13 +290,13 @@ void Renderer::update(float s)
         clearValue[1].depthStencil = {1.0f, 0};
         info.pClearValues = clearValue;
         info.clearValueCount = 2;
-        vkCmdBeginRenderPass(d->swapChain.commandBuffers[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(d->swapChain.frames[d->frameIndex].buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
     renderMeshes();
     renderWidgets();
 
-    vkCmdEndRenderPass(d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
+    vkCmdEndRenderPass(d->swapChain.frames[d->frameIndex].buffer);
     {
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info = {};
@@ -304,13 +305,13 @@ void Renderer::update(float s)
         info.pWaitSemaphores = &image_acquired_semaphore;
         info.pWaitDstStageMask = &wait_stage;
         info.commandBufferCount = 1;
-        info.pCommandBuffers = &d->swapChain.commandBuffers[d->frameIndex].commandBuffer;
+        info.pCommandBuffers = &d->swapChain.frames[d->frameIndex].buffer;
         info.signalSemaphoreCount = 1;
-        info.pSignalSemaphores = &d->swapChain.commandBuffers[d->frameIndex].renderCompleteSemaphore;
+        info.pSignalSemaphores = &d->swapChain.frames[d->frameIndex].complete;
 
-        VkResult err = vkEndCommandBuffer(d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
+        VkResult err = vkEndCommandBuffer(d->swapChain.frames[d->frameIndex].buffer);
         check_vk_result(err);
-        err = vkQueueSubmit(d->queue, 1, &info, d->swapChain.commandBuffers[d->frameIndex].fence);
+        err = vkQueueSubmit(d->queue, 1, &info, d->swapChain.frames[d->frameIndex].fence);
         check_vk_result(err);
     }
 
@@ -318,12 +319,12 @@ void Renderer::update(float s)
         VkPresentInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &d->swapChain.commandBuffers[d->frameIndex].renderCompleteSemaphore;
+        info.pWaitSemaphores = &d->swapChain.frames[d->frameIndex].complete;
         info.swapchainCount = 1;
         info.pSwapchains = &d->swapChainKHR;
         info.pImageIndices = &d->frameIndex;
         VkResult err = vkQueuePresentKHR(d->queue, &info);
-        if (err == VK_ERROR_OUT_OF_DATE_KHR)
+        if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
         {
             int width = 0, height = 0;
             while (width == 0 || height == 0)
@@ -333,7 +334,8 @@ void Renderer::update(float s)
             }
 
             vkDeviceWaitIdle(d->renderDevice.device);
-            d->createSwapChainAndFramebuffer(width, height);
+            d->createSwapChainAndFramebuffer(width, height, d->toVSync);
+            d->isVSync = d->toVSync;
         }
         else
         {
@@ -348,17 +350,17 @@ void Renderer::update(float s)
 
 void Renderer::postUpdate()
 {
-    if (d->toFullscreen && !d->fullscreen)
+    if (d->toFullscreen && !d->isFullscreen)
     {
         glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
         glfwSetWindowMonitor(d->window, glfwGetPrimaryMonitor(), 0, 0, 1920, 1080, GLFW_DONT_CARE);
     }
-    else if (!d->toFullscreen && d->fullscreen)
+    else if (!d->toFullscreen && d->isFullscreen)
     {
         glfwSetWindowMonitor(d->window, nullptr, 80, 80, 1920/2, 1080/2, GLFW_DONT_CARE);
         glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
     }
-    d->fullscreen = d->toFullscreen;
+    d->isFullscreen = d->toFullscreen;
 }
 
 void Renderer::renderMeshes()
@@ -404,6 +406,7 @@ void Renderer::renderWidgets()
     if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Checkbox("fullscreen", &d->toFullscreen);
+        ImGui::Checkbox("V-Sync", &d->toVSync);
     }
     for (auto * widget : widgets)
     {
@@ -456,6 +459,6 @@ void Renderer::renderWidgets()
     // Rendering
     ImGui::Render();
 
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->swapChain.frames[d->frameIndex].buffer);
 #endif
 }

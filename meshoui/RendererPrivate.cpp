@@ -288,9 +288,9 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 
 void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
 {
-    auto & frame = swapChain.commandBuffers[frameIndex];
-    vkCmdBindPipeline(frame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
-    vkCmdBindDescriptorSets(frame.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet[frameIndex], 0, nullptr);
+    auto & frame = swapChain.frames[frameIndex];
+    vkCmdBindPipeline(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
+    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet[frameIndex], 0, nullptr);
 }
 
 void RendererPrivate::unbindProgram(const ProgramRegistration &)
@@ -320,9 +320,9 @@ void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRe
 void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration &)
 {
     VkDeviceSize offset = 0;
-    auto & frame = swapChain.commandBuffers[frameIndex];
-    vkCmdBindVertexBuffers(frame.commandBuffer, 0, 1, &meshRegistration.vertexBuffer.buffer, &offset);
-    vkCmdBindIndexBuffer(frame.commandBuffer, meshRegistration.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    auto & frame = swapChain.frames[frameIndex];
+    vkCmdBindVertexBuffers(frame.buffer, 0, 1, &meshRegistration.vertexBuffer.buffer, &offset);
+    vkCmdBindIndexBuffer(frame.buffer, meshRegistration.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
 void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration &)
@@ -335,6 +335,7 @@ RendererPrivate::RendererPrivate()
     , instance(VK_NULL_HANDLE)
     , renderDevice()
     , swapChain()
+    , frameIndex(0)
     , queueFamily(-1)
     , queue(VK_NULL_HANDLE)
     , pipelineCache(VK_NULL_HANDLE)
@@ -346,20 +347,14 @@ RendererPrivate::RendererPrivate()
     , swapChainKHR(VK_NULL_HANDLE)
     , renderPass(VK_NULL_HANDLE)
     , depthBuffer()
-    , backBufferCount(0)
-    , backBuffer()
-    , backBufferView()
-    , framebuffer()
-    , frameIndex(0)
     , toFullscreen(false)
-    , fullscreen(false)
+    , isFullscreen(false)
+    , toVSync(true)
+    , isVSync(true)
     , projectionMatrix(mul(vkCorrMatrix, linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f)))
     , camera(nullptr)
 {
     memset(&surfaceFormat, 0, sizeof(surfaceFormat));
-    memset(&backBuffer, 0, sizeof(backBuffer));
-    memset(&backBufferView, 0, sizeof(backBufferView));
-    memset(&framebuffer, 0, sizeof(framebuffer));
 }
 
 void RendererPrivate::selectSurfaceFormat(const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
@@ -494,38 +489,38 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
 void RendererPrivate::destroyCommandBuffers()
 {
     vkQueueWaitIdle(queue);
-    for (auto & frame : swapChain.commandBuffers)
+    for (auto & frame : swapChain.frames)
     {
         vkDestroyFence(renderDevice.device, frame.fence, renderDevice.allocator);
-        vkFreeCommandBuffers(renderDevice.device, frame.commandPool, 1, &frame.commandBuffer);
-        vkDestroyCommandPool(renderDevice.device, frame.commandPool, renderDevice.allocator);
-        vkDestroySemaphore(renderDevice.device, frame.imageAcquiredSemaphore, renderDevice.allocator);
-        vkDestroySemaphore(renderDevice.device, frame.renderCompleteSemaphore, renderDevice.allocator);
+        vkFreeCommandBuffers(renderDevice.device, frame.pool, 1, &frame.buffer);
+        vkDestroyCommandPool(renderDevice.device, frame.pool, renderDevice.allocator);
+        vkDestroySemaphore(renderDevice.device, frame.acquired, renderDevice.allocator);
+        vkDestroySemaphore(renderDevice.device, frame.complete, renderDevice.allocator);
     }
 }
 
 void RendererPrivate::createCommandBuffers()
 {
-    swapChain.commandBuffers.resize(FrameCount);
+    swapChain.frames.resize(FrameCount);
 
     VkResult err;
-    for (auto & frame : swapChain.commandBuffers)
+    for (auto & frame : swapChain.frames)
     {
         {
             VkCommandPoolCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
             info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
             info.queueFamilyIndex = queueFamily;
-            err = vkCreateCommandPool(renderDevice.device, &info, renderDevice.allocator, &frame.commandPool);
+            err = vkCreateCommandPool(renderDevice.device, &info, renderDevice.allocator, &frame.pool);
             check_vk_result(err);
         }
         {
             VkCommandBufferAllocateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            info.commandPool = frame.commandPool;
+            info.commandPool = frame.pool;
             info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
             info.commandBufferCount = 1;
-            err = vkAllocateCommandBuffers(renderDevice.device, &info, &frame.commandBuffer);
+            err = vkAllocateCommandBuffers(renderDevice.device, &info, &frame.buffer);
             check_vk_result(err);
         }
         {
@@ -538,9 +533,9 @@ void RendererPrivate::createCommandBuffers()
         {
             VkSemaphoreCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.imageAcquiredSemaphore);
+            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.acquired);
             check_vk_result(err);
-            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.renderCompleteSemaphore);
+            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.complete);
             check_vk_result(err);
         }
     }
@@ -550,31 +545,29 @@ void RendererPrivate::destroySwapChainAndFramebuffer()
 {
     vkQueueWaitIdle(queue);
     renderDevice.deleteBuffer(depthBuffer);
-    for (uint32_t i = 0; i < backBufferCount; i++)
+    for (auto & image : swapChain.images)
     {
-        vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
-        vkDestroyFramebuffer(renderDevice.device, framebuffer[i], renderDevice.allocator);
+        vkDestroyImageView(renderDevice.device, image.view, renderDevice.allocator);
+        vkDestroyFramebuffer(renderDevice.device, image.front, renderDevice.allocator);
     }
     vkDestroyRenderPass(renderDevice.device, renderPass, renderDevice.allocator);
     vkDestroySwapchainKHR(renderDevice.device, swapChainKHR, renderDevice.allocator);
     vkDestroySurfaceKHR(instance, surface, renderDevice.allocator);
 }
 
-void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
+void RendererPrivate::createSwapChainAndFramebuffer(int w, int h, bool vsync)
 {
     VkResult err;
     VkSwapchainKHR old_swapchain = swapChainKHR;
     err = vkDeviceWaitIdle(renderDevice.device);
     check_vk_result(err);
 
-    for (uint32_t i = 0; i < backBufferCount; i++)
+    for (auto & image : swapChain.images)
     {
-        if (backBufferView[i])
-            vkDestroyImageView(renderDevice.device, backBufferView[i], renderDevice.allocator);
-        if (framebuffer[i])
-            vkDestroyFramebuffer(renderDevice.device, framebuffer[i], renderDevice.allocator);
+        vkDestroyImageView(renderDevice.device, image.view, renderDevice.allocator);
+        vkDestroyFramebuffer(renderDevice.device, image.front, renderDevice.allocator);
     }
-    backBufferCount = 0;
+    swapChain.images.resize(0);
     if (renderPass)
     {
         vkDestroyRenderPass(renderDevice.device, renderPass, renderDevice.allocator);
@@ -592,7 +585,7 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;           // Assume that graphics family == present family
         info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        info.presentMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
         info.clipped = VK_TRUE;
         info.oldSwapchain = old_swapchain;
         VkSurfaceCapabilitiesKHR cap;
@@ -615,10 +608,18 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         }
         err = vkCreateSwapchainKHR(renderDevice.device, &info, renderDevice.allocator, &swapChainKHR);
         check_vk_result(err);
+        uint32_t backBufferCount = 0;
         err = vkGetSwapchainImagesKHR(renderDevice.device, swapChainKHR, &backBufferCount, NULL);
         check_vk_result(err);
-        err = vkGetSwapchainImagesKHR(renderDevice.device, swapChainKHR, &backBufferCount, backBuffer);
+        std::vector<VkImage> backBuffer(backBufferCount);
+        err = vkGetSwapchainImagesKHR(renderDevice.device, swapChainKHR, &backBufferCount, backBuffer.data());
         check_vk_result(err);
+
+        swapChain.images.resize(backBufferCount);
+        for (size_t i = 0; i < swapChain.images.size(); ++i)
+        {
+            swapChain.images[i].back = backBuffer[i];
+        }
     }
     if (old_swapchain)
     {
@@ -677,10 +678,10 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.components.a = VK_COMPONENT_SWIZZLE_A;
         VkImageSubresourceRange image_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
         info.subresourceRange = image_range;
-        for (uint32_t i = 0; i < backBufferCount; i++)
+        for (size_t i = 0; i < swapChain.images.size(); ++i)
         {
-            info.image = backBuffer[i];
-            err = vkCreateImageView(renderDevice.device, &info, renderDevice.allocator, &backBufferView[i]);
+            info.image = swapChain.images[i].back;
+            err = vkCreateImageView(renderDevice.device, &info, renderDevice.allocator, &swapChain.images[i].view);
             check_vk_result(err);
         }
     }
@@ -698,10 +699,10 @@ void RendererPrivate::createSwapChainAndFramebuffer(int w, int h)
         info.width = width;
         info.height = height;
         info.layers = 1;
-        for (uint32_t i = 0; i < backBufferCount; i++)
+        for (size_t i = 0; i < swapChain.images.size(); ++i)
         {
-            attachment[0] = backBufferView[i];
-            err = vkCreateFramebuffer(renderDevice.device, &info, renderDevice.allocator, &framebuffer[i]);
+            attachment[0] = swapChain.images[i].view;
+            err = vkCreateFramebuffer(renderDevice.device, &info, renderDevice.allocator, &swapChain.images[i].front);
             check_vk_result(err);
         }
     }
@@ -843,19 +844,19 @@ void RendererPrivate::draw(Program *program, Mesh *mesh)
     const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
     const MeshRegistration & meshRegistration = registrationFor(meshRegistrations, mesh);
 
-    auto & frame = swapChain.commandBuffers[frameIndex];
+    auto & frame = swapChain.frames[frameIndex];
 
     VkViewport viewport{0, 0, float(width), float(height), 0.f, 1.f};
-    vkCmdSetViewport(frame.commandBuffer, 0, 1, &viewport);
+    vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
 
-    vkCmdPushConstants(frame.commandBuffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
+    vkCmdPushConstants(frame.buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
 
     renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
 
     VkRect2D scissor{0, 0, width, height};
-    vkCmdSetScissor(frame.commandBuffer, 0, 1, &scissor);
+    vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
 
-    vkCmdDrawIndexed(frame.commandBuffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
+    vkCmdDrawIndexed(frame.buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 
 void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *> &meshes)

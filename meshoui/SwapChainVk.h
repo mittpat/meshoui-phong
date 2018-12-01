@@ -11,34 +11,34 @@ namespace Meshoui
         SwapChainImageBufferVk();
 
         VkImage       back;
-        VkImageView   backView;
+        VkImageView   view;
         VkFramebuffer front;
     };
     inline SwapChainImageBufferVk::~SwapChainImageBufferVk() {}
-    inline SwapChainImageBufferVk::SwapChainImageBufferVk() : back(VK_NULL_HANDLE), backView(VK_NULL_HANDLE), front(VK_NULL_HANDLE) {}
+    inline SwapChainImageBufferVk::SwapChainImageBufferVk() : back(VK_NULL_HANDLE), view(VK_NULL_HANDLE), front(VK_NULL_HANDLE) {}
 
     struct SwapChainCommandBufferVk final
     {
         ~SwapChainCommandBufferVk();
         SwapChainCommandBufferVk();
 
-        VkCommandPool   commandPool;
-        VkCommandBuffer commandBuffer;
+        VkCommandPool   pool;
+        VkCommandBuffer buffer;
         VkFence         fence;
-        VkSemaphore     imageAcquiredSemaphore;
-        VkSemaphore     renderCompleteSemaphore;
+        VkSemaphore     acquired;
+        VkSemaphore     complete;
     };
     inline SwapChainCommandBufferVk::~SwapChainCommandBufferVk() {}
-    inline SwapChainCommandBufferVk::SwapChainCommandBufferVk() : commandPool(VK_NULL_HANDLE), commandBuffer(VK_NULL_HANDLE), fence(VK_NULL_HANDLE), imageAcquiredSemaphore(VK_NULL_HANDLE), renderCompleteSemaphore(VK_NULL_HANDLE) {}
+    inline SwapChainCommandBufferVk::SwapChainCommandBufferVk() : pool(VK_NULL_HANDLE), buffer(VK_NULL_HANDLE), fence(VK_NULL_HANDLE), acquired(VK_NULL_HANDLE), complete(VK_NULL_HANDLE) {}
 
     struct SwapChainVk final
     {
         ~SwapChainVk();
         SwapChainVk();
 
-        std::vector<SwapChainImageBufferVk> imageBuffers;
-        std::vector<SwapChainCommandBufferVk> commandBuffers;
+        std::vector<SwapChainImageBufferVk> images;
+        std::vector<SwapChainCommandBufferVk> frames;
     };
     inline SwapChainVk::~SwapChainVk() {}
-    inline SwapChainVk::SwapChainVk() : imageBuffers(), commandBuffers() {}
+    inline SwapChainVk::SwapChainVk() : images(), frames() {}
 }
