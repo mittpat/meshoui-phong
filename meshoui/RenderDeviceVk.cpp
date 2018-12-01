@@ -47,12 +47,12 @@ void RenderDeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkB
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = req.size;
     alloc_info.memoryTypeIndex = memoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-    err = vkAllocateMemory(device, &alloc_info, allocator, &deviceBuffer.bufferMemory);
+    err = vkAllocateMemory(device, &alloc_info, allocator, &deviceBuffer.memory);
     check_vk_result(err);
 
-    err = vkBindBufferMemory(device, deviceBuffer.buffer, deviceBuffer.bufferMemory, 0);
+    err = vkBindBufferMemory(device, deviceBuffer.buffer, deviceBuffer.memory, 0);
     check_vk_result(err);
-    deviceBuffer.bufferSize = size;
+    deviceBuffer.size = size;
 }
 
 void RenderDeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data)
@@ -60,25 +60,25 @@ void RenderDeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSi
     VkResult err;
     {
         void* dest = nullptr;
-        err = vkMapMemory(device, deviceBuffer.bufferMemory, 0, size, 0, &dest);
+        err = vkMapMemory(device, deviceBuffer.memory, 0, size, 0, &dest);
         check_vk_result(err);
         memcpy(dest, data, size);
     }
     VkMappedMemoryRange range = {};
     range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    range.memory = deviceBuffer.bufferMemory;
+    range.memory = deviceBuffer.memory;
     range.size = size;
     err = vkFlushMappedMemoryRanges(device, 1, &range);
     check_vk_result(err);
-    vkUnmapMemory(device, deviceBuffer.bufferMemory);
+    vkUnmapMemory(device, deviceBuffer.memory);
 }
 
 void RenderDeviceVk::deleteBuffer(const DeviceBufferVk &deviceBuffer)
 {
     if (deviceBuffer.buffer != VK_NULL_HANDLE)
         vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
-    if (deviceBuffer.bufferMemory)
-        vkFreeMemory(device, deviceBuffer.bufferMemory, allocator);
+    if (deviceBuffer.memory)
+        vkFreeMemory(device, deviceBuffer.memory, allocator);
 }
 
 void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D & extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask)
@@ -107,9 +107,9 @@ void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D 
         alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         alloc_info.allocationSize = req.size;
         alloc_info.memoryTypeIndex = memoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
-        err = vkAllocateMemory(device, &alloc_info, allocator, &deviceBuffer.imageMemory);
+        err = vkAllocateMemory(device, &alloc_info, allocator, &deviceBuffer.memory);
         check_vk_result(err);
-        err = vkBindImageMemory(device, deviceBuffer.image, deviceBuffer.imageMemory, 0);
+        err = vkBindImageMemory(device, deviceBuffer.image, deviceBuffer.memory, 0);
         check_vk_result(err);
     }
     {
@@ -127,14 +127,14 @@ void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D 
         view_info.subresourceRange.baseArrayLayer = 0;
         view_info.subresourceRange.layerCount = 1;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        err = vkCreateImageView(device, &view_info, nullptr, &deviceBuffer.imageView);
+        err = vkCreateImageView(device, &view_info, nullptr, &deviceBuffer.view);
         check_vk_result(err);
     }
 }
 
 void RenderDeviceVk::deleteBuffer(const ImageBufferVk &deviceBuffer)
 {
-    vkDestroyImageView(device, deviceBuffer.imageView, allocator);
+    vkDestroyImageView(device, deviceBuffer.view, allocator);
     vkDestroyImage(device, deviceBuffer.image, allocator);
-    vkFreeMemory(device, deviceBuffer.imageMemory, allocator);
+    vkFreeMemory(device, deviceBuffer.memory, allocator);
 }

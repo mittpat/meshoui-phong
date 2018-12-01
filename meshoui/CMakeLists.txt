@@ -19,6 +19,8 @@ add_library(meshouilib
     Renderer.h
     RendererPrivate.cpp
     RendererPrivate.h
+    SwapChainVk.cpp
+    SwapChainVk.h
     TextureLoader.cpp
     TextureLoader.h
     Widget.h)

@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "MeshLoader.h"
 #include "RenderDeviceVk.h"
+#include "SwapChainVk.h"
 
 #include <hashid.h>
 #include <string>
@@ -137,6 +138,7 @@ namespace Meshoui
         GLFWwindow*        window;
         VkInstance         instance;
         RenderDeviceVk     renderDevice;
+        SwapChainVk        swapChain;
         uint32_t           queueFamily;
         VkQueue            queue;
         VkPipelineCache    pipelineCache;
@@ -146,26 +148,15 @@ namespace Meshoui
 
         uint32_t       width;
         uint32_t       height;
-        VkSwapchainKHR swapchain;
+        VkSwapchainKHR swapChainKHR;
         VkRenderPass   renderPass;
         ImageBufferVk  depthBuffer;
         uint32_t       backBufferCount;
         VkImage        backBuffer[16];
         VkImageView    backBufferView[16];
         VkFramebuffer  framebuffer[16];
-        struct FrameData
-        {
-            ~FrameData();
-            FrameData();
 
-            uint32_t        backbufferIndex;
-            VkCommandPool   commandPool;
-            VkCommandBuffer commandBuffer;
-            VkFence         fence;
-            VkSemaphore     imageAcquiredSemaphore;
-            VkSemaphore     renderCompleteSemaphore;
-        }                   frames[FrameCount];
-        uint32_t            frameIndex;
+        uint32_t       frameIndex;
 
         ProgramRegistrations programRegistrations;
         MeshRegistrations    meshRegistrations;
@@ -185,5 +176,3 @@ namespace Meshoui
 }
 
 inline Meshoui::RendererPrivate::~RendererPrivate() {}
-inline Meshoui::RendererPrivate::FrameData::~FrameData() {}
-inline Meshoui::RendererPrivate::FrameData::FrameData() : backbufferIndex(0), commandPool(VK_NULL_HANDLE), commandBuffer(VK_NULL_HANDLE), fence(VK_NULL_HANDLE), imageAcquiredSemaphore(VK_NULL_HANDLE), renderCompleteSemaphore(VK_NULL_HANDLE) {}

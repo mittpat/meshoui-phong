@@ -136,8 +136,8 @@ Renderer::Renderer()
 
     {
         // Use any command queue
-        VkCommandPool command_pool = d->frames[d->frameIndex].commandPool;
-        VkCommandBuffer command_buffer = d->frames[d->frameIndex].commandBuffer;
+        VkCommandPool command_pool = d->swapChain.commandBuffers[d->frameIndex].commandPool;
+        VkCommandBuffer command_buffer = d->swapChain.commandBuffers[d->frameIndex].commandBuffer;
 
         err = vkResetCommandPool(d->renderDevice.device, command_pool, 0);
         check_vk_result(err);
@@ -257,24 +257,24 @@ void Renderer::update(float s)
 
     VkResult err;
 
-    VkSemaphore& image_acquired_semaphore  = d->frames[d->frameIndex].imageAcquiredSemaphore;
-    err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
+    VkSemaphore& image_acquired_semaphore  = d->swapChain.commandBuffers[d->frameIndex].imageAcquiredSemaphore;
+    err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapChainKHR, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
     check_vk_result(err);
 
     {
-        err = vkWaitForFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
+        err = vkWaitForFences(d->renderDevice.device, 1, &d->swapChain.commandBuffers[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
         check_vk_result(err);
 
-        err = vkResetFences(d->renderDevice.device, 1, &d->frames[d->frameIndex].fence);
+        err = vkResetFences(d->renderDevice.device, 1, &d->swapChain.commandBuffers[d->frameIndex].fence);
         check_vk_result(err);
     }
     {
-        err = vkResetCommandPool(d->renderDevice.device, d->frames[d->frameIndex].commandPool, 0);
+        err = vkResetCommandPool(d->renderDevice.device, d->swapChain.commandBuffers[d->frameIndex].commandPool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(d->frames[d->frameIndex].commandBuffer, &info);
+        err = vkBeginCommandBuffer(d->swapChain.commandBuffers[d->frameIndex].commandBuffer, &info);
         check_vk_result(err);
     }
     {
@@ -289,13 +289,13 @@ void Renderer::update(float s)
         clearValue[1].depthStencil = {1.0f, 0};
         info.pClearValues = clearValue;
         info.clearValueCount = 2;
-        vkCmdBeginRenderPass(d->frames[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(d->swapChain.commandBuffers[d->frameIndex].commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
     renderMeshes();
     renderWidgets();
 
-    vkCmdEndRenderPass(d->frames[d->frameIndex].commandBuffer);
+    vkCmdEndRenderPass(d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
     {
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info = {};
@@ -304,13 +304,13 @@ void Renderer::update(float s)
         info.pWaitSemaphores = &image_acquired_semaphore;
         info.pWaitDstStageMask = &wait_stage;
         info.commandBufferCount = 1;
-        info.pCommandBuffers = &d->frames[d->frameIndex].commandBuffer;
+        info.pCommandBuffers = &d->swapChain.commandBuffers[d->frameIndex].commandBuffer;
         info.signalSemaphoreCount = 1;
-        info.pSignalSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
+        info.pSignalSemaphores = &d->swapChain.commandBuffers[d->frameIndex].renderCompleteSemaphore;
 
-        VkResult err = vkEndCommandBuffer(d->frames[d->frameIndex].commandBuffer);
+        VkResult err = vkEndCommandBuffer(d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
         check_vk_result(err);
-        err = vkQueueSubmit(d->queue, 1, &info, d->frames[d->frameIndex].fence);
+        err = vkQueueSubmit(d->queue, 1, &info, d->swapChain.commandBuffers[d->frameIndex].fence);
         check_vk_result(err);
     }
 
@@ -318,9 +318,9 @@ void Renderer::update(float s)
         VkPresentInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &d->frames[d->frameIndex].renderCompleteSemaphore;
+        info.pWaitSemaphores = &d->swapChain.commandBuffers[d->frameIndex].renderCompleteSemaphore;
         info.swapchainCount = 1;
-        info.pSwapchains = &d->swapchain;
+        info.pSwapchains = &d->swapChainKHR;
         info.pImageIndices = &d->frameIndex;
         VkResult err = vkQueuePresentKHR(d->queue, &info);
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
@@ -456,6 +456,6 @@ void Renderer::renderWidgets()
     // Rendering
     ImGui::Render();
 
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->frames[d->frameIndex].commandBuffer);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->swapChain.commandBuffers[d->frameIndex].commandBuffer);
 #endif
 }

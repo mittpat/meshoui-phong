@@ -10,11 +10,11 @@ namespace Meshoui
         DeviceBufferVk();
 
         VkBuffer buffer;
-        VkDeviceMemory bufferMemory;
-        VkDeviceSize bufferSize;
+        VkDeviceMemory memory;
+        VkDeviceSize size;
     };
     inline DeviceBufferVk::~DeviceBufferVk() {}
-    inline DeviceBufferVk::DeviceBufferVk() : buffer(VK_NULL_HANDLE), bufferMemory(VK_NULL_HANDLE), bufferSize(VK_NULL_HANDLE) {}
+    inline DeviceBufferVk::DeviceBufferVk() : buffer(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), size(VK_NULL_HANDLE) {}
 
     struct ImageBufferVk final
     {
@@ -22,11 +22,11 @@ namespace Meshoui
         ImageBufferVk();
 
         VkImage image;
-        VkDeviceMemory imageMemory;
-        VkImageView imageView;
+        VkDeviceMemory memory;
+        VkImageView view;
     };
     inline ImageBufferVk::~ImageBufferVk() {}
-    inline ImageBufferVk::ImageBufferVk() : image(VK_NULL_HANDLE), imageMemory(VK_NULL_HANDLE), imageView(VK_NULL_HANDLE) {}
+    inline ImageBufferVk::ImageBufferVk() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE) {}
 
     struct RenderDeviceVk final
     {
