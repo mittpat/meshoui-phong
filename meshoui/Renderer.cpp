@@ -37,12 +37,99 @@ namespace
     }
 }
 
+struct Meshoui::Renderer::GlfwCallbacks
+{
+    static void doregister(Renderer* renderer)
+    {
+        glfwSetMouseButtonCallback(renderer->d->window, GlfwCallbacks::mouseButtonCallback);
+        glfwSetScrollCallback(renderer->d->window, GlfwCallbacks::scrollCallback);
+        glfwSetKeyCallback(renderer->d->window, GlfwCallbacks::keyCallback);
+        glfwSetCharCallback(renderer->d->window, GlfwCallbacks::charCallback);
+    }
+    static void unregister(Renderer* renderer)
+    {
+        glfwSetMouseButtonCallback(renderer->d->window, nullptr);
+        glfwSetScrollCallback(renderer->d->window, nullptr);
+        glfwSetKeyCallback(renderer->d->window, nullptr);
+        glfwSetCharCallback(renderer->d->window, nullptr);
+    }
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->mice)
+        {
+            cb->mouseButtonAction(window, button, action, mods);
+        }
+    }
+    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->mice)
+        {
+            cb->scrollAction(window, xoffset, yoffset);
+        }
+    }
+    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->keyboards)
+        {
+            cb->keyAction(window, key, scancode, action, mods);
+        }
+    }
+    static void charCallback(GLFWwindow* window, unsigned int c)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->keyboards)
+        {
+            cb->charAction(window, c);
+        }
+    }
+};
+
+struct Meshoui::Renderer::WidgetCallbacks
+    : IKeyboard
+    , IMouse
+{
+    virtual void mouseButtonAction(void *window, int button, int action, int mods) override
+    {
+#ifdef USE_IMGUI
+        ImGui_ImplGlfw_MouseButtonCallback(reinterpret_cast<GLFWwindow*>(window), button, action, mods);
+#endif
+    }
+    virtual void scrollAction(void *window, double xoffset, double yoffset) override
+    {
+#ifdef USE_IMGUI
+        ImGui_ImplGlfw_ScrollCallback(reinterpret_cast<GLFWwindow*>(window), xoffset, yoffset);
+#endif
+    }
+    virtual void keyAction(void *window, int key, int scancode, int action, int mods) override
+    {
+#ifdef USE_IMGUI
+        ImGui_ImplGlfw_KeyCallback(reinterpret_cast<GLFWwindow*>(window), key, scancode, action, mods);
+#endif
+    }
+    virtual void charAction(void *window, unsigned int c) override
+    {
+#ifdef USE_IMGUI
+        ImGui_ImplGlfw_CharCallback(reinterpret_cast<GLFWwindow*>(window), c);
+#endif
+    }
+};
+
 using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
 Renderer::~Renderer()
 {
+    remove((IKeyboard*)widgetCallbacks);
+    remove((IMouse*)widgetCallbacks);
+    delete widgetCallbacks;
+    widgetCallbacks = nullptr;
+
+    GlfwCallbacks::unregister(this);
+
     // Cleanup
     auto err = vkDeviceWaitIdle(d->renderDevice.device);
     check_vk_result(err);
@@ -66,8 +153,14 @@ Renderer::Renderer()
     : d(new RendererPrivate)
     , defaultProgram(nullptr)
     , time(0.f)
+    , cameras()
+    , keyboards()
+    , mice()
     , meshes()
+    , models()
     , programs()
+    , widgets()
+    , widgetCallbacks(new WidgetCallbacks())
 {
     // glfw & vulkan
     glfwSetErrorCallback(error_callback);
@@ -78,6 +171,12 @@ Renderer::Renderer()
     {
         printf("GLFW: Vulkan Not Supported\n");
     }
+
+    glfwSetWindowUserPointer(d->window, this);
+    GlfwCallbacks::doregister(this);
+    add((IKeyboard*)widgetCallbacks);
+    add((IMouse*)widgetCallbacks);
+
     uint32_t extensions_count = 0;
     const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);    
     d->createGraphicsSubsystem(extensions, extensions_count);
@@ -113,7 +212,7 @@ Renderer::Renderer()
     // imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForVulkan(d->window, true);
+    ImGui_ImplGlfw_InitForVulkan(d->window, false);
     {
         ImGui_ImplVulkan_InitInfo init_info = {};
         init_info.Instance = d->instance;
@@ -214,6 +313,22 @@ void Renderer::add(Widget * widget)
     }
 }
 
+void Renderer::add(IKeyboard *keyboard)
+{
+    if (std::find(keyboards.begin(), keyboards.end(), keyboard) == keyboards.end())
+    {
+        keyboards.push_back(keyboard);
+    }
+}
+
+void Renderer::add(IMouse *mouse)
+{
+    if (std::find(mice.begin(), mice.end(), mouse) == mice.end())
+    {
+        mice.push_back(mouse);
+    }
+}
+
 void Renderer::remove(Model *model)
 {
     d->unregisterGraphics(model);
@@ -245,6 +360,16 @@ void Renderer::remove(Camera* camera)
 void Renderer::remove(Widget * widget)
 {
     widgets.erase(std::remove(widgets.begin(), widgets.end(), widget));
+}
+
+void Renderer::remove(IKeyboard *keyboard)
+{
+    keyboards.erase(std::remove(keyboards.begin(), keyboards.end(), keyboard));
+}
+
+void Renderer::remove(IMouse *mouse)
+{
+    mice.erase(std::remove(mice.begin(), mice.end(), mouse));
 }
 
 void Renderer::update(float s)
@@ -361,13 +486,30 @@ void Renderer::postUpdate()
 
 void Renderer::renderMeshes()
 {
+    auto & frame = d->swapChain.frames[d->frameIndex];
+
+    VkViewport viewport{0, 0, float(d->width), float(d->height), 0.f, 1.f};
+    vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
+
+    VkRect2D scissor{0, 0, d->width, d->height};
+    vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
+
+    d->uniforms.position = d->camera->position;
+    d->uniforms.light = d->lights[0]->position;
+
+    Program * currentProgram = nullptr;
+
     std::stable_sort(meshes.begin(), meshes.end(), [](Mesh *, Mesh * right) { return (right->renderFlags & Render::DepthWrite) == 0; });
     for (Mesh * mesh : meshes)
     {
         if ((mesh->renderFlags & Render::Visible) == 0)
             continue;
 
-        d->bindGraphics(mesh->program);
+        if (currentProgram != mesh->program)
+        {
+            currentProgram = mesh->program;
+            d->bindGraphics(mesh->program);
+        }
         d->bindGraphics(mesh);
 
         d->pushConstants.model = mesh->modelMatrix();
@@ -375,13 +517,11 @@ void Renderer::renderMeshes()
             d->pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
         d->pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
 
-        d->uniforms.position = d->camera->position;
-        d->uniforms.light = d->lights[0]->position;
-
         mesh->program->draw(mesh);
         d->unbindGraphics(mesh);
-        d->unbindGraphics(mesh->program);
     }
+
+    d->unbindGraphics(currentProgram);
 }
 
 void Renderer::renderWidgets()

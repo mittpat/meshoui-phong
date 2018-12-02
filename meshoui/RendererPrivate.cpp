@@ -321,6 +321,10 @@ void RendererPrivate::bindProgram(const ProgramRegistration & programRegistratio
     auto & frame = swapChain.frames[frameIndex];
     vkCmdBindPipeline(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipeline);
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programRegistration.pipelineLayout, 0, 1, &programRegistration.descriptorSet[frameIndex], 0, nullptr);
+
+    Blocks::PhongMaterial def;
+    renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
+    renderDevice.uploadBuffer(programRegistration.materialBuffer[frameIndex], sizeof(Blocks::PhongMaterial), &def);
 }
 
 void RendererPrivate::unbindProgram(const ProgramRegistration &)
@@ -874,19 +878,7 @@ void RendererPrivate::draw(Program *program, Mesh *mesh)
 
     auto & frame = swapChain.frames[frameIndex];
 
-    VkViewport viewport{0, 0, float(width), float(height), 0.f, 1.f};
-    vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
-
     vkCmdPushConstants(frame.buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
-
-    Blocks::PhongMaterial def;
-
-    renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
-    renderDevice.uploadBuffer(programRegistration.materialBuffer[frameIndex], sizeof(Blocks::PhongMaterial), &def);
-
-    VkRect2D scissor{0, 0, width, height};
-    vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
-
     vkCmdDrawIndexed(frame.buffer, meshRegistration.indexBufferSize, 1, 0, 0, 0);
 }
 

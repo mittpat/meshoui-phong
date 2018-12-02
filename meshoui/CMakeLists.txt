@@ -5,6 +5,10 @@ add_library(meshouilib
     enums.h
     Camera.cpp
     Camera.h
+    IKeyboard.cpp
+    IKeyboard.h
+    IMouse.cpp
+    IMouse.h
     Mesh.cpp
     Mesh.h
     MeshLoader.cpp
