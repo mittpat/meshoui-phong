@@ -14,4 +14,10 @@ namespace Meshoui
                     Default = DepthTest | Filtering | Anisotropic | Mipmap | BackFaceCulling | DepthWrite | Visible, All = 0xFFFF };
         typedef int Flags;
     };
+
+    struct Feature
+    {
+        enum Flag { None = 0x0, DepthWrite = 0x01, DepthTest = 0x02, Default = DepthWrite | DepthTest };
+        typedef int Flags;
+    };
 }

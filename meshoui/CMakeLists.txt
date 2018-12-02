@@ -25,7 +25,8 @@ add_library(meshouilib
     TextureLoader.h
     Widget.h)
 
-set(shaders resources/shaders/Phong.frag resources/shaders/Phong.vert)
+set(shaders resources/shaders/Phong.frag resources/shaders/Phong.vert
+            resources/shaders/Skydome.frag resources/shaders/Skydome.vert)
 set(glslang_output_dir ${CMAKE_BINARY_DIR}/meshoui/resources/shaders)
 compile_glsl(spirv ${shaders})
 

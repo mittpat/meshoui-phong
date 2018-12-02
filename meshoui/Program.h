@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "enums.h"
+
 namespace Meshoui
 {
     class Mesh;
@@ -14,6 +16,7 @@ namespace Meshoui
     public:
         virtual ~Program();
         Program();
+        Program(const std::string & filename);
 
         void load(const std::string & filename);
         void draw(Mesh * mesh);
@@ -22,11 +25,13 @@ namespace Meshoui
         // set before adding
         std::vector<char> vertexShaderSource;
         std::vector<char> fragmentShaderSource;
+        Feature::Flags features;
 
     private:
         friend class RendererPrivate;
         RendererPrivate * d;
     };
-    inline Program::Program() {}
+    inline Program::Program() : features(Feature::Default) {}
+    inline Program::Program(const std::string & filename) : features(Feature::Default) { load(filename); }
     inline RendererPrivate *Program::d_ptr() const { return d; }
 }

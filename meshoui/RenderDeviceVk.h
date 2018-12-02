@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <vector>
 
 namespace Meshoui
 {
@@ -33,6 +34,7 @@ namespace Meshoui
         ~RenderDeviceVk();
         RenderDeviceVk();
         RenderDeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
+        void selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space);
         uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage);
         void uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data);

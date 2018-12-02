@@ -105,11 +105,7 @@ Renderer::Renderer()
         fprintf(stderr, "Error no WSI support on physical device 0\n");
         exit(-1);
     }
-
-    // Select Surface Format
-    const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    d->selectSurfaceFormat(requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    d->renderDevice.selectSurfaceFormat(d->surface, d->surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
     d->createCommandBuffers();
@@ -408,7 +404,7 @@ void Renderer::renderWidgets()
     if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Checkbox("fullscreen", &d->toFullscreen);
-        ImGui::Checkbox("V-Sync", &d->toVSync);
+        ImGui::Checkbox("Vsync", &d->toVSync);
     }
     for (auto * widget : widgets)
     {
@@ -418,6 +414,7 @@ void Renderer::renderWidgets()
     if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Text("frametime : %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("time : %.3f s", time);
         ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshFiles.size());
         if (ImGui::Button("Clear cache"))
             d->meshFiles.clear();

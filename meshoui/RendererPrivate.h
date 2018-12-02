@@ -108,7 +108,6 @@ namespace Meshoui
         ~RendererPrivate();
         RendererPrivate();
 
-        void selectSurfaceFormat(const VkFormat *request_formats, int request_formats_count, VkColorSpaceKHR request_color_space);
         void destroyGraphicsSubsystem();
         void createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count);
         void destroyCommandBuffers();

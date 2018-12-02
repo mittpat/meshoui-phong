@@ -256,8 +256,8 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 
     VkPipelineDepthStencilStateCreateInfo depth_info = {};
     depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_info.depthTestEnable = VK_TRUE;
-    depth_info.depthWriteEnable = VK_TRUE;
+    depth_info.depthTestEnable = (program->features & Feature::DepthTest) ? VK_TRUE : VK_FALSE;
+    depth_info.depthWriteEnable = (program->features & Feature::DepthWrite) ? VK_TRUE : VK_FALSE;
     depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
     depth_info.depthBoundsTestEnable = VK_FALSE;
     depth_info.stencilTestEnable = VK_FALSE;
@@ -355,44 +355,6 @@ RendererPrivate::RendererPrivate()
     , camera(nullptr)
 {
     memset(&surfaceFormat, 0, sizeof(surfaceFormat));
-}
-
-void RendererPrivate::selectSurfaceFormat(const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
-{
-    surfaceFormat.format = VK_FORMAT_UNDEFINED;
-
-    uint32_t avail_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(renderDevice.physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
-    ImVector<VkSurfaceFormatKHR> avail_format;
-    avail_format.resize((int)avail_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(renderDevice.physicalDevice, surface, &avail_count, avail_format.Data);
-
-    if (avail_count == 1)
-    {
-        if (avail_format[0].format == VK_FORMAT_UNDEFINED)
-        {
-            surfaceFormat.format = request_formats[0];
-            surfaceFormat.colorSpace = request_color_space;
-        }
-        else
-        {
-            surfaceFormat = avail_format[0];
-        }
-    }
-    else
-    {
-        surfaceFormat = avail_format[0];
-        for (int request_i = 0; request_i < request_formats_count; request_i++)
-        {
-            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
-            {
-                if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
-                {
-                    surfaceFormat = avail_format[avail_i];
-                }
-            }
-        }
-    }
 }
 
 void RendererPrivate::destroyGraphicsSubsystem()

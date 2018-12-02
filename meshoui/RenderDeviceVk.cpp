@@ -17,6 +17,43 @@ namespace
 
 using namespace Meshoui;
 
+void RenderDeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space)
+{
+    surfaceFormat.format = VK_FORMAT_UNDEFINED;
+
+    uint32_t avail_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &avail_count, VK_NULL_HANDLE);
+    std::vector<VkSurfaceFormatKHR> avail_format(avail_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &avail_count, avail_format.data());
+
+    if (avail_count == 1)
+    {
+        if (avail_format[0].format == VK_FORMAT_UNDEFINED)
+        {
+            surfaceFormat.format = request_formats[0];
+            surfaceFormat.colorSpace = request_color_space;
+        }
+        else
+        {
+            surfaceFormat = avail_format[0];
+        }
+    }
+    else
+    {
+        surfaceFormat = avail_format[0];
+        for (auto fmt : request_formats)
+        {
+            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
+            {
+                if (avail_format[avail_i].format == fmt && avail_format[avail_i].colorSpace == request_color_space)
+                {
+                    surfaceFormat = avail_format[avail_i];
+                }
+            }
+        }
+    }
+}
+
 uint32_t RenderDeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
 {
     VkPhysicalDeviceMemoryProperties prop;
