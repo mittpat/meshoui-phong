@@ -7,13 +7,13 @@ Notes
 
 The Collada support is only very very partial. Some Blender files were tested, but other files on the web are known to fail with a blank screen.
 
-This branch targets Vulkan 1.1... its a work in progress. Not currently functional.
+This branch targets Vulkan 1.1. Only texture mapping is missing (wip).
 
 Todo
 -------
-* Get up and running with Vulkan
-* Improve Collada file format support
+* Texture mapping
 * Improve Cameras and Lights
+* Nvidia RTX realtime shadows
 
 License
 -------
