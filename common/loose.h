@@ -7,6 +7,12 @@
 inline float degreesToRadians(float angle) { return angle * M_PI / 180.0; }
 inline float radiansToDegrees(float rad) { return rad * 180.0 / M_PI; }
 
+template < typename T, size_t N >
+size_t countof( T ( & arr )[ N ] )
+{
+    return std::extent< T[ N ] >::value;
+}
+
 inline std::string sibling(const std::string & path, const std::string & other)
 {
     std::experimental::filesystem::path parentpath(other);

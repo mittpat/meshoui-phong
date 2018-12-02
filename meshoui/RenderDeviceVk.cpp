@@ -112,10 +112,8 @@ void RenderDeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSi
 
 void RenderDeviceVk::deleteBuffer(const DeviceBufferVk &deviceBuffer)
 {
-    if (deviceBuffer.buffer != VK_NULL_HANDLE)
-        vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
-    if (deviceBuffer.memory)
-        vkFreeMemory(device, deviceBuffer.memory, allocator);
+    vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
+    vkFreeMemory(device, deviceBuffer.memory, allocator);
 }
 
 void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D & extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask)

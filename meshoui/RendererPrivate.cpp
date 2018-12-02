@@ -3,7 +3,6 @@
 #include "RendererPrivate.h"
 #include "TextureLoader.h"
 
-#include <imgui.h>
 #include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
@@ -28,6 +27,16 @@ namespace
         if (err < 0)
             abort();
     }
+
+#ifdef _DEBUG
+    VkDebugReportCallbackEXT g_DebugReport = VK_NULL_HANDLE;
+    VKAPI_ATTR VkBool32 VKAPI_CALL debug_report(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* pLayerPrefix, const char* pMessage, void* pUserData)
+    {
+        (void)flags; (void)object; (void)location; (void)messageCode; (void)pUserData; (void)pLayerPrefix; // Unused arguments
+        fprintf(stderr, "[vulkan] ObjectType: %i\nMessage: %s\n\n", objectType, pMessage);
+        return VK_FALSE;
+    }
+#endif
 
     const ProgramRegistration & registrationFor(const ProgramRegistrations & programRegistrations, Program * program)
     {
@@ -71,8 +80,12 @@ namespace
 
 void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistration)
 {
+    vkQueueWaitIdle(queue);
     for (size_t i = 0; i < FrameCount; ++i)
+    {
         renderDevice.deleteBuffer(programRegistration.uniformBuffer[i]);
+        renderDevice.deleteBuffer(programRegistration.materialBuffer[i]);
+    }
 
     vkDestroyDescriptorSetLayout(renderDevice.device, programRegistration.descriptorSetLayout, renderDevice.allocator);
     vkDestroyPipelineLayout(renderDevice.device, programRegistration.pipelineLayout, renderDevice.allocator);
@@ -80,6 +93,7 @@ void RendererPrivate::unregisterProgram(ProgramRegistration & programRegistratio
     programRegistration.descriptorSetLayout = VK_NULL_HANDLE;
     programRegistration.pipelineLayout = VK_NULL_HANDLE;
     programRegistration.pipeline = VK_NULL_HANDLE;
+    memset(&programRegistration.materialBuffer, 0, sizeof(programRegistration.materialBuffer));
     memset(&programRegistration.uniformBuffer, 0, sizeof(programRegistration.uniformBuffer));
     memset(&programRegistration.descriptorSet, 0, sizeof(programRegistration.descriptorSet));
 }
@@ -124,13 +138,18 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
 //    }
 
     {
-        VkDescriptorSetLayoutBinding binding[1] = {};
+        VkDescriptorSetLayoutBinding binding[2] = {};
+        binding[0].binding = 0;
         binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         binding[0].descriptorCount = 1;
         binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        binding[1].binding = 1;
+        binding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        binding[1].descriptorCount = 1;
+        binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.bindingCount = 1;
+        info.bindingCount = 2;
         info.pBindings = binding;
         err = vkCreateDescriptorSetLayout(renderDevice.device, &info, renderDevice.allocator, &programRegistration.descriptorSetLayout);
         check_vk_result(err);
@@ -152,22 +171,33 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     for (size_t i = 0; i < FrameCount; ++i)
     {
         renderDevice.createBuffer(programRegistration.uniformBuffer[i], sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        renderDevice.createBuffer(programRegistration.materialBuffer[i], sizeof(Blocks::PhongMaterial), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
-        VkDescriptorBufferInfo bufferInfo = {};
-        bufferInfo.buffer = programRegistration.uniformBuffer[i].buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(Blocks::Uniform);
+        VkDescriptorBufferInfo bufferInfo[2] = {};
+        bufferInfo[0].buffer = programRegistration.uniformBuffer[i].buffer;
+        bufferInfo[0].offset = 0;
+        bufferInfo[0].range = sizeof(Blocks::Uniform);
+        bufferInfo[1].buffer = programRegistration.materialBuffer[i].buffer;
+        bufferInfo[1].offset = 0;
+        bufferInfo[1].range = sizeof(Blocks::PhongMaterial);
 
-        VkWriteDescriptorSet descriptorWrite = {};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = programRegistration.descriptorSet[i];
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfo;
+        VkWriteDescriptorSet descriptorWrite[2] = {};
+        descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite[0].dstSet = programRegistration.descriptorSet[i];
+        descriptorWrite[0].dstBinding = 0;
+        descriptorWrite[0].dstArrayElement = 0;
+        descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite[0].descriptorCount = 1;
+        descriptorWrite[0].pBufferInfo = &bufferInfo[0];
+        descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite[1].dstSet = programRegistration.descriptorSet[i];
+        descriptorWrite[1].dstBinding = 1;
+        descriptorWrite[1].dstArrayElement = 0;
+        descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite[1].descriptorCount = 1;
+        descriptorWrite[1].pBufferInfo = &bufferInfo[1];
 
-        vkUpdateDescriptorSets(renderDevice.device, 1, &descriptorWrite, 0, nullptr);
+        vkUpdateDescriptorSets(renderDevice.device, 2, descriptorWrite, 0, nullptr);
     }
 
     {
@@ -251,7 +281,7 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     VkDynamicState dynamic_states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     VkPipelineDynamicStateCreateInfo dynamic_state = {};
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount = (uint32_t)IM_ARRAYSIZE(dynamic_states);
+    dynamic_state.dynamicStateCount = countof(dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
 
     VkPipelineDepthStencilStateCreateInfo depth_info = {};
@@ -300,6 +330,7 @@ void RendererPrivate::unbindProgram(const ProgramRegistration &)
 
 void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
 {
+    vkQueueWaitIdle(queue);
     renderDevice.deleteBuffer(meshRegistration.vertexBuffer);
     renderDevice.deleteBuffer(meshRegistration.indexBuffer);
 }
@@ -359,7 +390,11 @@ RendererPrivate::RendererPrivate()
 
 void RendererPrivate::destroyGraphicsSubsystem()
 {
-    vkDestroyDescriptorPool(renderDevice.device, descriptorPool, renderDevice.allocator);
+    vkDestroyDescriptorPool(renderDevice.device, descriptorPool, renderDevice.allocator);    
+#ifdef _DEBUG
+    auto vkDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+    vkDestroyDebugReportCallbackEXT(instance, g_DebugReport, renderDevice.allocator);
+#endif
     vkDestroyDevice(renderDevice.device, renderDevice.allocator);
     vkDestroyInstance(instance, renderDevice.allocator);
 }
@@ -373,8 +408,39 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.enabledExtensionCount = extensions_count;
         create_info.ppEnabledExtensionNames = extensions;
+#ifdef _DEBUG
+        // Enabling multiple validation layers grouped as LunarG standard validation
+        const char* layers[] = { "VK_LAYER_LUNARG_standard_validation" };
+        create_info.enabledLayerCount = 1;
+        create_info.ppEnabledLayerNames = layers;
+
+        // Enable debug report extension (we need additional storage, so we duplicate the user array to add our new extension to it)
+        const char** extensions_ext = (const char**)malloc(sizeof(const char*) * (extensions_count + 1));
+        memcpy(extensions_ext, extensions, extensions_count * sizeof(const char*));
+        extensions_ext[extensions_count] = "VK_EXT_debug_report";
+        create_info.enabledExtensionCount = extensions_count + 1;
+        create_info.ppEnabledExtensionNames = extensions_ext;
+
+        // Create Vulkan Instance
         err = vkCreateInstance(&create_info, renderDevice.allocator, &instance);
         check_vk_result(err);
+        free(extensions_ext);
+
+        // Get the function pointer (required for any extensions)
+        auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
+
+        // Setup the debug report callback
+        VkDebugReportCallbackCreateInfoEXT debug_report_ci = {};
+        debug_report_ci.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+        debug_report_ci.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+        debug_report_ci.pfnCallback = debug_report;
+        debug_report_ci.pUserData = nullptr;
+        err = vkCreateDebugReportCallbackEXT(instance, &debug_report_ci, renderDevice.allocator, &g_DebugReport);
+        check_vk_result(err);
+#else
+        err = vkCreateInstance(&create_info, renderDevice.allocator, &instance);
+        check_vk_result(err);
+#endif
     }
 
     {
@@ -413,7 +479,7 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         queue_info[0].pQueuePriorities = queue_priority;
         VkDeviceCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info.queueCreateInfoCount = IM_ARRAYSIZE(queue_info);
+        create_info.queueCreateInfoCount = countof(queue_info);
         create_info.pQueueCreateInfos = queue_info;
         create_info.enabledExtensionCount = device_extensions_count;
         create_info.ppEnabledExtensionNames = device_extensions;
@@ -440,8 +506,8 @@ void RendererPrivate::createGraphicsSubsystem(const char* const* extensions, uin
         VkDescriptorPoolCreateInfo pool_info = {};
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
-        pool_info.poolSizeCount = IM_ARRAYSIZE(pool_sizes);
+        pool_info.maxSets = 1000 * countof(pool_sizes);
+        pool_info.poolSizeCount = countof(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
         err = vkCreateDescriptorPool(renderDevice.device, &pool_info, renderDevice.allocator, &descriptorPool);
         check_vk_result(err);
@@ -813,7 +879,10 @@ void RendererPrivate::draw(Program *program, Mesh *mesh)
 
     vkCmdPushConstants(frame.buffer, programRegistration.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
 
+    Blocks::PhongMaterial def;
+
     renderDevice.uploadBuffer(programRegistration.uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
+    renderDevice.uploadBuffer(programRegistration.materialBuffer[frameIndex], sizeof(Blocks::PhongMaterial), &def);
 
     VkRect2D scissor{0, 0, width, height};
     vkCmdSetScissor(frame.buffer, 0, 1, &scissor);

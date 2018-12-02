@@ -41,6 +41,19 @@ namespace Meshoui
         };
         inline Uniform::~Uniform() {}
         inline Uniform::Uniform() : position(linalg::zero), light(linalg::zero) {}
+
+        struct PhongMaterial
+        {
+            ~PhongMaterial();
+            PhongMaterial();
+
+            alignas(16) linalg::aliases::float3 ambient;
+            alignas(16) linalg::aliases::float3 diffuse;
+            alignas(16) linalg::aliases::float3 specular;
+            alignas(16) linalg::aliases::float3 emissive;
+        };
+        inline PhongMaterial::~PhongMaterial() {}
+        inline PhongMaterial::PhongMaterial() : ambient(linalg::zero), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
     }
 
     class ProgramRegistration final
@@ -54,6 +67,7 @@ namespace Meshoui
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorSet descriptorSet[FrameCount];
         DeviceBufferVk uniformBuffer[FrameCount];
+        DeviceBufferVk materialBuffer[FrameCount];
     };
     inline ProgramRegistration::~ProgramRegistration() {}
     inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
