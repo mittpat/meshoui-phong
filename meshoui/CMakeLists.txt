@@ -3,12 +3,17 @@ set_source_files_properties(${resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 add_library(meshouilib
     enums.h
+    Assets.cpp
+    Assets.h
     Camera.cpp
     Camera.h
     IKeyboard.cpp
     IKeyboard.h
     IMouse.cpp
     IMouse.h
+    InputCallbacks.cpp
+    InputCallbacks.h
+    Manipulators.h
     Mesh.cpp
     Mesh.h
     MeshLoader.cpp

@@ -5,6 +5,7 @@
 #include "Renderer.h"
 #include "RendererPrivate.h"
 #include "Camera.h"
+#include "InputCallbacks.h"
 #include "Program.h"
 #include "Widget.h"
 
@@ -13,8 +14,7 @@
 #include <algorithm>
 #include <set>
 
-#define USE_IMGUI
-#ifdef USE_IMGUI
+#ifdef MESHOUI_USE_IMGUI
 #include <imgui.h>
 #include <examples/imgui_impl_glfw.h>
 #include <examples/imgui_impl_vulkan.h>
@@ -37,133 +37,6 @@ namespace
     }
 }
 
-struct Meshoui::Renderer::WidgetCallbacks
-    : IKeyboard
-    , IMouse
-{
-    virtual void mouseButtonAction(void *window, int button, int action, int mods) override
-    {
-#ifdef USE_IMGUI
-        ImGui_ImplGlfw_MouseButtonCallback(reinterpret_cast<GLFWwindow*>(window), button, action, mods);
-#endif
-    }
-    virtual void scrollAction(void *window, double xoffset, double yoffset) override
-    {
-#ifdef USE_IMGUI
-        ImGui_ImplGlfw_ScrollCallback(reinterpret_cast<GLFWwindow*>(window), xoffset, yoffset);
-#endif
-    }
-    virtual void keyAction(void *window, int key, int scancode, int action, int mods) override
-    {
-#ifdef USE_IMGUI
-        ImGui_ImplGlfw_KeyCallback(reinterpret_cast<GLFWwindow*>(window), key, scancode, action, mods);
-#endif
-    }
-    virtual void charAction(void *window, unsigned int c) override
-    {
-#ifdef USE_IMGUI
-        ImGui_ImplGlfw_CharCallback(reinterpret_cast<GLFWwindow*>(window), c);
-#endif
-    }
-};
-
-struct Meshoui::Renderer::GlfwCallbacks
-{
-    static void doregister(Renderer* renderer)
-    {
-        glfwSetCursorEnterCallback(renderer->d->window, GlfwCallbacks::cursorEnterCallback);
-        glfwSetCursorPosCallback(renderer->d->window, GlfwCallbacks::cursorPositionCallback);
-        glfwSetMouseButtonCallback(renderer->d->window, GlfwCallbacks::mouseButtonCallback);
-        glfwSetScrollCallback(renderer->d->window, GlfwCallbacks::scrollCallback);
-        glfwSetKeyCallback(renderer->d->window, GlfwCallbacks::keyCallback);
-        glfwSetCharCallback(renderer->d->window, GlfwCallbacks::charCallback);
-    }
-    static void unregister(Renderer* renderer)
-    {
-        glfwSetCursorEnterCallback(renderer->d->window, nullptr);
-        glfwSetCursorPosCallback(renderer->d->window, nullptr);
-        glfwSetMouseButtonCallback(renderer->d->window, nullptr);
-        glfwSetScrollCallback(renderer->d->window, nullptr);
-        glfwSetKeyCallback(renderer->d->window, nullptr);
-        glfwSetCharCallback(renderer->d->window, nullptr);
-    }
-    static void cursorEnterCallback(GLFWwindow* window, int entered)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->mice) { cb->mouseLost(); }
-    }
-    static void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        renderer->widgetCallbacks->cursorPositionAction(window, xpos, ypos);
-#ifdef USE_IMGUI
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse)
-        {
-            for (auto * cb : renderer->mice) { cb->mouseLost(); }
-            return;
-        }
-#endif
-        for (auto * cb : renderer->mice) { cb->cursorPositionAction(window, xpos, ypos); }
-    }
-    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        renderer->widgetCallbacks->mouseButtonAction(window, button, action, mods);
-#ifdef USE_IMGUI
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse)
-        {
-            for (auto * cb : renderer->mice) { cb->mouseLost(); }
-            return;
-        }
-#endif
-        for (auto * cb : renderer->mice) { cb->mouseButtonAction(window, button, action, mods); }
-    }
-    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        renderer->widgetCallbacks->scrollAction(window, xoffset, yoffset);
-#ifdef USE_IMGUI
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse)
-        {
-            for (auto * cb : renderer->mice) { cb->mouseLost(); }
-            return;
-        }
-#endif
-        for (auto * cb : renderer->mice) { cb->scrollAction(window, xoffset, yoffset); }
-    }
-    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        renderer->widgetCallbacks->keyAction(window, key, scancode, action, mods);
-#ifdef USE_IMGUI
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureKeyboard)
-        {
-            for (auto * cb : renderer->keyboards) { cb->keyboardLost(); }
-            return;
-        }
-#endif
-        for (auto * cb : renderer->keyboards) { cb->keyAction(window, key, scancode, action, mods); }
-    }
-    static void charCallback(GLFWwindow* window, unsigned int c)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        renderer->widgetCallbacks->charAction(window, c);
-#ifdef USE_IMGUI
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureKeyboard)
-        {
-            for (auto * cb : renderer->keyboards) { cb->keyboardLost(); }
-            return;
-        }
-#endif
-        for (auto * cb : renderer->keyboards) { cb->charAction(window, c); }
-    }
-};
-
 using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
@@ -178,7 +51,7 @@ Renderer::~Renderer()
     // Cleanup
     auto err = vkDeviceWaitIdle(d->renderDevice.device);
     check_vk_result(err);
-#ifdef USE_IMGUI
+#ifdef MESHOUI_USE_IMGUI
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -197,6 +70,11 @@ Renderer::Renderer()
     : d(new RendererPrivate)
     , defaultProgram(nullptr)
     , time(0.f)
+#ifdef MESHOUI_USE_IMGUI
+    , overlay(true)
+#else
+    , overlay(false)
+#endif
     , cameras()
     , keyboards()
     , mice()
@@ -215,9 +93,7 @@ Renderer::Renderer()
     {
         printf("GLFW: Vulkan Not Supported\n");
     }
-#ifndef USE_IMGUI
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-#endif
+    if (!overlay) glfwSetInputMode(d->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     uint32_t extensions_count = 0;
     const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);    
@@ -250,7 +126,7 @@ Renderer::Renderer()
     d->createCommandBuffers();
     d->createSwapChainAndFramebuffer(width, height, d->toVSync);
     d->toVSync = d->isVSync;
-#ifdef USE_IMGUI
+#ifdef MESHOUI_USE_IMGUI
     // imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -519,11 +395,13 @@ void Renderer::postUpdate()
     {
         glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
         glfwSetWindowMonitor(d->window, glfwGetPrimaryMonitor(), 0, 0, 1920, 1080, GLFW_DONT_CARE);
+        for (auto * cb : mice) { cb->mouseLost(); }
     }
     else if (!d->toFullscreen && d->isFullscreen)
     {
         glfwSetWindowMonitor(d->window, nullptr, 80, 80, 1920/2, 1080/2, GLFW_DONT_CARE);
         glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+        for (auto * cb : mice) { cb->mouseLost(); }
     }
     d->isFullscreen = d->toFullscreen;
 }
@@ -570,76 +448,82 @@ void Renderer::renderMeshes()
 
 void Renderer::renderWidgets()
 {
-#ifdef USE_IMGUI
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+    if (overlay)
+    {
+#ifdef MESHOUI_USE_IMGUI
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-    ImGui::Begin("Main window");
-    if (ImGui::CollapsingHeader("Menu", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        if (ImGui::Button("Exit"))
+        ImGui::Begin("Main window");
+        ImGui::Text("Press ESCAPE (Esc) to switch to mouselook");
+        if (ImGui::CollapsingHeader("Menu", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            glfwSetWindowShouldClose(d->window, 1);
-        }
-    }
-    if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("fullscreen", &d->toFullscreen);
-        ImGui::Checkbox("Vsync", &d->toVSync);
-    }
-    for (auto * widget : widgets)
-    {
-        if (widget->window == "Main window")
-            widget->draw();
-    }
-    if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Text("frametime : %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::Text("time : %.3f s", time);
-        ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshFiles.size());
-        if (ImGui::Button("Clear cache"))
-            d->meshFiles.clear();
-        if (ImGui::CollapsingHeader("instances"))
-        {
-            for (const auto * mesh : meshes)
+            if (ImGui::Button("Exit"))
             {
-                ImGui::Text("%s", mesh->instanceId.str.c_str());
+                glfwSetWindowShouldClose(d->window, 1);
             }
         }
-        if (ImGui::CollapsingHeader("definitions"))
+        if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            for (const auto & registration : d->meshRegistrations)
+            ImGui::Checkbox("fullscreen", &d->toFullscreen);
+            ImGui::Checkbox("Vsync", &d->toVSync);
+        }
+        for (auto * widget : widgets)
+        {
+            if (widget->window == "Main window")
+                widget->draw();
+        }
+        if (ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("frametime : %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            ImGui::Text("time : %.3f s", time);
+            ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshFiles.size());
+            if (ImGui::Button("Clear cache"))
+                d->meshFiles.clear();
+            if (ImGui::CollapsingHeader("instances"))
             {
-                ImGui::Text("%s", registration.definitionId.str.c_str());
+                for (const auto * mesh : meshes)
+                {
+                    ImGui::Text("%s", mesh->instanceId.str.c_str());
+                }
+            }
+            if (ImGui::CollapsingHeader("definitions"))
+            {
+                for (const auto & registration : d->meshRegistrations)
+                {
+                    ImGui::Text("%s", registration.definitionId.str.c_str());
+                }
+            }
+            if (ImGui::CollapsingHeader("textures"))
+            {
+                for (const auto & registration : d->textureRegistrations)
+                {
+                    ImGui::Text("%s", registration.name.str.c_str());
+                }
+            }
+            if (ImGui::CollapsingHeader("files"))
+            {
+                for (const auto & meshFile : d->meshFiles)
+                {
+                    ImGui::Text("%s", meshFile.filename.c_str());
+                }
             }
         }
-        if (ImGui::CollapsingHeader("textures"))
+        ImGui::End();
+
+        for (auto * widget : widgets)
         {
-            for (const auto & registration : d->textureRegistrations)
-            {
-                ImGui::Text("%s", registration.name.str.c_str());
-            }
+            if (widget->window != "Main window")
+                widget->draw();
         }
-        if (ImGui::CollapsingHeader("files"))
-        {
-            for (const auto & meshFile : d->meshFiles)
-            {
-                ImGui::Text("%s", meshFile.filename.c_str());
-            }
-        }
-    }
-    ImGui::End();
 
-    for (auto * widget : widgets)
-    {
-        if (widget->window != "Main window")
-            widget->draw();
-    }
+        // Rendering
+        ImGui::Render();
 
-    // Rendering
-    ImGui::Render();
-
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->swapChain.frames[d->frameIndex].buffer);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), d->swapChain.frames[d->frameIndex].buffer);
+#else
+        glfwSetWindowShouldClose(d->window, 1);
 #endif
+    }
 }

@@ -7,7 +7,7 @@ enable_testing()
 set(meshoui_root ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG")
-add_definitions(-DNV_DDS_NO_GL_SUPPORT)
+add_definitions(-DNV_DDS_NO_GL_SUPPORT -DMESHOUI_USE_IMGUI)
 
 include_directories(3rdparty/glfw/include)
 

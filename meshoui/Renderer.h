@@ -11,6 +11,9 @@
 
 namespace Meshoui
 {
+    struct GlfwCallbacks;
+    struct WidgetCallbacks;
+
     class Camera;
     class MeshFile;
     class Program;
@@ -48,6 +51,7 @@ namespace Meshoui
 
         Program * defaultProgram;
         float time;
+        bool overlay;
 
     private:
         std::vector<Camera *> cameras;
@@ -58,9 +62,7 @@ namespace Meshoui
         std::vector<Program *> programs;
         std::vector<Widget *> widgets;
 
-        struct GlfwCallbacks;
         friend struct GlfwCallbacks;
-        struct WidgetCallbacks;
         WidgetCallbacks * widgetCallbacks;
     };
 }
