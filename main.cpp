@@ -37,8 +37,8 @@ int main(int, char**)
         renderer.add(&light);
         light.enable(true);
 
-        LinearVelocity<Camera> cameraAnimator(&camera, 0.1f);
-        WASD<LinearVelocity<Camera>> cameraStrafer(&cameraAnimator);
+        LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
+        WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
         renderer.add(&cameraStrafer);
 
         Mouselook cameraLook(&camera);

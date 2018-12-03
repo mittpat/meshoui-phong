@@ -11,9 +11,9 @@
 namespace Meshoui
 {
     template<typename T>
-    struct LinearVelocity
+    struct LinearAcceleration
     {
-        LinearVelocity(T * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
+        LinearAcceleration(T * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
         void step(float s)
         {
             linalg::aliases::float3 forward = qzdir(target->orientation);
@@ -61,10 +61,10 @@ namespace Meshoui
     };
 
     template<typename T>
-    struct WASD<LinearVelocity<T>>
+    struct WASD<LinearAcceleration<T>>
         : IKeyboard
     {
-        WASD(LinearVelocity<T> * t) : target(t), w(false), a(false), s(false), d(false) {}
+        WASD(LinearAcceleration<T> * t) : target(t), w(false), a(false), s(false), d(false) {}
         virtual void keyAction(void *, int key, int, int action, int) override
         {
             static const float v = 100.f;
@@ -129,7 +129,7 @@ namespace Meshoui
                 }
             }
         }
-        LinearVelocity<T> * target;
+        LinearAcceleration<T> * target;
         bool w,a,s,d;
     };
 
