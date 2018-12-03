@@ -41,6 +41,7 @@ struct Meshoui::Renderer::GlfwCallbacks
 {
     static void doregister(Renderer* renderer)
     {
+        glfwSetCursorPosCallback(renderer->d->window, GlfwCallbacks::cursorPositionCallback);
         glfwSetMouseButtonCallback(renderer->d->window, GlfwCallbacks::mouseButtonCallback);
         glfwSetScrollCallback(renderer->d->window, GlfwCallbacks::scrollCallback);
         glfwSetKeyCallback(renderer->d->window, GlfwCallbacks::keyCallback);
@@ -48,10 +49,19 @@ struct Meshoui::Renderer::GlfwCallbacks
     }
     static void unregister(Renderer* renderer)
     {
+        glfwSetCursorPosCallback(renderer->d->window, nullptr);
         glfwSetMouseButtonCallback(renderer->d->window, nullptr);
         glfwSetScrollCallback(renderer->d->window, nullptr);
         glfwSetKeyCallback(renderer->d->window, nullptr);
         glfwSetCharCallback(renderer->d->window, nullptr);
+    }
+    static void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->mice)
+        {
+            cb->cursorPositionAction(window, xpos, ypos);
+        }
     }
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
