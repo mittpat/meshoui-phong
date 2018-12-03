@@ -16,3 +16,8 @@ void IMouse::scrollAction(void *, double, double)
 {
 
 }
+
+void IMouse::mouseLost()
+{
+
+}

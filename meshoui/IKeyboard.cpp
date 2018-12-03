@@ -11,3 +11,8 @@ void IKeyboard::charAction(void *, unsigned int)
 {
 
 }
+
+void IKeyboard::keyboardLost()
+{
+
+}

@@ -37,66 +37,6 @@ namespace
     }
 }
 
-struct Meshoui::Renderer::GlfwCallbacks
-{
-    static void doregister(Renderer* renderer)
-    {
-        glfwSetCursorPosCallback(renderer->d->window, GlfwCallbacks::cursorPositionCallback);
-        glfwSetMouseButtonCallback(renderer->d->window, GlfwCallbacks::mouseButtonCallback);
-        glfwSetScrollCallback(renderer->d->window, GlfwCallbacks::scrollCallback);
-        glfwSetKeyCallback(renderer->d->window, GlfwCallbacks::keyCallback);
-        glfwSetCharCallback(renderer->d->window, GlfwCallbacks::charCallback);
-    }
-    static void unregister(Renderer* renderer)
-    {
-        glfwSetCursorPosCallback(renderer->d->window, nullptr);
-        glfwSetMouseButtonCallback(renderer->d->window, nullptr);
-        glfwSetScrollCallback(renderer->d->window, nullptr);
-        glfwSetKeyCallback(renderer->d->window, nullptr);
-        glfwSetCharCallback(renderer->d->window, nullptr);
-    }
-    static void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->mice)
-        {
-            cb->cursorPositionAction(window, xpos, ypos);
-        }
-    }
-    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->mice)
-        {
-            cb->mouseButtonAction(window, button, action, mods);
-        }
-    }
-    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->mice)
-        {
-            cb->scrollAction(window, xoffset, yoffset);
-        }
-    }
-    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->keyboards)
-        {
-            cb->keyAction(window, key, scancode, action, mods);
-        }
-    }
-    static void charCallback(GLFWwindow* window, unsigned int c)
-    {
-        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
-        for (auto * cb : renderer->keyboards)
-        {
-            cb->charAction(window, c);
-        }
-    }
-};
-
 struct Meshoui::Renderer::WidgetCallbacks
     : IKeyboard
     , IMouse
@@ -127,14 +67,109 @@ struct Meshoui::Renderer::WidgetCallbacks
     }
 };
 
+struct Meshoui::Renderer::GlfwCallbacks
+{
+    static void doregister(Renderer* renderer)
+    {
+        glfwSetCursorEnterCallback(renderer->d->window, GlfwCallbacks::cursorEnterCallback);
+        glfwSetCursorPosCallback(renderer->d->window, GlfwCallbacks::cursorPositionCallback);
+        glfwSetMouseButtonCallback(renderer->d->window, GlfwCallbacks::mouseButtonCallback);
+        glfwSetScrollCallback(renderer->d->window, GlfwCallbacks::scrollCallback);
+        glfwSetKeyCallback(renderer->d->window, GlfwCallbacks::keyCallback);
+        glfwSetCharCallback(renderer->d->window, GlfwCallbacks::charCallback);
+    }
+    static void unregister(Renderer* renderer)
+    {
+        glfwSetCursorEnterCallback(renderer->d->window, nullptr);
+        glfwSetCursorPosCallback(renderer->d->window, nullptr);
+        glfwSetMouseButtonCallback(renderer->d->window, nullptr);
+        glfwSetScrollCallback(renderer->d->window, nullptr);
+        glfwSetKeyCallback(renderer->d->window, nullptr);
+        glfwSetCharCallback(renderer->d->window, nullptr);
+    }
+    static void cursorEnterCallback(GLFWwindow* window, int entered)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        for (auto * cb : renderer->mice) { cb->mouseLost(); }
+    }
+    static void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        renderer->widgetCallbacks->cursorPositionAction(window, xpos, ypos);
+#ifdef USE_IMGUI
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            for (auto * cb : renderer->mice) { cb->mouseLost(); }
+            return;
+        }
+#endif
+        for (auto * cb : renderer->mice) { cb->cursorPositionAction(window, xpos, ypos); }
+    }
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        renderer->widgetCallbacks->mouseButtonAction(window, button, action, mods);
+#ifdef USE_IMGUI
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            for (auto * cb : renderer->mice) { cb->mouseLost(); }
+            return;
+        }
+#endif
+        for (auto * cb : renderer->mice) { cb->mouseButtonAction(window, button, action, mods); }
+    }
+    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        renderer->widgetCallbacks->scrollAction(window, xoffset, yoffset);
+#ifdef USE_IMGUI
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse)
+        {
+            for (auto * cb : renderer->mice) { cb->mouseLost(); }
+            return;
+        }
+#endif
+        for (auto * cb : renderer->mice) { cb->scrollAction(window, xoffset, yoffset); }
+    }
+    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        renderer->widgetCallbacks->keyAction(window, key, scancode, action, mods);
+#ifdef USE_IMGUI
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureKeyboard)
+        {
+            for (auto * cb : renderer->keyboards) { cb->keyboardLost(); }
+            return;
+        }
+#endif
+        for (auto * cb : renderer->keyboards) { cb->keyAction(window, key, scancode, action, mods); }
+    }
+    static void charCallback(GLFWwindow* window, unsigned int c)
+    {
+        Renderer * renderer = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        renderer->widgetCallbacks->charAction(window, c);
+#ifdef USE_IMGUI
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureKeyboard)
+        {
+            for (auto * cb : renderer->keyboards) { cb->keyboardLost(); }
+            return;
+        }
+#endif
+        for (auto * cb : renderer->keyboards) { cb->charAction(window, c); }
+    }
+};
+
 using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
 Renderer::~Renderer()
 {
-    remove((IKeyboard*)widgetCallbacks);
-    remove((IMouse*)widgetCallbacks);
     delete widgetCallbacks;
     widgetCallbacks = nullptr;
 
@@ -152,7 +187,6 @@ Renderer::~Renderer()
     d->destroyCommandBuffers();
     d->destroyGraphicsSubsystem();
 
-    //vkDestroySurfaceKHR(d->instance, d->surface, d->renderDevice.allocator);
     glfwDestroyWindow(d->window);
     glfwTerminate();
 
@@ -181,11 +215,9 @@ Renderer::Renderer()
     {
         printf("GLFW: Vulkan Not Supported\n");
     }
-
-    glfwSetWindowUserPointer(d->window, this);
-    GlfwCallbacks::doregister(this);
-    add((IKeyboard*)widgetCallbacks);
-    add((IMouse*)widgetCallbacks);
+#ifndef USE_IMGUI
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+#endif
 
     uint32_t extensions_count = 0;
     const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);    
@@ -268,6 +300,8 @@ Renderer::Renderer()
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
 #endif
+    glfwSetWindowUserPointer(d->window, this);
+    GlfwCallbacks::doregister(this);
 }
 
 bool Renderer::shouldClose() const
