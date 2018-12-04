@@ -2,6 +2,7 @@
 
 ![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/screenshot.png)
 
+
 Notes
 -------
 
@@ -9,11 +10,20 @@ The Collada support is only very very partial. Some Blender files were tested, b
 
 This branch targets Vulkan 1.1. Only texture mapping is missing (wip).
 
+
 Todo
 -------
+
 * Texture mapping
 * Improve Cameras and Lights
 * Nvidia RTX realtime shadows
+
+
+qu3e
+-------
+
+![animation](qu3e.gif)
+
 
 License
 -------
