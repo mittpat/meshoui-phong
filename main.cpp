@@ -8,12 +8,20 @@
 #include <Program.h>
 #include <Renderer.h>
 
+#include <q3.h>
+
 using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
+namespace
+{
+    const float timestep = 1.f/60;
+}
+
 int main(int, char**)
 {
+    q3Scene scene(timestep);
     Renderer renderer;
 
     Program phongProgram;
@@ -25,6 +33,14 @@ int main(int, char**)
 
         ScopedSkydome skydome(&renderer);
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
+        std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
+        std::vector<BodyAttitude<Mesh>> bodyBakers; bodyBakers.reserve(crates.meshes.size());
+        for (const auto & mesh : crates.meshes)
+        {
+            bodies.emplace_back(&scene, mesh->position, mesh->orientation, mesh->scale);
+            bodyBakers.emplace_back(mesh, bodies.back().body);
+        }
+        ScopedBody groundBody(&scene, float3(0, -5, 0), identity, float3(100, 1, 100), false);
 
 
         Camera camera;
@@ -52,9 +68,12 @@ int main(int, char**)
         bool run = true;
         while (run)
         {
-            lightAnimator.step(0.016f);
-            cameraAnimator.step(0.016f);
-            renderer.update(0.016f);
+            lightAnimator.step(timestep);
+            cameraAnimator.step(timestep);
+            scene.Step();
+            for (const auto & bodyBaker : bodyBakers)
+                bodyBaker.bake();
+            renderer.update(timestep);
             if (renderer.shouldClose())
                 run = false;
         }

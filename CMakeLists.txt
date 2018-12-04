@@ -17,6 +17,7 @@ include(CMake/modules/3p_glslang.cmake)
 include(CMake/modules/3p_iniparser.cmake)
 include(CMake/modules/3p_linalg.cmake)
 include(CMake/modules/3p_pugixml.cmake)
+include(CMake/modules/3p_qu3e.cmake)
 
 add_subdirectory(common)
 add_subdirectory(meshoui)
@@ -26,6 +27,7 @@ include_directories(common)
 include_directories(meshoui)
 
 use_linalg()
+use_qu3e()
 
 add_executable(meshouiview main.cpp)
 target_link_libraries(meshouiview meshouilib)

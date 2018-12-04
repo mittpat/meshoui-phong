@@ -64,3 +64,11 @@ install(TARGETS pugixml
                 RUNTIME DESTINATION bin COMPONENT libraries
                 LIBRARY DESTINATION lib COMPONENT libraries
                 ARCHIVE DESTINATION lib/static COMPONENT libraries)
+
+# qu3e
+project("qu3e")
+set(qu3e_version 1.1)
+option(qu3e_build_shared "Build qu3e shared libraries" OFF)
+option(qu3e_build_static "Build qu3e static libraries" ON)
+option(qu3e_build_demo "Build qu3e demo" OFF)
+add_subdirectory(qu3e/src)

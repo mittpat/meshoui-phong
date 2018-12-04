@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <linalg.h>
+#include <dynamics/q3Body.h>
 
 #include "IKeyboard.h"
 #include "IMouse.h"
@@ -39,6 +40,20 @@ namespace Meshoui
         }
         T * target;
         linalg::aliases::float4 angularVelocity;
+    };
+
+    template<typename T>
+    struct BodyAttitude
+    {
+        BodyAttitude(T * t, q3Body * b) : target(t), body(b) {}
+        void bake() const
+        {
+            const auto transform = body->GetTransform();
+            target->position = (linalg::aliases::float3&)transform.position;
+            target->orientation = linalg::rotation_quat((linalg::aliases::float3x3&)transform.rotation);
+        }
+        T * target;
+        q3Body * body;
     };
 
     template<typename T>

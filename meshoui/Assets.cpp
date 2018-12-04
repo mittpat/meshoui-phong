@@ -1,5 +1,7 @@
 #include "Assets.h"
 
+#include <q3.h>
+
 using namespace Meshoui;
 
 ScopedAsset::ScopedAsset(Renderer *r, const std::string &filename)
@@ -34,4 +36,28 @@ ScopedSkydome::ScopedSkydome(Renderer *r)
 ScopedSkydome::~ScopedSkydome()
 {
     renderer->remove(&program);
+}
+
+ScopedBody::ScopedBody(q3Scene *s, const linalg::aliases::float3 & position, const linalg::aliases::float4 & orientation, const linalg::aliases::float3 &scale, bool dynamic)
+    : scene(s)
+    , body(nullptr)
+{
+    q3BodyDef def;
+    def.bodyType = dynamic ? eDynamicBody : eKinematicBody;
+    body = scene->CreateBody(def);
+
+    q3BoxDef boxDef;
+    boxDef.SetRestitution(0);
+    q3Transform tx;
+    q3Identity(tx);
+
+    boxDef.Set(tx, (q3Vec3&)scale * 2.f);
+    body->AddBox(boxDef);
+    linalg::aliases::float3 axis = linalg::qaxis(orientation);
+    body->SetTransform((q3Vec3&)position, (q3Vec3&)axis, linalg::qangle(orientation));
+}
+
+ScopedBody::~ScopedBody()
+{
+    scene->RemoveBody(body);
 }
