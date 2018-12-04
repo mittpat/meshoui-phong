@@ -21,21 +21,16 @@ int main(int, char**)
     renderer.add(&phongProgram);
 
     {
-        static const float3 up(0.,1.,0.);
         static const float3 right(-1.,0.,0.);
 
         ScopedSkydome skydome(&renderer);
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
 
+
         Camera camera;
         camera.position = float3(0.0, 2.0, 5.0);
         renderer.add(&camera);
         camera.enable();
-
-        Light light;
-        light.position = mul(rotation_matrix(qmul(rotation_quat(up, -0.4f), rotation_quat(right, 0.0f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
-        renderer.add(&light);
-        light.enable(true);
 
         LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
         WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
@@ -44,10 +39,20 @@ int main(int, char**)
         Mouselook cameraLook(&camera);
         renderer.add(&cameraLook);
 
+
+        Light light;
+        light.position = float3(300.0, 1000.0, -300.0);
+        renderer.add(&light);
+        light.enable(true);
+
+        AngularVelocity<Light> lightAnimator(&light);
+        lightAnimator.angularVelocity = rotation_quat(right, 0.02f);
+
+
         bool run = true;
         while (run)
         {
-            light.position = mul(rotation_matrix(qmul(rotation_quat(up, -0.4f), rotation_quat(right, 0.0f + renderer.time * 0.1f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
+            lightAnimator.step(0.016f);
             cameraAnimator.step(0.016f);
             renderer.update(0.016f);
             if (renderer.shouldClose())

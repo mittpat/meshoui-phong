@@ -30,6 +30,18 @@ namespace Meshoui
     };
 
     template<typename T>
+    struct AngularVelocity
+    {
+        AngularVelocity(T * t) : target(t), angularVelocity(linalg::identity) {}
+        void step(float s)
+        {
+            target->position = linalg::mul(linalg::rotation_matrix(linalg::rotation_quat(linalg::qaxis(angularVelocity), linalg::qangle(angularVelocity) * s)), linalg::aliases::float4(target->position, 1.0)).xyz();
+        }
+        T * target;
+        linalg::aliases::float4 angularVelocity;
+    };
+
+    template<typename T>
     struct WASD
         : IKeyboard
     {
@@ -148,7 +160,7 @@ namespace Meshoui
                 double deltaX = xpos - previousX;
                 double deltaY = ypos - previousY;
 
-                static const float rotationScaler = 0.0005f;
+                static const float rotationScaler = 0.001f;
                 {
                     linalg::aliases::float3 right = qxdir(target->orientation);
                     target->orientation = qmul(rotation_quat(right, float(-deltaY * rotationScaler * M_PI/2)), target->orientation);
