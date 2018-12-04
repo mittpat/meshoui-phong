@@ -22,7 +22,7 @@ Todo
 qu3e
 -------
 
-![animation](qu3e.gif)
+![animation](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/qu3e.gif)
 
 
 License
