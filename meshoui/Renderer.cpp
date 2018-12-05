@@ -57,7 +57,7 @@ Renderer::~Renderer()
     ImGui::DestroyContext();
 #endif
     d->destroySwapChainAndFramebuffer();
-    d->destroyCommandBuffers();
+    d->swapChain.destroyCommandBuffers(d->renderDevice);
     d->renderDevice.destroy();
     d->instance.destroy();
 
@@ -122,7 +122,7 @@ Renderer::Renderer()
     d->renderDevice.selectSurfaceFormat(d->surface, d->surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    d->createCommandBuffers();
+    d->swapChain.createCommandBuffers(d->renderDevice, FrameCount);
     d->createSwapChainAndFramebuffer(width, height, d->toVSync);
     d->toVSync = d->isVSync;
 #ifdef MESHOUI_USE_IMGUI

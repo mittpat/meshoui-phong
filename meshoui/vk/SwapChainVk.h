@@ -37,6 +37,11 @@ namespace Meshoui
         ~SwapChainVk();
         SwapChainVk();
 
+        void createCommandBuffers(DeviceVk &device, uint32_t frameCount);
+        void destroyCommandBuffers(DeviceVk &device);
+        void createImageBuffers();
+        void destroyImageBuffers();
+
         VkSemaphore &beginRender(const DeviceVk &device, VkSwapchainKHR swapChainKHR, VkRenderPass renderPass, uint32_t &frameIndex, const VkExtent2D &extent);
         VkResult endRender(VkSemaphore &imageAcquiredSemaphore, VkSwapchainKHR swapChainKHR, VkQueue queue, uint32_t &frameIndex);
 

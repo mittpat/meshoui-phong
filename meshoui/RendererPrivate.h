@@ -121,8 +121,6 @@ namespace Meshoui
         ~RendererPrivate();
         RendererPrivate();
 
-        void destroyCommandBuffers();
-        void createCommandBuffers();
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h, bool vsync);
 

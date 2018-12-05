@@ -379,61 +379,6 @@ RendererPrivate::RendererPrivate()
     memset(&surfaceFormat, 0, sizeof(surfaceFormat));
 }
 
-void RendererPrivate::destroyCommandBuffers()
-{
-    vkQueueWaitIdle(renderDevice.queue);
-    for (auto & frame : swapChain.frames)
-    {
-        vkDestroyFence(renderDevice.device, frame.fence, renderDevice.allocator);
-        vkFreeCommandBuffers(renderDevice.device, frame.pool, 1, &frame.buffer);
-        vkDestroyCommandPool(renderDevice.device, frame.pool, renderDevice.allocator);
-        vkDestroySemaphore(renderDevice.device, frame.acquired, renderDevice.allocator);
-        vkDestroySemaphore(renderDevice.device, frame.complete, renderDevice.allocator);
-    }
-}
-
-void RendererPrivate::createCommandBuffers()
-{
-    swapChain.frames.resize(FrameCount);
-
-    VkResult err;
-    for (auto & frame : swapChain.frames)
-    {
-        {
-            VkCommandPoolCreateInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-            info.queueFamilyIndex = renderDevice.queueFamily;
-            err = vkCreateCommandPool(renderDevice.device, &info, renderDevice.allocator, &frame.pool);
-            check_vk_result(err);
-        }
-        {
-            VkCommandBufferAllocateInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            info.commandPool = frame.pool;
-            info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            info.commandBufferCount = 1;
-            err = vkAllocateCommandBuffers(renderDevice.device, &info, &frame.buffer);
-            check_vk_result(err);
-        }
-        {
-            VkFenceCreateInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-            err = vkCreateFence(renderDevice.device, &info, renderDevice.allocator, &frame.fence);
-            check_vk_result(err);
-        }
-        {
-            VkSemaphoreCreateInfo info = {};
-            info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.acquired);
-            check_vk_result(err);
-            err = vkCreateSemaphore(renderDevice.device, &info, renderDevice.allocator, &frame.complete);
-            check_vk_result(err);
-        }
-    }
-}
-
 void RendererPrivate::destroySwapChainAndFramebuffer()
 {
     vkQueueWaitIdle(renderDevice.queue);
