@@ -31,10 +31,14 @@ namespace Meshoui
     inline SwapChainCommandBufferVk::~SwapChainCommandBufferVk() {}
     inline SwapChainCommandBufferVk::SwapChainCommandBufferVk() : pool(VK_NULL_HANDLE), buffer(VK_NULL_HANDLE), fence(VK_NULL_HANDLE), acquired(VK_NULL_HANDLE), complete(VK_NULL_HANDLE) {}
 
+    struct DeviceVk;
     struct SwapChainVk final
     {
         ~SwapChainVk();
         SwapChainVk();
+
+        VkSemaphore &beginRender(const DeviceVk &device, VkSwapchainKHR swapChainKHR, VkRenderPass renderPass, uint32_t &frameIndex, const VkExtent2D &extent);
+        VkResult endRender(VkSemaphore &imageAcquiredSemaphore, VkSwapchainKHR swapChainKHR, VkQueue queue, uint32_t &frameIndex);
 
         std::vector<SwapChainImageBufferVk> images;
         std::vector<SwapChainCommandBufferVk> frames;

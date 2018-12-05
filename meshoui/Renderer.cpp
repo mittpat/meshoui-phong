@@ -89,10 +89,7 @@ Renderer::Renderer()
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     d->window = glfwCreateWindow(1920/2, 1080/2, "Meshoui", nullptr, nullptr);
-    if (!glfwVulkanSupported())
-    {
-        printf("GLFW: Vulkan Not Supported\n");
-    }
+    if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
     if (!overlay) glfwSetInputMode(d->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     uint32_t extensions_count = 0;
@@ -296,92 +293,29 @@ void Renderer::update(float s)
 {
     glfwPollEvents();
 
-    VkResult err;
-
-    VkSemaphore& image_acquired_semaphore  = d->swapChain.frames[d->frameIndex].acquired;
-    err = vkAcquireNextImageKHR(d->renderDevice.device, d->swapChainKHR, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &d->frameIndex);
-    check_vk_result(err);
-
-    {
-        err = vkWaitForFences(d->renderDevice.device, 1, &d->swapChain.frames[d->frameIndex].fence, VK_TRUE, UINT64_MAX);	// wait indefinitely instead of periodically checking
-        check_vk_result(err);
-
-        err = vkResetFences(d->renderDevice.device, 1, &d->swapChain.frames[d->frameIndex].fence);
-        check_vk_result(err);
-    }
-    {
-        err = vkResetCommandPool(d->renderDevice.device, d->swapChain.frames[d->frameIndex].pool, 0);
-        check_vk_result(err);
-        VkCommandBufferBeginInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(d->swapChain.frames[d->frameIndex].buffer, &info);
-        check_vk_result(err);
-    }
-    {
-        VkRenderPassBeginInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        info.renderPass = d->renderPass;
-        info.framebuffer = d->swapChain.images[d->frameIndex].front;
-        info.renderArea.extent.width = d->width;
-        info.renderArea.extent.height = d->height;
-        VkClearValue clearValue[2] = {0};
-        clearValue[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
-        clearValue[1].depthStencil = {1.0f, 0};
-        info.pClearValues = clearValue;
-        info.clearValueCount = 2;
-        vkCmdBeginRenderPass(d->swapChain.frames[d->frameIndex].buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-    }
+    VkSemaphore &imageAcquiredSemaphore  = d->swapChain.beginRender(d->renderDevice, d->swapChainKHR, d->renderPass, d->frameIndex, { d->width, d->height });
 
     renderMeshes();
     renderWidgets();
 
-    vkCmdEndRenderPass(d->swapChain.frames[d->frameIndex].buffer);
+    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->queue, d->frameIndex);
+    if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
     {
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        VkSubmitInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &image_acquired_semaphore;
-        info.pWaitDstStageMask = &wait_stage;
-        info.commandBufferCount = 1;
-        info.pCommandBuffers = &d->swapChain.frames[d->frameIndex].buffer;
-        info.signalSemaphoreCount = 1;
-        info.pSignalSemaphores = &d->swapChain.frames[d->frameIndex].complete;
+        int width = 0, height = 0;
+        while (width == 0 || height == 0)
+        {
+            glfwGetFramebufferSize(d->window, &width, &height);
+            glfwPostEmptyEvent();
+            glfwWaitEvents();
+        }
 
-        VkResult err = vkEndCommandBuffer(d->swapChain.frames[d->frameIndex].buffer);
-        check_vk_result(err);
-        err = vkQueueSubmit(d->queue, 1, &info, d->swapChain.frames[d->frameIndex].fence);
-        check_vk_result(err);
+        vkDeviceWaitIdle(d->renderDevice.device);
+        d->createSwapChainAndFramebuffer(width, height, d->toVSync);
+        d->isVSync = d->toVSync;
     }
-
+    else
     {
-        VkPresentInfoKHR info = {};
-        info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &d->swapChain.frames[d->frameIndex].complete;
-        info.swapchainCount = 1;
-        info.pSwapchains = &d->swapChainKHR;
-        info.pImageIndices = &d->frameIndex;
-        VkResult err = vkQueuePresentKHR(d->queue, &info);
-        if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
-        {
-            int width = 0, height = 0;
-            while (width == 0 || height == 0)
-            {
-                glfwGetFramebufferSize(d->window, &width, &height);
-                glfwPostEmptyEvent();
-                glfwWaitEvents();
-            }
-
-            vkDeviceWaitIdle(d->renderDevice.device);
-            d->createSwapChainAndFramebuffer(width, height, d->toVSync);
-            d->isVSync = d->toVSync;
-        }
-        else
-        {
-            check_vk_result(err);
-        }
+        check_vk_result(err);
     }
 
     postUpdate();
