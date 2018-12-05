@@ -430,7 +430,7 @@ void Renderer::renderMeshes()
         if (currentProgram != mesh->program)
         {
             currentProgram = mesh->program;
-            d->bindGraphics(mesh->program);
+            d->bindGraphics(currentProgram);
         }
         d->bindGraphics(mesh);
 
@@ -439,7 +439,7 @@ void Renderer::renderMeshes()
             d->pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
         d->pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
 
-        mesh->program->draw(mesh);
+        d->draw(currentProgram, mesh);
         d->unbindGraphics(mesh);
     }
 

@@ -755,7 +755,6 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
 
 void RendererPrivate::registerGraphics(Program * program)
 {
-    program->d = this;
     ProgramRegistration programRegistration;
     registerProgram(program, programRegistration);
     programRegistrations.push_back(std::make_pair(program, programRegistration));
@@ -826,7 +825,6 @@ void RendererPrivate::unregisterGraphics(Program * program)
         unregisterProgram(found->second);
         programRegistrations.erase(found);
     }
-    program->d = nullptr;
 }
 
 void RendererPrivate::unregisterGraphics(Camera *cam)

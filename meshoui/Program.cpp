@@ -1,41 +1,28 @@
-﻿#include <GL/glew.h>
-
-#include "Program.h"
-#include "RendererPrivate.h"
+﻿#include "Program.h"
 
 #include <loose.h>
-#include <iniparser.h>
-
-#include <algorithm>
 #include <fstream>
-#include <sstream>
 
-using namespace linalg;
-using namespace linalg::aliases;
 using namespace Meshoui;
-
-Program::~Program()
-{
-
-}
 
 void Program::load(const std::string & filename)
 {
-    dictionary * ini = iniparser_load(filename.c_str());
+    std::ifstream shaderFileStream(filename);
+    for (std::string line; std::getline(shaderFileStream, line); )
     {
-        std::string shaderFilename = iniparser_getstring(ini, "vertexShader:filename", "");
-        std::ifstream fileStream(sibling(shaderFilename, filename));
-        vertexShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        auto pair = split(line, '=');
+        if (pair.size() == 2)
+        {
+            if (pair[0] == "vertexShaderFilename")
+            {
+                std::ifstream fileStream(sibling(pair[1], filename));
+                vertexShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+            }
+            if (pair[0] == "fragmentShaderFilename")
+            {
+                std::ifstream fileStream(sibling(pair[1], filename));
+                fragmentShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+            }
+        }
     }
-    {
-        std::string shaderFilename = iniparser_getstring(ini, "fragmentShader:filename", "");
-        std::ifstream fileStream(sibling(shaderFilename, filename));
-        fragmentShaderSource = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-    }
-    iniparser_freedict(ini);
-}
-
-void Program::draw(Mesh * mesh)
-{
-    d_ptr()->draw(this, mesh);
 }

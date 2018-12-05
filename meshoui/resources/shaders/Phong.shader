@@ -1,4 +1,2 @@
-[vertexShader]
-filename=Phong.vert.spv
-[fragmentShader]
-filename=Phong.frag.spv
+vertexShaderFilename=Phong.vert.spv
+fragmentShaderFilename=Phong.frag.spv

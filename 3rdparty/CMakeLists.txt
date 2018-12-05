@@ -27,17 +27,6 @@ install(TARGETS imgui
                 LIBRARY DESTINATION lib COMPONENT libraries
                 ARCHIVE DESTINATION lib/static COMPONENT libraries)
 
-# iniparser
-add_definitions(-DASCIILINESZ=4096)
-add_library(iniparser
-    iniparser/src/dictionary.h iniparser/src/dictionary.c
-    iniparser/src/iniparser.h  iniparser/src/iniparser.c)
-target_link_libraries(iniparser)
-install(TARGETS iniparser
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)
-
 # linalg
 add_custom_target(linalg SOURCES linalg/linalg.h)
 

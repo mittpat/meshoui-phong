@@ -14,7 +14,6 @@ include_directories(3rdparty/glfw/include)
 add_subdirectory(3rdparty)
 
 include(CMake/modules/3p_glslang.cmake)
-include(CMake/modules/3p_iniparser.cmake)
 include(CMake/modules/3p_linalg.cmake)
 include(CMake/modules/3p_pugixml.cmake)
 include(CMake/modules/3p_qu3e.cmake)

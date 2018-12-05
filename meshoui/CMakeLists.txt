@@ -47,7 +47,6 @@ add_custom_target(meshouilib_data SOURCES ${Resources})
 
 find_package(Vulkan REQUIRED)
 
-use_iniparser()
 use_linalg()
 use_pugixml()
 use_qu3e()
@@ -58,7 +57,7 @@ include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
 include_directories(../common)
 
-target_link_libraries(meshouilib commonlib stdc++fs ${Vulkan_LIBRARIES} glfw iniparser imgui lodepng pugixml nv_dds qu3e)
+target_link_libraries(meshouilib commonlib stdc++fs ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e)
 
 ADD_CUSTOM_TARGET(meshouilib_spirv DEPENDS ${spirv})
 ADD_DEPENDENCIES(meshouilib meshouilib_spirv)

@@ -1,4 +1,2 @@
-[vertexShader]
-filename=Skydome.vert.spv
-[fragmentShader]
-filename=Skydome.frag.spv
+vertexShaderFilename=Skydome.vert.spv
+fragmentShaderFilename=Skydome.frag.spv
