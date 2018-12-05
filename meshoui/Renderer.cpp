@@ -49,7 +49,7 @@ Renderer::~Renderer()
     GlfwCallbacks::unregister(this);
 
     // Cleanup
-    auto err = vkDeviceWaitIdle(d->renderDevice.device);
+    auto err = vkDeviceWaitIdle(d->device.device);
     check_vk_result(err);
 #ifdef MESHOUI_USE_IMGUI
     ImGui_ImplVulkan_Shutdown();
@@ -57,8 +57,8 @@ Renderer::~Renderer()
     ImGui::DestroyContext();
 #endif
     d->destroySwapChainAndFramebuffer();
-    d->swapChain.destroyCommandBuffers(d->renderDevice);
-    d->renderDevice.destroy();
+    d->swapChain.destroyCommandBuffers(d->device);
+    d->device.destroy();
     d->instance.destroy();
 
     glfwDestroyWindow(d->window);
@@ -96,10 +96,10 @@ Renderer::Renderer()
     uint32_t extensionsCount = 0;
     const char** extensions = glfwGetRequiredInstanceExtensions(&extensionsCount);
     d->instance.create(extensions, extensionsCount);
-    d->renderDevice.create(d->instance);
+    d->device.create(d->instance);
 
     // Create Window Surface
-    VkResult err = glfwCreateWindowSurface(d->instance.instance, d->window, d->renderDevice.allocator, &d->surface);
+    VkResult err = glfwCreateWindowSurface(d->instance.instance, d->window, d->device.allocator, &d->surface);
     check_vk_result(err);
 
     // Create Framebuffers
@@ -113,16 +113,16 @@ Renderer::Renderer()
 
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(d->renderDevice.physicalDevice, d->renderDevice.queueFamily, d->surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->device.physicalDevice, d->device.queueFamily, d->surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
         exit(-1);
     }
-    d->renderDevice.selectSurfaceFormat(d->surface, d->surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
+    d->device.selectSurfaceFormat(d->surface, d->surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    d->swapChain.createCommandBuffers(d->renderDevice, FrameCount);
+    d->swapChain.createCommandBuffers(d->device, FrameCount);
     d->createSwapChainAndFramebuffer(width, height, d->toVSync);
     d->toVSync = d->isVSync;
 #ifdef MESHOUI_USE_IMGUI
@@ -133,13 +133,13 @@ Renderer::Renderer()
     {
         ImGui_ImplVulkan_InitInfo init_info = {};
         init_info.Instance = d->instance.instance;
-        init_info.PhysicalDevice = d->renderDevice.physicalDevice;
-        init_info.Device = d->renderDevice.device;
-        init_info.QueueFamily = d->renderDevice.queueFamily;
-        init_info.Queue = d->renderDevice.queue;
+        init_info.PhysicalDevice = d->device.physicalDevice;
+        init_info.Device = d->device.device;
+        init_info.QueueFamily = d->device.queueFamily;
+        init_info.Queue = d->device.queue;
         init_info.PipelineCache = d->pipelineCache;
-        init_info.DescriptorPool = d->renderDevice.descriptorPool;
-        init_info.Allocator = d->renderDevice.allocator;
+        init_info.DescriptorPool = d->device.descriptorPool;
+        init_info.Allocator = d->device.allocator;
         init_info.CheckVkResultFn = check_vk_result;
         ImGui_ImplVulkan_Init(&init_info, d->renderPass);
     }
@@ -151,7 +151,7 @@ Renderer::Renderer()
         VkCommandPool command_pool = d->swapChain.frames[d->frameIndex].pool;
         VkCommandBuffer command_buffer = d->swapChain.frames[d->frameIndex].buffer;
 
-        err = vkResetCommandPool(d->renderDevice.device, command_pool, 0);
+        err = vkResetCommandPool(d->device.device, command_pool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -167,10 +167,10 @@ Renderer::Renderer()
         end_info.pCommandBuffers = &command_buffer;
         err = vkEndCommandBuffer(command_buffer);
         check_vk_result(err);
-        err = vkQueueSubmit(d->renderDevice.queue, 1, &end_info, VK_NULL_HANDLE);
+        err = vkQueueSubmit(d->device.queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);
 
-        err = vkDeviceWaitIdle(d->renderDevice.device);
+        err = vkDeviceWaitIdle(d->device.device);
         check_vk_result(err);
         ImGui_ImplVulkan_InvalidateFontUploadObjects();
     }
@@ -295,12 +295,12 @@ void Renderer::update(float s)
 {
     glfwPollEvents();
 
-    VkSemaphore &imageAcquiredSemaphore  = d->swapChain.beginRender(d->renderDevice, d->swapChainKHR, d->renderPass, d->frameIndex, { d->width, d->height });
+    VkSemaphore &imageAcquiredSemaphore  = d->swapChain.beginRender(d->device, d->swapChainKHR, d->renderPass, d->frameIndex, { d->width, d->height });
 
     renderMeshes();
     renderWidgets();
 
-    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->renderDevice.queue, d->frameIndex);
+    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->device.queue, d->frameIndex);
     if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
     {
         int width = 0, height = 0;
@@ -311,7 +311,7 @@ void Renderer::update(float s)
             glfwWaitEvents();
         }
 
-        vkDeviceWaitIdle(d->renderDevice.device);
+        vkDeviceWaitIdle(d->device.device);
         d->createSwapChainAndFramebuffer(width, height, d->toVSync);
         d->isVSync = d->toVSync;
     }

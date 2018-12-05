@@ -145,7 +145,7 @@ namespace Meshoui
 
         GLFWwindow*        window;
         InstanceVk         instance;
-        DeviceVk           renderDevice;
+        DeviceVk           device;
         SwapChainVk        swapChain;
         uint32_t           frameIndex;
         VkPipelineCache    pipelineCache;
