@@ -29,11 +29,11 @@ namespace Meshoui
     inline ImageBufferVk::~ImageBufferVk() {}
     inline ImageBufferVk::ImageBufferVk() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE) {}
 
-    struct RenderDeviceVk final
+    struct DeviceVk final
     {
-        ~RenderDeviceVk();
-        RenderDeviceVk();
-        RenderDeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
+        ~DeviceVk();
+        DeviceVk();
+        DeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
         void selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space);
         uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage);
@@ -48,7 +48,7 @@ namespace Meshoui
         VkAllocationCallbacks* allocator;
         VkDeviceSize bufferMemoryAlignment;
     };
-    inline RenderDeviceVk::~RenderDeviceVk() {}
-    inline RenderDeviceVk::RenderDeviceVk() : physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE), allocator(VK_NULL_HANDLE), bufferMemoryAlignment(256) {}
-    inline RenderDeviceVk::RenderDeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks *a = VK_NULL_HANDLE) : physicalDevice(p), device(d), allocator(a), bufferMemoryAlignment(256) {}
+    inline DeviceVk::~DeviceVk() {}
+    inline DeviceVk::DeviceVk() : physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE), allocator(VK_NULL_HANDLE), bufferMemoryAlignment(256) {}
+    inline DeviceVk::DeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks *a = VK_NULL_HANDLE) : physicalDevice(p), device(d), allocator(a), bufferMemoryAlignment(256) {}
 }

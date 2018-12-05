@@ -1,4 +1,4 @@
-#include "RenderDeviceVk.h"
+#include "DeviceVk.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +17,7 @@ namespace
 
 using namespace Meshoui;
 
-void RenderDeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space)
+void DeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space)
 {
     surfaceFormat.format = VK_FORMAT_UNDEFINED;
 
@@ -54,7 +54,7 @@ void RenderDeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatK
     }
 }
 
-uint32_t RenderDeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
+uint32_t DeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
 {
     VkPhysicalDeviceMemoryProperties prop;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
@@ -64,7 +64,7 @@ uint32_t RenderDeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t t
     return 0xFFFFFFFF;
 }
 
-void RenderDeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage)
+void DeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage)
 {
     VkResult err;
 
@@ -92,7 +92,7 @@ void RenderDeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkB
     deviceBuffer.size = size;
 }
 
-void RenderDeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data)
+void DeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data)
 {
     VkResult err;
     {
@@ -110,13 +110,13 @@ void RenderDeviceVk::uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSi
     vkUnmapMemory(device, deviceBuffer.memory);
 }
 
-void RenderDeviceVk::deleteBuffer(const DeviceBufferVk &deviceBuffer)
+void DeviceVk::deleteBuffer(const DeviceBufferVk &deviceBuffer)
 {
     vkDestroyBuffer(device, deviceBuffer.buffer, allocator);
     vkFreeMemory(device, deviceBuffer.memory, allocator);
 }
 
-void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D & extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask)
+void DeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D & extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask)
 {
     VkResult err;
     {
@@ -167,7 +167,7 @@ void RenderDeviceVk::createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D 
     }
 }
 
-void RenderDeviceVk::deleteBuffer(const ImageBufferVk &deviceBuffer)
+void DeviceVk::deleteBuffer(const ImageBufferVk &deviceBuffer)
 {
     vkDestroyImageView(device, deviceBuffer.view, allocator);
     vkDestroyImage(device, deviceBuffer.image, allocator);

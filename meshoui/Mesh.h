@@ -11,7 +11,6 @@
 namespace Meshoui
 {
     class Program;
-    class RendererPrivate;
     class Mesh
     {
     public:
@@ -19,12 +18,12 @@ namespace Meshoui
         Mesh();
 
         linalg::aliases::float4x4 modelMatrix() const;
-        RendererPrivate * d_ptr() const;
+
+        Program * program;
 
         HashId instanceId;
         HashId definitionId;
         std::string filename;
-        Program * program;
 
         linalg::aliases::float3 scale;
         linalg::aliases::float4 orientation;
@@ -32,17 +31,11 @@ namespace Meshoui
 
         View::Flags viewFlags;
         Render::Flags renderFlags;
-
-        std::vector<linalg::aliases::float4x4> collisions;
-
-    private:
-        friend class RendererPrivate;
-        RendererPrivate * d;
     };
     inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default) {}
-    inline RendererPrivate *Mesh::d_ptr() const { return d; }
 
     // Mesh factory
+    class RendererPrivate;
     class Model
     {
     public:

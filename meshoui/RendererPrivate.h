@@ -5,7 +5,7 @@
 #include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
-#include "RenderDeviceVk.h"
+#include "DeviceVk.h"
 #include "SwapChainVk.h"
 
 #include <hashid.h>
@@ -101,8 +101,6 @@ namespace Meshoui
     inline MeshRegistration::~MeshRegistration() {}
     inline MeshRegistration::MeshRegistration() : indexBufferSize(0), referenceCount(0) {}
 
-    class IGraphics;
-    class IUniform;
     class Program;
     typedef std::vector<std::pair<Program *, ProgramRegistration>> ProgramRegistrations;
     typedef std::vector<MeshRegistration> MeshRegistrations;
@@ -150,7 +148,7 @@ namespace Meshoui
 
         GLFWwindow*        window;
         VkInstance         instance;
-        RenderDeviceVk     renderDevice;
+        DeviceVk           renderDevice;
         SwapChainVk        swapChain;
         uint32_t           frameIndex;
         uint32_t           queueFamily;

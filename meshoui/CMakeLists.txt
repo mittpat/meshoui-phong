@@ -1,7 +1,12 @@
 file(GLOB resources resources/*)
 set_source_files_properties(${resources} PROPERTIES HEADER_FILE_ONLY TRUE)
 
+include_directories(vk)
 add_library(meshouilib
+    vk/DeviceVk.cpp
+    vk/DeviceVk.h
+    vk/SwapChainVk.cpp
+    vk/SwapChainVk.h
     enums.h
     Assets.cpp
     Assets.h
@@ -22,14 +27,10 @@ add_library(meshouilib
     MeshLoaderPrivate.h
     Program.cpp
     Program.h
-    RenderDeviceVk.cpp
-    RenderDeviceVk.h
     Renderer.cpp
     Renderer.h
     RendererPrivate.cpp
     RendererPrivate.h
-    SwapChainVk.cpp
-    SwapChainVk.h
     TextureLoader.cpp
     TextureLoader.h
     Widget.h)

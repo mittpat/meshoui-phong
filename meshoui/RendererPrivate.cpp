@@ -748,7 +748,6 @@ void RendererPrivate::registerGraphics(Model *model)
 
 void RendererPrivate::registerGraphics(Mesh * mesh)
 {
-    mesh->d = this;
     const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
     const_cast<MeshRegistration *>(meshRegistration)->referenceCount += 1;
 }
@@ -811,7 +810,6 @@ void RendererPrivate::unregisterGraphics(Mesh * mesh)
             meshRegistrations.erase(found);
         }
     }
-    mesh->d = nullptr;
 }
 
 void RendererPrivate::unregisterGraphics(Program * program)
