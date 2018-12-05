@@ -7,9 +7,6 @@
 [submodule "3rdparty/imgui"]
 	path = 3rdparty/imgui
 	url = https://github.com/ocornut/imgui.git
-[submodule "3rdparty/iniparser"]
-	path = 3rdparty/iniparser
-	url = https://github.com/mittpat/iniparser.git
 [submodule "3rdparty/linalg"]
 	path = 3rdparty/linalg
 	url = https://github.com/mittpat/linalg.git
