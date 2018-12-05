@@ -58,7 +58,8 @@ Renderer::~Renderer()
 #endif
     d->destroySwapChainAndFramebuffer();
     d->destroyCommandBuffers();
-    d->destroyGraphicsSubsystem();
+    d->renderDevice.destroy();
+    d->instance.destroy();
 
     glfwDestroyWindow(d->window);
     glfwTerminate();
@@ -92,12 +93,13 @@ Renderer::Renderer()
     if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
     if (!overlay) glfwSetInputMode(d->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    uint32_t extensions_count = 0;
-    const char** extensions = glfwGetRequiredInstanceExtensions(&extensions_count);    
-    d->createGraphicsSubsystem(extensions, extensions_count);
+    uint32_t extensionsCount = 0;
+    const char** extensions = glfwGetRequiredInstanceExtensions(&extensionsCount);
+    d->instance.create(extensions, extensionsCount);
+    d->renderDevice.create(d->instance);
 
     // Create Window Surface
-    VkResult err = glfwCreateWindowSurface(d->instance, d->window, d->renderDevice.allocator, &d->surface);
+    VkResult err = glfwCreateWindowSurface(d->instance.instance, d->window, d->renderDevice.allocator, &d->surface);
     check_vk_result(err);
 
     // Create Framebuffers
@@ -111,7 +113,7 @@ Renderer::Renderer()
 
     // Check for WSI support
     VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(d->renderDevice.physicalDevice, d->queueFamily, d->surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(d->renderDevice.physicalDevice, d->renderDevice.queueFamily, d->surface, &res);
     if (res != VK_TRUE)
     {
         fprintf(stderr, "Error no WSI support on physical device 0\n");
@@ -130,13 +132,13 @@ Renderer::Renderer()
     ImGui_ImplGlfw_InitForVulkan(d->window, false);
     {
         ImGui_ImplVulkan_InitInfo init_info = {};
-        init_info.Instance = d->instance;
+        init_info.Instance = d->instance.instance;
         init_info.PhysicalDevice = d->renderDevice.physicalDevice;
         init_info.Device = d->renderDevice.device;
-        init_info.QueueFamily = d->queueFamily;
-        init_info.Queue = d->queue;
+        init_info.QueueFamily = d->renderDevice.queueFamily;
+        init_info.Queue = d->renderDevice.queue;
         init_info.PipelineCache = d->pipelineCache;
-        init_info.DescriptorPool = d->descriptorPool;
+        init_info.DescriptorPool = d->renderDevice.descriptorPool;
         init_info.Allocator = d->renderDevice.allocator;
         init_info.CheckVkResultFn = check_vk_result;
         ImGui_ImplVulkan_Init(&init_info, d->renderPass);
@@ -165,7 +167,7 @@ Renderer::Renderer()
         end_info.pCommandBuffers = &command_buffer;
         err = vkEndCommandBuffer(command_buffer);
         check_vk_result(err);
-        err = vkQueueSubmit(d->queue, 1, &end_info, VK_NULL_HANDLE);
+        err = vkQueueSubmit(d->renderDevice.queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);
 
         err = vkDeviceWaitIdle(d->renderDevice.device);
@@ -298,7 +300,7 @@ void Renderer::update(float s)
     renderMeshes();
     renderWidgets();
 
-    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->queue, d->frameIndex);
+    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->renderDevice.queue, d->frameIndex);
     if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
     {
         int width = 0, height = 0;

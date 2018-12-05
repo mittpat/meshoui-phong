@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "MeshLoader.h"
 #include "DeviceVk.h"
+#include "InstanceVk.h"
 #include "SwapChainVk.h"
 
 #include <hashid.h>
@@ -120,8 +121,6 @@ namespace Meshoui
         ~RendererPrivate();
         RendererPrivate();
 
-        void destroyGraphicsSubsystem();
-        void createGraphicsSubsystem(const char* const* extensions, uint32_t extensions_count);
         void destroyCommandBuffers();
         void createCommandBuffers();
         void destroySwapChainAndFramebuffer();
@@ -147,14 +146,11 @@ namespace Meshoui
         const MeshFile & load(const std::string & filename);
 
         GLFWwindow*        window;
-        VkInstance         instance;
+        InstanceVk         instance;
         DeviceVk           renderDevice;
         SwapChainVk        swapChain;
         uint32_t           frameIndex;
-        uint32_t           queueFamily;
-        VkQueue            queue;
         VkPipelineCache    pipelineCache;
-        VkDescriptorPool   descriptorPool;
         VkSurfaceKHR       surface;
         VkSurfaceFormatKHR surfaceFormat;
 

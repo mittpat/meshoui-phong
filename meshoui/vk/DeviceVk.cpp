@@ -1,4 +1,7 @@
 #include "DeviceVk.h"
+#include "InstanceVk.h"
+
+#include <loose.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -16,6 +19,87 @@ namespace
 }
 
 using namespace Meshoui;
+
+void DeviceVk::create(InstanceVk &instance)
+{
+    VkResult err;
+
+    {
+        uint32_t count;
+        err = vkEnumeratePhysicalDevices(instance.instance, &count, VK_NULL_HANDLE);
+        check_vk_result(err);
+        std::vector<VkPhysicalDevice> gpus(count);
+        err = vkEnumeratePhysicalDevices(instance.instance, &count, gpus.data());
+        check_vk_result(err);
+        physicalDevice = gpus[0];
+    }
+
+    {
+        uint32_t count;
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, VK_NULL_HANDLE);
+        std::vector<VkQueueFamilyProperties> queues(count);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, queues.data());
+        for (uint32_t i = 0; i < count; i++)
+        {
+            if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                queueFamily = i;
+                break;
+            }
+        }
+    }
+
+    {
+        uint32_t device_extensions_count = 1;
+        const char* device_extensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+        const float queue_priority[] = { 1.0f };
+        VkDeviceQueueCreateInfo queue_info[1] = {};
+        queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info[0].queueFamilyIndex = queueFamily;
+        queue_info[0].queueCount = 1;
+        queue_info[0].pQueuePriorities = queue_priority;
+        VkDeviceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        create_info.queueCreateInfoCount = countof(queue_info);
+        create_info.pQueueCreateInfos = queue_info;
+        create_info.enabledExtensionCount = device_extensions_count;
+        create_info.ppEnabledExtensionNames = device_extensions;
+        err = vkCreateDevice(physicalDevice, &create_info, allocator, &device);
+        check_vk_result(err);
+        vkGetDeviceQueue(device, queueFamily, 0, &queue);
+    }
+
+    {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * countof(pool_sizes);
+        pool_info.poolSizeCount = countof(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        err = vkCreateDescriptorPool(device, &pool_info, allocator, &descriptorPool);
+        check_vk_result(err);
+    }
+}
+
+void DeviceVk::destroy()
+{
+    vkDestroyDescriptorPool(device, descriptorPool, allocator);
+    vkDestroyDevice(device, allocator);
+}
 
 void DeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space)
 {
@@ -54,21 +138,11 @@ void DeviceVk::selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &su
     }
 }
 
-uint32_t DeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
-{
-    VkPhysicalDeviceMemoryProperties prop;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
-    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
-            return i;
-    return 0xFFFFFFFF;
-}
-
 void DeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage)
 {
     VkResult err;
 
-    VkDeviceSize vertex_buffer_size_aligned = ((size - 1) / bufferMemoryAlignment + 1) * bufferMemoryAlignment;
+    VkDeviceSize vertex_buffer_size_aligned = ((size - 1) / memoryAlignment + 1) * memoryAlignment;
     VkBufferCreateInfo buffer_info = {};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size = vertex_buffer_size_aligned;
@@ -79,7 +153,7 @@ void DeviceVk::createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferU
 
     VkMemoryRequirements req;
     vkGetBufferMemoryRequirements(device, deviceBuffer.buffer, &req);
-    bufferMemoryAlignment = (bufferMemoryAlignment > req.alignment) ? bufferMemoryAlignment : req.alignment;
+    memoryAlignment = (memoryAlignment > req.alignment) ? memoryAlignment : req.alignment;
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = req.size;
@@ -172,4 +246,14 @@ void DeviceVk::deleteBuffer(const ImageBufferVk &deviceBuffer)
     vkDestroyImageView(device, deviceBuffer.view, allocator);
     vkDestroyImage(device, deviceBuffer.image, allocator);
     vkFreeMemory(device, deviceBuffer.memory, allocator);
+}
+
+uint32_t DeviceVk::memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits)
+{
+    VkPhysicalDeviceMemoryProperties prop;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
+    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
+        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
+            return i;
+    return 0xFFFFFFFF;
 }

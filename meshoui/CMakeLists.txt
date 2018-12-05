@@ -5,6 +5,8 @@ include_directories(vk)
 add_library(meshouilib
     vk/DeviceVk.cpp
     vk/DeviceVk.h
+    vk/InstanceVk.cpp
+    vk/InstanceVk.h
     vk/SwapChainVk.cpp
     vk/SwapChainVk.h
     enums.h

@@ -29,13 +29,15 @@ namespace Meshoui
     inline ImageBufferVk::~ImageBufferVk() {}
     inline ImageBufferVk::ImageBufferVk() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE) {}
 
+    struct InstanceVk;
     struct DeviceVk final
     {
         ~DeviceVk();
         DeviceVk();
-        DeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks* a);
+
+        void create(InstanceVk &instance);
+        void destroy();
         void selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space);
-        uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
         void createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage);
         void uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data);
         void deleteBuffer(const DeviceBufferVk &deviceBuffer);
@@ -43,12 +45,17 @@ namespace Meshoui
         void createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D &extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask);
         void deleteBuffer(const ImageBufferVk &deviceBuffer);
 
-        VkPhysicalDevice physicalDevice;
-        VkDevice device;
+        VkPhysicalDevice       physicalDevice;
+        VkDevice               device;
+        uint32_t               queueFamily;
+        VkQueue                queue;
+        VkDescriptorPool       descriptorPool;
         VkAllocationCallbacks* allocator;
-        VkDeviceSize bufferMemoryAlignment;
+        VkDeviceSize           memoryAlignment;
+
+    private:
+        uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);
     };
     inline DeviceVk::~DeviceVk() {}
-    inline DeviceVk::DeviceVk() : physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE), allocator(VK_NULL_HANDLE), bufferMemoryAlignment(256) {}
-    inline DeviceVk::DeviceVk(VkPhysicalDevice p, VkDevice d, VkAllocationCallbacks *a = VK_NULL_HANDLE) : physicalDevice(p), device(d), allocator(a), bufferMemoryAlignment(256) {}
+    inline DeviceVk::DeviceVk() : physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queueFamily(-1), queue(VK_NULL_HANDLE), descriptorPool(VK_NULL_HANDLE), allocator(VK_NULL_HANDLE), memoryAlignment(256) {}
 }
