@@ -61,10 +61,12 @@ namespace
 
     void texture(/*GLuint * buffer, */const std::string & filename, bool repeat)
     {
+#if 0
         if (TextureLoader::loadDDS(/*buffer, */std::filesystem::path(filename).replace_extension(".dds"), repeat))
             return;
         if (TextureLoader::loadPNG(/*buffer, */std::filesystem::path(filename).replace_extension(".png"), repeat))
             return;
+#endif
     }
 }
 
@@ -235,7 +237,6 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineViewportStateCreateInfo viewport_info = {};
     viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -263,6 +264,14 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     color_attachment[0].alphaBlendOp = VK_BLEND_OP_ADD;
     color_attachment[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
+    VkPipelineDepthStencilStateCreateInfo depth_info = {};
+    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_info.depthTestEnable = (program->features & Feature::DepthTest) ? VK_TRUE : VK_FALSE;
+    depth_info.depthWriteEnable = (program->features & Feature::DepthWrite) ? VK_TRUE : VK_FALSE;
+    depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_info.depthBoundsTestEnable = VK_FALSE;
+    depth_info.stencilTestEnable = VK_FALSE;
+
     VkPipelineColorBlendStateCreateInfo blend_info = {};
     blend_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend_info.attachmentCount = 1;
@@ -273,14 +282,6 @@ bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & p
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_state.dynamicStateCount = countof(dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
-
-    VkPipelineDepthStencilStateCreateInfo depth_info = {};
-    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_info.depthTestEnable = (program->features & Feature::DepthTest) ? VK_TRUE : VK_FALSE;
-    depth_info.depthWriteEnable = (program->features & Feature::DepthWrite) ? VK_TRUE : VK_FALSE;
-    depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
-    depth_info.depthBoundsTestEnable = VK_FALSE;
-    depth_info.stencilTestEnable = VK_FALSE;
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -584,10 +585,10 @@ void RendererPrivate::registerGraphics(const MeshFile &meshFile)
     {
         for (auto value : material.values)
         {
-            if (value.texture)
+            if (!value.texture.empty())
             {
-                TextureRegistration textureRegistration = TextureRegistration(*value.texture);
-                texture(/*&textureRegistration.buffer, */sibling(*value.texture, meshFile.filename), material.repeatTexcoords);
+                TextureRegistration textureRegistration = TextureRegistration(value.texture);
+                texture(/*&textureRegistration.buffer, */sibling(value.texture, meshFile.filename), material.repeatTexcoords);
                 textureRegistrations.push_back(textureRegistration);
             }
         }

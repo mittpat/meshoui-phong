@@ -30,7 +30,7 @@ int main(int, char**)
 
     {
         static const float3 right(-1.,0.,0.);
-
+        
         ScopedSkydome skydome(&renderer);
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
         std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
@@ -41,26 +41,26 @@ int main(int, char**)
             bodyBakers.emplace_back(mesh, bodies.back().body);
         }
         ScopedBody groundBody(&scene, float3(0, -5, 0), identity, float3(100, 1, 100), false);
-
-
+        
+        
         Camera camera;
         camera.position = float3(0.0, 2.0, 5.0);
         renderer.add(&camera);
         camera.enable();
-
+        
         LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
         WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
         renderer.add(&cameraStrafer);
-
-        Mouselook cameraLook(&camera);
+        
+        Mouselook<Camera> cameraLook(&camera);
         renderer.add(&cameraLook);
-
-
+        
+        
         Light light;
         light.position = float3(300.0, 1000.0, -300.0);
         renderer.add(&light);
         light.enable(true);
-
+        
         AngularVelocity<Light> lightAnimator(&light);
         lightAnimator.angularVelocity = rotation_quat(right, 0.02f);
 

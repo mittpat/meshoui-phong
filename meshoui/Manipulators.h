@@ -9,6 +9,9 @@
 #include "IKeyboard.h"
 #include "IMouse.h"
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 namespace Meshoui
 {
     template<typename T>

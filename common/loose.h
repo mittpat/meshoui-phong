@@ -3,6 +3,10 @@
 #include <cstring>
 #include <linalg.h>
 #include <experimental/filesystem>
+#include <sstream>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 inline float degreesToRadians(float angle) { return angle * M_PI / 180.0; }
 inline float radiansToDegrees(float rad) { return rad * 180.0 / M_PI; }
@@ -17,7 +21,7 @@ inline std::string sibling(const std::string & path, const std::string & other)
 {
     std::experimental::filesystem::path parentpath(other);
     std::experimental::filesystem::path parentdirectory = parentpath.parent_path();
-    return parentdirectory / path;
+    return (parentdirectory / path).u8string();
 }
 
 inline std::vector<std::string> split(const std::string & str, char sep, bool keepEmptyParts = false)

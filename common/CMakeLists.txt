@@ -8,4 +8,8 @@ add_library(commonlib
 use_pugixml()
 use_linalg()
 
-target_link_libraries(commonlib stdc++fs pugixml)
+if(MSVC)
+    target_link_libraries(         commonlib pugixml)
+else()
+    target_link_libraries(stdc++fs commonlib pugixml)
+endif()

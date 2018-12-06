@@ -66,15 +66,15 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
         }
         for (const auto & libraryNode : data.nodes)
         {
-            if (libraryNode.geometry)
+            if (libraryNode.geometry.name != HashId())
             {
-                auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [libraryNode](const MeshDefinition & definition){ return definition.definitionId == libraryNode.geometry->url; });
+                auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [libraryNode](const MeshDefinition & definition){ return definition.definitionId == libraryNode.geometry.url; });
 
                 MeshInstance instance;
                 instance.instanceId = libraryNode.id;
                 instance.definitionId = (*definition).definitionId;
-                if (libraryNode.geometry->material != HashId())
-                    instance.materialId = libraryNode.geometry->material;
+                if (libraryNode.geometry.material != HashId())
+                    instance.materialId = libraryNode.geometry.material;
                 else
                     instance.materialId = MeshMaterial::kDefault.name;
                 float3x3 rot = identity;

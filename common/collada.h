@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <linalg.h>
 #include <vector>
 #include "hashid.h"
@@ -36,8 +35,8 @@ namespace DAE
             Value(HashId i, const std::string & t);
 
             HashId sid;
-            std::optional<std::vector<float>> data;
-            std::optional<std::string> texture;
+            std::vector<float> data;
+            std::string texture;
         };
 
         HashId id;
@@ -99,7 +98,7 @@ namespace DAE
         Node();
         HashId id;
         linalg::aliases::float4x4 transform;
-        std::optional<InstanceGeometry> geometry;
+        InstanceGeometry geometry;
     };
     inline Node::Node() : transform(linalg::identity) {}
 
