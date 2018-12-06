@@ -61,9 +61,9 @@ include_directories(../3rdparty/nv_dds)
 include_directories(../common)
 
 if(MSVC)
-    target_link_libraries(         meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e)
+    target_link_libraries(meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e)
 else()
-    target_link_libraries(stdc++fs meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e)
+    target_link_libraries(meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e stdc++fs)
 endif()
 
 ADD_CUSTOM_TARGET(meshouilib_spirv DEPENDS ${spirv})
