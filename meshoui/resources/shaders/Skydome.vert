@@ -1,4 +1,4 @@
-#version 440 core
+#version 450 core
 
 layout(location=0) out VertexData
 {
@@ -21,5 +21,5 @@ layout(push_constant) uniform uPushConstant
 void main()
 {
     outData.vertex = vec3(pc.uniformModel * vec4(vertexPosition, 1.0));
-    gl_Position = pc.uniformProjection * pc.uniformView * pc.uniformModel * vec4(vertexPosition, 1.0);
+    gl_Position = pc.uniformProjection * /*pc.uniformView * */pc.uniformModel * vec4(vertexPosition, 1.0);
 }

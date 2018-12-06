@@ -20,14 +20,12 @@ namespace Meshoui
         HashId name;
         linalg::aliases::float4 orientation;
         linalg::aliases::float3 position;
-        linalg::aliases::float4 localOrientation;
-        linalg::aliases::float3 localPosition;
 
     private:
         friend class RendererPrivate;
         RendererPrivate * d;
     };
-    inline Camera::Camera() : orientation(linalg::identity), position(0.f, 0.f, 0.f), localOrientation(linalg::identity), localPosition(0.f, 0.f, 0.f) {}
+    inline Camera::Camera() : orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
     inline Camera::~Camera() {}
 
     typedef Camera Light;
