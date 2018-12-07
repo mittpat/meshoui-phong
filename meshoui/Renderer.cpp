@@ -68,7 +68,7 @@ Renderer::~Renderer()
 }
 
 Renderer::Renderer()
-    : d(new RendererPrivate)
+    : d(new RendererPrivate(this))
     , defaultProgram(nullptr)
     , time(0.f)
 #ifdef MESHOUI_USE_IMGUI
@@ -375,7 +375,7 @@ void Renderer::renderMeshes()
             d->pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
         d->pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;
 
-        d->draw(currentProgram, mesh);
+        d->draw(mesh);
         d->unbindGraphics(mesh);
     }
 
@@ -414,7 +414,7 @@ void Renderer::renderWidgets()
         {
             ImGui::Text("frametime : %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::Text("time : %.3f s", time);
-            ImGui::Text("meshes : %zu instance(s), %zu definition(s), %zu file(s)", meshes.size(), d->meshRegistrations.size(), d->meshFiles.size());
+            ImGui::Text("meshes : %zu mesh(es), %zu file(s)", meshes.size(), d->meshFiles.size());
             if (ImGui::Button("Clear cache"))
                 d->meshFiles.clear();
             if (ImGui::CollapsingHeader("instances"))
@@ -422,20 +422,6 @@ void Renderer::renderWidgets()
                 for (const auto * mesh : meshes)
                 {
                     ImGui::Text("%s", mesh->instanceId.str.c_str());
-                }
-            }
-            if (ImGui::CollapsingHeader("definitions"))
-            {
-                for (const auto & registration : d->meshRegistrations)
-                {
-                    ImGui::Text("%s", registration.definitionId.str.c_str());
-                }
-            }
-            if (ImGui::CollapsingHeader("textures"))
-            {
-                for (const auto & registration : d->textureRegistrations)
-                {
-                    ImGui::Text("%s", registration.name.str.c_str());
                 }
             }
             if (ImGui::CollapsingHeader("files"))

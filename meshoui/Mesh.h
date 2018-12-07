@@ -11,6 +11,7 @@
 namespace Meshoui
 {
     class Program;
+    class MeshPrivate;
     class Mesh
     {
     public:
@@ -31,8 +32,12 @@ namespace Meshoui
 
         View::Flags viewFlags;
         Render::Flags renderFlags;
+
+    private:
+        friend class RendererPrivate;
+        MeshPrivate * d;
     };
-    inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default) {}
+    inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default), d(nullptr) {}
 
     // Mesh factory
     class RendererPrivate;
@@ -46,7 +51,6 @@ namespace Meshoui
         template<typename T>
         std::vector<T *> meshFactory(linalg::aliases::float3 position = linalg::zero) const;
         size_t meshCount() const;
-        RendererPrivate * d_ptr() const;
 
         std::string filename;
 
@@ -68,5 +72,4 @@ namespace Meshoui
         for (size_t i = 0; i < count; ++i) meshes[i]->position += position;
         return meshes;
     }
-    inline RendererPrivate *Model::d_ptr() const { return d; }
 }

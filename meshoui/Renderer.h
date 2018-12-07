@@ -62,6 +62,7 @@ namespace Meshoui
         std::vector<Program *> programs;
         std::vector<Widget *> widgets;
 
+        friend class RendererPrivate;
         friend struct GlfwCallbacks;
         WidgetCallbacks * widgetCallbacks;
     };

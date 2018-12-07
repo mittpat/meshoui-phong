@@ -7,6 +7,7 @@
 
 namespace Meshoui
 {
+    class ProgramPrivate;
     class Program
     {
     public:
@@ -19,8 +20,12 @@ namespace Meshoui
         std::vector<char> vertexShaderSource;
         std::vector<char> fragmentShaderSource;
         Feature::Flags features;
+
+    private:
+        friend class RendererPrivate;
+        ProgramPrivate * d;
     };
     inline Program::~Program() {}
-    inline Program::Program() : features(Feature::Default) {}
-    inline Program::Program(const std::string & filename) : features(Feature::Default) { load(filename); }
+    inline Program::Program() : features(Feature::Default), d(nullptr) {}
+    inline Program::Program(const std::string & filename) : features(Feature::Default), d(nullptr) { load(filename); }
 }

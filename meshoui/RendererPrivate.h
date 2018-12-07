@@ -57,11 +57,11 @@ namespace Meshoui
         inline PhongMaterial::PhongMaterial() : ambient(linalg::zero), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
     }
 
-    class ProgramRegistration final
+    class ProgramPrivate final
     {
     public:
-        ~ProgramRegistration();
-        ProgramRegistration();
+        ~ProgramPrivate();
+        ProgramPrivate();
 
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
@@ -70,28 +70,28 @@ namespace Meshoui
         DeviceBufferVk uniformBuffer[FrameCount];
         DeviceBufferVk materialBuffer[FrameCount];
     };
-    inline ProgramRegistration::~ProgramRegistration() {}
-    inline ProgramRegistration::ProgramRegistration() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
+    inline ProgramPrivate::~ProgramPrivate() {}
+    inline ProgramPrivate::ProgramPrivate() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
 
-    class TextureRegistration final
+    class TexturePrivate final
     {
     public:
-        ~TextureRegistration();
-        TextureRegistration();
-        TextureRegistration(HashId n);
+        ~TexturePrivate();
+        TexturePrivate();
+        TexturePrivate(HashId n);
 
         HashId name;
         //
     };
-    inline TextureRegistration::~TextureRegistration() {}
-    inline TextureRegistration::TextureRegistration() {}
-    inline TextureRegistration::TextureRegistration(HashId n) : name(n) {}
+    inline TexturePrivate::~TexturePrivate() {}
+    inline TexturePrivate::TexturePrivate() {}
+    inline TexturePrivate::TexturePrivate(HashId n) : name(n) {}
 
-    class MeshRegistration final
+    class MeshPrivate final
     {
     public:
-        ~MeshRegistration();
-        MeshRegistration();
+        ~MeshPrivate();
+        MeshPrivate();
 
         HashId definitionId;
         DeviceBufferVk vertexBuffer;
@@ -99,27 +99,16 @@ namespace Meshoui
         size_t indexBufferSize;
         size_t referenceCount;
     };
-    inline MeshRegistration::~MeshRegistration() {}
-    inline MeshRegistration::MeshRegistration() : indexBufferSize(0), referenceCount(0) {}
+    inline MeshPrivate::~MeshPrivate() {}
+    inline MeshPrivate::MeshPrivate() : indexBufferSize(0), referenceCount(0) {}
 
-    class Program;
-    typedef std::vector<std::pair<Program *, ProgramRegistration>> ProgramRegistrations;
-    typedef std::vector<MeshRegistration> MeshRegistrations;
-    typedef std::vector<TextureRegistration> TextureRegistrations;
+    class Renderer;
     class RendererPrivate final
     {
     public:
-        void unregisterProgram(ProgramRegistration & programRegistration);
-        bool registerProgram(Program * program, ProgramRegistration & programRegistration);
-        void bindProgram(const ProgramRegistration & programRegistration);
-        void unbindProgram(const ProgramRegistration &);
-        void unregisterMesh(const MeshRegistration & meshRegistration);
-        void registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration);
-        void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration &);
-        void unbindMesh(const MeshRegistration &, const ProgramRegistration &);
-
         ~RendererPrivate();
-        RendererPrivate();
+        RendererPrivate() = delete;
+        RendererPrivate(Renderer * r);
 
         void destroySwapChainAndFramebuffer();
         void createSwapChainAndFramebuffer(int w, int h, bool vsync);
@@ -139,10 +128,11 @@ namespace Meshoui
         void unbindGraphics(Mesh * mesh);
         void unbindGraphics(Program * program);
         void unbindGraphics(Camera * cam);
-        void draw(Program * program, Mesh * mesh);
+        void draw(Mesh * mesh);
         void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
         const MeshFile & load(const std::string & filename);
 
+        Renderer*          renderer;
         GLFWwindow*        window;
         InstanceVk         instance;
         DeviceVk           device;
@@ -158,9 +148,6 @@ namespace Meshoui
         VkRenderPass   renderPass;
         ImageBufferVk  depthBuffer;
 
-        ProgramRegistrations programRegistrations;
-        MeshRegistrations    meshRegistrations;
-        TextureRegistrations textureRegistrations;
         MeshFiles meshFiles;
 
         bool toFullscreen;
