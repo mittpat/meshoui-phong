@@ -56,8 +56,9 @@ Renderer::~Renderer()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 #endif
-    d->destroySwapChainAndFramebuffer();
+    d->swapChain.destroyImageBuffers(d->device, d->depthBuffer);
     d->swapChain.destroyCommandBuffers(d->device);
+    vkDestroySurfaceKHR(d->instance.instance, d->surface, d->instance.allocator);
     d->device.destroy();
     d->instance.destroy();
 
@@ -122,8 +123,8 @@ Renderer::Renderer()
     d->device.selectSurfaceFormat(d->surface, d->surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    d->swapChain.createCommandBuffers(d->device, FrameCount);
-    d->createSwapChainAndFramebuffer(width, height, d->toVSync);
+    d->swapChain.createCommandBuffers(d->device);
+    d->swapChain.createImageBuffers(d->device, d->depthBuffer, d->surface, d->surfaceFormat, width, height, d->toVSync);
     d->toVSync = d->isVSync;
 #ifdef MESHOUI_USE_IMGUI
     // imgui
@@ -141,7 +142,7 @@ Renderer::Renderer()
         init_info.DescriptorPool = d->device.descriptorPool;
         init_info.Allocator = d->device.allocator;
         init_info.CheckVkResultFn = check_vk_result;
-        ImGui_ImplVulkan_Init(&init_info, d->renderPass);
+        ImGui_ImplVulkan_Init(&init_info, d->swapChain.renderPass);
     }
 
     ImGui::StyleColorsDark();
@@ -295,12 +296,12 @@ void Renderer::update(float s)
 {
     glfwPollEvents();
 
-    VkSemaphore &imageAcquiredSemaphore  = d->swapChain.beginRender(d->device, d->swapChainKHR, d->renderPass, d->frameIndex, { d->width, d->height });
+    VkSemaphore &imageAcquiredSemaphore  = d->swapChain.beginRender(d->device, d->frameIndex);
 
     renderMeshes();
     renderWidgets();
 
-    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->swapChainKHR, d->device.queue, d->frameIndex);
+    VkResult err = d->swapChain.endRender(imageAcquiredSemaphore, d->device.queue, d->frameIndex);
     if (err == VK_ERROR_OUT_OF_DATE_KHR || (d->toVSync != d->isVSync))
     {
         int width = 0, height = 0;
@@ -312,7 +313,7 @@ void Renderer::update(float s)
         }
 
         vkDeviceWaitIdle(d->device.device);
-        d->createSwapChainAndFramebuffer(width, height, d->toVSync);
+        d->swapChain.createImageBuffers(d->device, d->depthBuffer, d->surface, d->surfaceFormat, width, height, d->toVSync);
         d->isVSync = d->toVSync;
     }
     else
@@ -346,10 +347,10 @@ void Renderer::renderMeshes()
 {
     auto & frame = d->swapChain.frames[d->frameIndex];
 
-    VkViewport viewport{0, 0, float(d->width), float(d->height), 0.f, 1.f};
+    VkViewport viewport{0, 0, float(d->swapChain.extent.width), float(d->swapChain.extent.height), 0.f, 1.f};
     vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
 
-    VkRect2D scissor{0, 0, d->width, d->height};
+    VkRect2D scissor{{0, 0}, {d->swapChain.extent.width, d->swapChain.extent.height}};
     vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
 
     d->uniforms.position = d->camera->position;

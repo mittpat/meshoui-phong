@@ -50,10 +50,6 @@ RendererPrivate::RendererPrivate(Renderer * r)
     , pipelineCache(VK_NULL_HANDLE)
     , surface(VK_NULL_HANDLE)
     , surfaceFormat()
-    , width(0)
-    , height(0)
-    , swapChainKHR(VK_NULL_HANDLE)
-    , renderPass(VK_NULL_HANDLE)
     , depthBuffer()
     , toFullscreen(false)
     , isFullscreen(false)
@@ -63,173 +59,6 @@ RendererPrivate::RendererPrivate(Renderer * r)
     , camera(nullptr)
 {
     memset(&surfaceFormat, 0, sizeof(surfaceFormat));
-}
-
-void RendererPrivate::destroySwapChainAndFramebuffer()
-{
-    vkQueueWaitIdle(device.queue);
-    device.deleteBuffer(depthBuffer);
-    for (auto & image : swapChain.images)
-    {
-        vkDestroyImageView(device.device, image.view, device.allocator);
-        vkDestroyFramebuffer(device.device, image.front, device.allocator);
-    }
-    vkDestroyRenderPass(device.device, renderPass, device.allocator);
-    vkDestroySwapchainKHR(device.device, swapChainKHR, device.allocator);
-    vkDestroySurfaceKHR(instance.instance, surface, device.allocator);
-}
-
-void RendererPrivate::createSwapChainAndFramebuffer(int w, int h, bool vsync)
-{
-    VkResult err;
-    VkSwapchainKHR old_swapchain = swapChainKHR;
-    err = vkDeviceWaitIdle(device.device);
-    check_vk_result(err);
-
-    for (auto & image : swapChain.images)
-    {
-        vkDestroyImageView(device.device, image.view, device.allocator);
-        vkDestroyFramebuffer(device.device, image.front, device.allocator);
-    }
-    swapChain.images.resize(0);
-    if (renderPass)
-    {
-        vkDestroyRenderPass(device.device, renderPass, device.allocator);
-    }
-
-    {
-        VkSwapchainCreateInfoKHR info = {};
-        info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        info.surface = surface;
-        info.minImageCount = FrameCount;
-        info.imageFormat = surfaceFormat.format;
-        info.imageColorSpace = surfaceFormat.colorSpace;
-        info.imageArrayLayers = 1;
-        info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;           // Assume that graphics family == present family
-        info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-        info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        info.presentMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-        info.clipped = VK_TRUE;
-        info.oldSwapchain = old_swapchain;
-        VkSurfaceCapabilitiesKHR cap;
-        err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physicalDevice, surface, &cap);
-        check_vk_result(err);
-        if (info.minImageCount < cap.minImageCount)
-            info.minImageCount = cap.minImageCount;
-        else if (cap.maxImageCount != 0 && info.minImageCount > cap.maxImageCount)
-            info.minImageCount = cap.maxImageCount;
-
-        if (cap.currentExtent.width == 0xffffffff)
-        {
-            info.imageExtent.width = width = w;
-            info.imageExtent.height = height = h;
-        }
-        else
-        {
-            info.imageExtent.width = width = cap.currentExtent.width;
-            info.imageExtent.height = height = cap.currentExtent.height;
-        }
-        err = vkCreateSwapchainKHR(device.device, &info, device.allocator, &swapChainKHR);
-        check_vk_result(err);
-        uint32_t backBufferCount = 0;
-        err = vkGetSwapchainImagesKHR(device.device, swapChainKHR, &backBufferCount, NULL);
-        check_vk_result(err);
-        std::vector<VkImage> backBuffer(backBufferCount);
-        err = vkGetSwapchainImagesKHR(device.device, swapChainKHR, &backBufferCount, backBuffer.data());
-        check_vk_result(err);
-
-        swapChain.images.resize(backBufferCount);
-        for (size_t i = 0; i < swapChain.images.size(); ++i)
-        {
-            swapChain.images[i].back = backBuffer[i];
-        }
-    }
-    if (old_swapchain)
-    {
-        vkDestroySwapchainKHR(device.device, old_swapchain, device.allocator);
-    }
-
-    {
-        VkAttachmentDescription attachment[2] = {};
-        attachment[0].format = surfaceFormat.format;
-        attachment[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachment[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachment[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachment[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        attachment[1].format = VK_FORMAT_D16_UNORM;
-        attachment[1].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachment[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachment[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachment[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference color_attachment = {};
-        color_attachment.attachment = 0;
-        color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;        
-        VkAttachmentReference depth_attachment = {};
-        depth_attachment.attachment = 1;
-        depth_attachment.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass = {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &color_attachment;
-        subpass.pDepthStencilAttachment = &depth_attachment;
-
-        VkRenderPassCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        info.attachmentCount = 2;
-        info.pAttachments = attachment;
-        info.subpassCount = 1;
-        info.pSubpasses = &subpass;
-        err = vkCreateRenderPass(device.device, &info, device.allocator, &renderPass);
-        check_vk_result(err);
-    }
-    {
-        VkImageViewCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        info.format = surfaceFormat.format;
-        info.components.r = VK_COMPONENT_SWIZZLE_R;
-        info.components.g = VK_COMPONENT_SWIZZLE_G;
-        info.components.b = VK_COMPONENT_SWIZZLE_B;
-        info.components.a = VK_COMPONENT_SWIZZLE_A;
-        VkImageSubresourceRange image_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        info.subresourceRange = image_range;
-        for (size_t i = 0; i < swapChain.images.size(); ++i)
-        {
-            info.image = swapChain.images[i].back;
-            err = vkCreateImageView(device.device, &info, device.allocator, &swapChain.images[i].view);
-            check_vk_result(err);
-        }
-    }
-
-    // depth buffer
-    device.createBuffer(depthBuffer, {width, height, 1}, VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-    {
-        VkImageView attachment[2] = {0, depthBuffer.view};
-        VkFramebufferCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        info.renderPass = renderPass;
-        info.attachmentCount = 2;
-        info.pAttachments = attachment;
-        info.width = width;
-        info.height = height;
-        info.layers = 1;
-        for (size_t i = 0; i < swapChain.images.size(); ++i)
-        {
-            attachment[0] = swapChain.images[i].view;
-            err = vkCreateFramebuffer(device.device, &info, device.allocator, &swapChain.images[i].front);
-            check_vk_result(err);
-        }
-    }
 }
 
 void RendererPrivate::registerGraphics(Model *model)
@@ -488,7 +317,7 @@ void RendererPrivate::registerGraphics(Program * program)
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
     info.layout = programPrivate->pipelineLayout;
-    info.renderPass = renderPass;
+    info.renderPass = swapChain.renderPass;
     err = vkCreateGraphicsPipelines(device.device, pipelineCache, 1, &info, device.allocator, &programPrivate->pipeline);
     check_vk_result(err);
 

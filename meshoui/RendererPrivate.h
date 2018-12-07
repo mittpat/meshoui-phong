@@ -13,8 +13,6 @@
 #include <string>
 #include <vector>
 
-#define FrameCount 2
-
 struct GLFWwindow;
 namespace Meshoui
 {
@@ -110,9 +108,6 @@ namespace Meshoui
         RendererPrivate() = delete;
         RendererPrivate(Renderer * r);
 
-        void destroySwapChainAndFramebuffer();
-        void createSwapChainAndFramebuffer(int w, int h, bool vsync);
-
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
         void registerGraphics(Program * program);
@@ -142,10 +137,6 @@ namespace Meshoui
         VkSurfaceKHR       surface;
         VkSurfaceFormatKHR surfaceFormat;
 
-        uint32_t       width;
-        uint32_t       height;
-        VkSwapchainKHR swapChainKHR;
-        VkRenderPass   renderPass;
         ImageBufferVk  depthBuffer;
 
         MeshFiles meshFiles;
