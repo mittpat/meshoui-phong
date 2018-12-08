@@ -15,15 +15,7 @@ layout(std140, binding = 0) uniform Block
     uniform vec3 viewPosition;
     uniform vec3 lightPosition;
 } uniformData;
-/*
-layout(std140, binding = 1) uniform Block2
-{
-    uniform vec3 ambient;
-    uniform vec3 diffuse;
-    uniform vec3 specular;
-    uniform vec3 emissive;
-} materialData;
-*/
+
 layout(set=1, binding=0) uniform sampler2D uniformTextureDiffuse;
 layout(set=1, binding=1) uniform sampler2D uniformTextureNormal;
 layout(set=1, binding=2) uniform sampler2D uniformTextureSpecular;

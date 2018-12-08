@@ -40,19 +40,6 @@ namespace Meshoui
         };
         inline Uniform::~Uniform() {}
         inline Uniform::Uniform() : position(linalg::zero), light(linalg::zero) {}
-
-        struct PhongMaterial
-        {
-            ~PhongMaterial();
-            PhongMaterial();
-
-            alignas(16) linalg::aliases::float3 ambient;
-            alignas(16) linalg::aliases::float3 diffuse;
-            alignas(16) linalg::aliases::float3 specular;
-            alignas(16) linalg::aliases::float3 emissive;
-        };
-        inline PhongMaterial::~PhongMaterial() {}
-        inline PhongMaterial::PhongMaterial() : ambient(linalg::zero), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
     }
 
 #define MESHOUI_PROGRAM_DESC_LAYOUT 0
@@ -68,7 +55,6 @@ namespace Meshoui
         VkDescriptorSetLayout descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT+1];
         VkDescriptorSet descriptorSet[FrameCount];
         DeviceBufferVk uniformBuffer[FrameCount];
-        DeviceBufferVk materialBuffer[FrameCount];
     };
     inline ProgramPrivate::~ProgramPrivate() {}
     inline ProgramPrivate::ProgramPrivate() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE) {}

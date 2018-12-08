@@ -395,17 +395,13 @@ void RendererPrivate::registerGraphics(Program * program)
     for (size_t i = 0; i < FrameCount; ++i)
     {
         device.createBuffer(programPrivate->uniformBuffer[i], sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-        device.createBuffer(programPrivate->materialBuffer[i], sizeof(Blocks::PhongMaterial), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
-        VkDescriptorBufferInfo bufferInfo[2] = {};
+        VkDescriptorBufferInfo bufferInfo[1] = {};
         bufferInfo[0].buffer = programPrivate->uniformBuffer[i].buffer;
         bufferInfo[0].offset = 0;
         bufferInfo[0].range = sizeof(Blocks::Uniform);
-        bufferInfo[1].buffer = programPrivate->materialBuffer[i].buffer;
-        bufferInfo[1].offset = 0;
-        bufferInfo[1].range = sizeof(Blocks::PhongMaterial);
 
-        VkWriteDescriptorSet descriptorWrite[2] = {};
+        VkWriteDescriptorSet descriptorWrite[1] = {};
         descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrite[0].dstSet = programPrivate->descriptorSet[i];
         descriptorWrite[0].dstBinding = 0;
@@ -413,15 +409,8 @@ void RendererPrivate::registerGraphics(Program * program)
         descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrite[0].descriptorCount = 1;
         descriptorWrite[0].pBufferInfo = &bufferInfo[0];
-        descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite[1].dstSet = programPrivate->descriptorSet[i];
-        descriptorWrite[1].dstBinding = 1;
-        descriptorWrite[1].dstArrayElement = 0;
-        descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrite[1].descriptorCount = 1;
-        descriptorWrite[1].pBufferInfo = &bufferInfo[1];
 
-        vkUpdateDescriptorSets(device.device, 2, descriptorWrite, 0, nullptr);
+        vkUpdateDescriptorSets(device.device, 1, descriptorWrite, 0, nullptr);
     }
 
     {
@@ -611,10 +600,7 @@ void RendererPrivate::unregisterGraphics(Program * program)
 
     vkQueueWaitIdle(device.queue);
     for (size_t i = 0; i < FrameCount; ++i)
-    {
         device.deleteBuffer(programPrivate->uniformBuffer[i]);
-        device.deleteBuffer(programPrivate->materialBuffer[i]);
-    }
 
     vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT], device.allocator);
     vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT], device.allocator);
@@ -624,7 +610,6 @@ void RendererPrivate::unregisterGraphics(Program * program)
     programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
     programPrivate->pipelineLayout = VK_NULL_HANDLE;
     programPrivate->pipeline = VK_NULL_HANDLE;
-    memset(&programPrivate->materialBuffer, 0, sizeof(programPrivate->materialBuffer));
     memset(&programPrivate->uniformBuffer, 0, sizeof(programPrivate->uniformBuffer));
     memset(&programPrivate->descriptorSet, 0, sizeof(programPrivate->descriptorSet));
 
@@ -666,9 +651,7 @@ void RendererPrivate::bindGraphics(Program * program)
     vkCmdBindPipeline(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programPrivate->pipeline);
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programPrivate->pipelineLayout, 0, 1, &programPrivate->descriptorSet[frameIndex], 0, nullptr);
 
-    Blocks::PhongMaterial def;
     device.uploadBuffer(programPrivate->uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
-    device.uploadBuffer(programPrivate->materialBuffer[frameIndex], sizeof(Blocks::PhongMaterial), &def);
 }
 
 void RendererPrivate::bindGraphics(Camera *cam, bool asLight)
