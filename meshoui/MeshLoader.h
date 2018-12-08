@@ -25,7 +25,7 @@ namespace Meshoui
         std::string textureSpecular;
         std::string textureEmissive;
     };
-    inline MeshMaterial::MeshMaterial() : ambient(0.0f, 0.0f, 0.0f), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
+    inline MeshMaterial::MeshMaterial() : ambient(0.0f, 0.0f, 0.0f), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(0.0f, 0.0f, 0.0f) {}
 
     struct Attribute final
     {

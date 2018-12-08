@@ -32,6 +32,9 @@ int main(int, char**)
         static const float3 right(-1.,0.,0.);
         
         ScopedSkydome skydome(&renderer);
+        ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
+        ScopedAsset island(&renderer, "meshoui/resources/models/island.dae");
+        for (const auto & mesh : island.meshes) mesh->position.y = -4.0f;
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
         std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
         std::vector<BodyAttitude<Mesh>> bodyBakers; bodyBakers.reserve(crates.meshes.size());

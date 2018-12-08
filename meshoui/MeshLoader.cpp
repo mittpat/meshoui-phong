@@ -33,7 +33,6 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
     {
         meshFile.filename = data.filename;
         meshFile.materials.push_back(MeshMaterial());
-        meshFile.materials[0].textureDiffuse = meshFile.materials[0].textureSpecular = meshFile.materials[0].textureEmissive = meshFile.materials[0].textureNormal = "brick.dds";
         for (const auto & libraryMaterial : data.materials)
         {
             auto effect = std::find_if(data.effects.begin(), data.effects.end(), [libraryMaterial](const DAE::Effect & effect){ return effect.id == libraryMaterial.effect.url; });
@@ -41,7 +40,6 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
             {
                 MeshMaterial material;
                 material.name = libraryMaterial.id;
-                material.textureDiffuse = material.textureSpecular = material.textureEmissive = material.textureNormal = "brick.dds";
                 for (const auto & value : (*effect).values)
                 {
                     DAE::Effect::Value v = value;

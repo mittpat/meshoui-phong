@@ -58,12 +58,15 @@ void DeviceVk::create(InstanceVk &instance)
         queue_info[0].queueFamilyIndex = queueFamily;
         queue_info[0].queueCount = 1;
         queue_info[0].pQueuePriorities = queue_priority;
+        VkPhysicalDeviceFeatures deviceFeatures = {};
+        deviceFeatures.textureCompressionBC = VK_TRUE;
         VkDeviceCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         create_info.queueCreateInfoCount = countof(queue_info);
         create_info.pQueueCreateInfos = queue_info;
         create_info.enabledExtensionCount = device_extensions_count;
         create_info.ppEnabledExtensionNames = device_extensions;
+        create_info.pEnabledFeatures = &deviceFeatures;
         err = vkCreateDevice(physicalDevice, &create_info, allocator, &device);
         check_vk_result(err);
         vkGetDeviceQueue(device, queueFamily, 0, &queue);

@@ -31,14 +31,15 @@ namespace
             abort();
     }
 
-    void texture(ImageBufferVk & imageBuffer, const std::string & filename, DeviceVk & device, SwapChainVk & swapChain, uint32_t frameIndex)
+    void texture(ImageBufferVk & imageBuffer, const std::string & filename, float4 fallbackColor, DeviceVk & device, SwapChainVk & swapChain, uint32_t frameIndex)
     {
+        VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
         unsigned width = 0, height = 0;
         std::vector<uint8_t> data;
 
         auto ddsfilename = std::filesystem::path(filename).replace_extension(".dds");
         auto pngfilename = std::filesystem::path(filename).replace_extension(".png");
-        /*if (std::filesystem::exists(ddsfilename))
+        if (std::filesystem::exists(ddsfilename))
         {
             nv_dds::CDDSImage image;
             image.load(ddsfilename, false);
@@ -46,8 +47,21 @@ namespace
             height = image.get_height();
             data.resize(image.get_size());
             std::memcpy(data.data(), image, image.get_size());
+
+            #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT   0x83F0
+            #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
+            #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT  0x83F2
+            #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
+            switch (image.get_format())
+            {
+            case 0x83F0: format = VK_FORMAT_BC1_RGB_UNORM_BLOCK; break;
+            case 0x83F1: format = VK_FORMAT_BC1_RGBA_UNORM_BLOCK; break;
+            case 0x83F2: format = VK_FORMAT_BC2_UNORM_BLOCK; break;
+            case 0x83F3: format = VK_FORMAT_BC3_UNORM_BLOCK; break;
+            default: abort();
+            }
         }
-        else */if (std::filesystem::exists(pngfilename))
+        else if (std::filesystem::exists(pngfilename))
         {
             unsigned error = lodepng::decode(data, width, height, pngfilename);
             if (error != 0)
@@ -58,7 +72,13 @@ namespace
         }
         else
         {
-            abort();
+            // use fallback
+            width = height = 1;
+            data.resize(4);
+            data[0] = fallbackColor.x * 0xFF;
+            data[1] = fallbackColor.y * 0xFF;
+            data[2] = fallbackColor.z * 0xFF;
+            data[3] = fallbackColor.w * 0xFF;
         }
 
         // Use any command queue
@@ -75,7 +95,7 @@ namespace
         check_vk_result(err);
 
         // create buffer
-        device.createBuffer(imageBuffer, {width, height, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        device.createBuffer(imageBuffer, {width, height, 1}, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
         // upload
         DeviceBufferVk upload;
@@ -96,6 +116,8 @@ namespace
         // wait
         err = vkDeviceWaitIdle(device.device);
         check_vk_result(err);
+
+        device.deleteBuffer(upload);
     }
 }
 
@@ -192,14 +214,10 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
 
             MaterialPrivate * materialPrivate = mesh->m = new MaterialPrivate();
             materialPrivate->name = material->name;
-            if (!material->textureDiffuse.empty())
-                texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), device, swapChain, frameIndex);
-            if (!material->textureNormal.empty())
-                texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), device, swapChain, frameIndex);
-            if (!material->textureEmissive.empty())
-                texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), device, swapChain, frameIndex);
-            if (!material->textureSpecular.empty())
-                texture(materialPrivate->specularImage, sibling(material->textureSpecular, meshFile.filename), device, swapChain, frameIndex);
+            texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), float4(0.5f, 0.5f, 1.0f, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), float4(material->emissive, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->specularImage, sibling(material->textureSpecular, meshFile.filename), float4(material->specular, 1.0f), device, swapChain, frameIndex);
 
             VkResult err;
             {
@@ -227,7 +245,7 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             {
                 VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
                 for (size_t i = 0; i < FrameCount; ++i)
-                    descriptorSetLayout[i] = mesh->program->d->descriptorSetLayout[1];
+                    descriptorSetLayout[i] = mesh->program->d->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT];
                 VkDescriptorSetAllocateInfo alloc_info = {};
                 alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
                 alloc_info.descriptorPool = device.descriptorPool;
@@ -255,21 +273,25 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
                 VkWriteDescriptorSet write_desc[4] = {};
                 write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 write_desc[0].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[0].dstBinding = 0;
                 write_desc[0].descriptorCount = 1;
                 write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[0].pImageInfo = &desc_image[0];
                 write_desc[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 write_desc[1].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[1].dstBinding = 1;
                 write_desc[1].descriptorCount = 1;
                 write_desc[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[1].pImageInfo = &desc_image[1];
                 write_desc[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 write_desc[2].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[2].dstBinding = 2;
                 write_desc[2].descriptorCount = 1;
                 write_desc[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[2].pImageInfo = &desc_image[2];
                 write_desc[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 write_desc[3].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[3].dstBinding = 3;
                 write_desc[3].descriptorCount = 1;
                 write_desc[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[3].pImageInfo = &desc_image[3];
@@ -306,29 +328,7 @@ void RendererPrivate::registerGraphics(Program * program)
         err = vkCreateShaderModule(device.device, &frag_info, device.allocator, &frag_module);
         check_vk_result(err);
     }
-/*
-    {
-        VkSamplerCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        info.magFilter = VK_FILTER_LINEAR;
-        info.minFilter = VK_FILTER_LINEAR;
-        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.minLod = -1000;
-        info.maxLod = 1000;
-        info.maxAnisotropy = 1.0f;
-        err = vkCreateSampler(device.device, &info, device.allocator, &programPrivate->diffuseSampler);
-        check_vk_result(err);
-        err = vkCreateSampler(device.device, &info, device.allocator, &programPrivate->normalSampler);
-        check_vk_result(err);
-        err = vkCreateSampler(device.device, &info, device.allocator, &programPrivate->specularSampler);
-        check_vk_result(err);
-        err = vkCreateSampler(device.device, &info, device.allocator, &programPrivate->emissiveSampler);
-        check_vk_result(err);
-    }
-*/
+
     {
         VkDescriptorSetLayoutBinding binding[2];
         binding[0].binding = 0;
@@ -344,7 +344,7 @@ void RendererPrivate::registerGraphics(Program * program)
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = countof(binding);
         info.pBindings = binding;
-        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[0]);
+        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT]);
         check_vk_result(err);
     }
 
@@ -375,14 +375,14 @@ void RendererPrivate::registerGraphics(Program * program)
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = countof(binding);
         info.pBindings = binding;
-        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[1]);
+        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT]);
         check_vk_result(err);
     }
 
     {
         VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
         for (size_t i = 0; i < FrameCount; ++i)
-            descriptorSetLayout[i] = programPrivate->descriptorSetLayout[0];
+            descriptorSetLayout[i] = programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT];
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         alloc_info.descriptorPool = device.descriptorPool;
@@ -430,7 +430,7 @@ void RendererPrivate::registerGraphics(Program * program)
         push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant)});
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.setLayoutCount = 2;
+        layout_info.setLayoutCount = countof(programPrivate->descriptorSetLayout);
         layout_info.pSetLayouts = programPrivate->descriptorSetLayout;
         layout_info.pushConstantRangeCount = push_constants.size();
         layout_info.pPushConstantRanges = push_constants.data();
@@ -590,6 +590,11 @@ void RendererPrivate::unregisterGraphics(Mesh * mesh)
             device.deleteBuffer(materialPrivate->normalImage);
             device.deleteBuffer(materialPrivate->specularImage);
             device.deleteBuffer(materialPrivate->emissiveImage);
+
+            vkDestroySampler(device.device, materialPrivate->diffuseSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->normalSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->specularSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->emissiveSampler, device.allocator);
         }
 
         delete mesh->d;
@@ -611,12 +616,12 @@ void RendererPrivate::unregisterGraphics(Program * program)
         device.deleteBuffer(programPrivate->materialBuffer[i]);
     }
 
-    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[0], device.allocator);
-    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[1], device.allocator);
+    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT], device.allocator);
+    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT], device.allocator);
     vkDestroyPipelineLayout(device.device, programPrivate->pipelineLayout, device.allocator);
     vkDestroyPipeline(device.device, programPrivate->pipeline, device.allocator);
-    programPrivate->descriptorSetLayout[0] = VK_NULL_HANDLE;
-    programPrivate->descriptorSetLayout[1] = VK_NULL_HANDLE;
+    programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT] = VK_NULL_HANDLE;
+    programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
     programPrivate->pipelineLayout = VK_NULL_HANDLE;
     programPrivate->pipeline = VK_NULL_HANDLE;
     memset(&programPrivate->materialBuffer, 0, sizeof(programPrivate->materialBuffer));

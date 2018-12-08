@@ -55,6 +55,8 @@ namespace Meshoui
         inline PhongMaterial::PhongMaterial() : ambient(linalg::zero), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
     }
 
+#define MESHOUI_PROGRAM_DESC_LAYOUT 0
+#define MESHOUI_MATERIAL_DESC_LAYOUT 1
     class ProgramPrivate final
     {
     public:
@@ -63,7 +65,7 @@ namespace Meshoui
 
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
-        VkDescriptorSetLayout descriptorSetLayout[2];
+        VkDescriptorSetLayout descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT+1];
         VkDescriptorSet descriptorSet[FrameCount];
         DeviceBufferVk uniformBuffer[FrameCount];
         DeviceBufferVk materialBuffer[FrameCount];
