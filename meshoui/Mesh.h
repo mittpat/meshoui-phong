@@ -11,6 +11,7 @@
 namespace Meshoui
 {
     class Program;
+    class MaterialPrivate;
     class MeshPrivate;
     class Mesh
     {
@@ -24,6 +25,7 @@ namespace Meshoui
 
         HashId instanceId;
         HashId definitionId;
+        HashId materialId;
         std::string filename;
 
         linalg::aliases::float3 scale;
@@ -36,8 +38,9 @@ namespace Meshoui
     private:
         friend class RendererPrivate;
         MeshPrivate * d;
+        MaterialPrivate * m;
     };
-    inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default), d(nullptr) {}
+    inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default), d(nullptr), m(nullptr) {}
 
     // Mesh factory
     class RendererPrivate;

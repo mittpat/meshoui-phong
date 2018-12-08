@@ -9,24 +9,23 @@
 
 namespace Meshoui
 {
-    typedef DAE::Effect::Value MeshMaterialValue;
-
-    class MeshMaterial final
+    struct MeshMaterial final
     {
-    public:
-        static const MeshMaterial kDefault;
-
-        ~MeshMaterial();
         MeshMaterial();
-        MeshMaterial(HashId n, const std::vector<MeshMaterialValue> & v);
 
         HashId name;
-        std::vector<MeshMaterialValue> values;
-        bool repeatTexcoords;
+
+        linalg::aliases::float3 ambient;
+        linalg::aliases::float3 diffuse;
+        linalg::aliases::float3 specular;
+        linalg::aliases::float3 emissive;
+
+        std::string textureDiffuse;
+        std::string textureNormal;
+        std::string textureSpecular;
+        std::string textureEmissive;
     };
-    inline MeshMaterial::~MeshMaterial() {}
-    inline MeshMaterial::MeshMaterial() : repeatTexcoords(false) {}
-    inline MeshMaterial::MeshMaterial(HashId n, const std::vector<MeshMaterialValue> & v) : name(n), values(v), repeatTexcoords(false) {}
+    inline MeshMaterial::MeshMaterial() : ambient(0.0f, 0.0f, 0.0f), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(linalg::zero) {}
 
     struct Attribute final
     {

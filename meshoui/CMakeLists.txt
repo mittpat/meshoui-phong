@@ -33,8 +33,6 @@ add_library(meshouilib
     Renderer.h
     RendererPrivate.cpp
     RendererPrivate.h
-    TextureLoader.cpp
-    TextureLoader.h
     Widget.h)
 
 set(shaders resources/shaders/Phong.frag resources/shaders/Phong.vert

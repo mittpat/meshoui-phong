@@ -149,24 +149,24 @@ Renderer::Renderer()
 
     {
         // Use any command queue
-        VkCommandPool command_pool = d->swapChain.frames[d->frameIndex].pool;
-        VkCommandBuffer command_buffer = d->swapChain.frames[d->frameIndex].buffer;
+        VkCommandPool commandPool = d->swapChain.frames[d->frameIndex].pool;
+        VkCommandBuffer commandBuffer = d->swapChain.frames[d->frameIndex].buffer;
 
-        err = vkResetCommandPool(d->device.device, command_pool, 0);
+        err = vkResetCommandPool(d->device.device, commandPool, 0);
         check_vk_result(err);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(command_buffer, &begin_info);
+        err = vkBeginCommandBuffer(commandBuffer, &begin_info);
         check_vk_result(err);
 
-        ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+        ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
 
         VkSubmitInfo end_info = {};
         end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         end_info.commandBufferCount = 1;
-        end_info.pCommandBuffers = &command_buffer;
-        err = vkEndCommandBuffer(command_buffer);
+        end_info.pCommandBuffers = &commandBuffer;
+        err = vkEndCommandBuffer(commandBuffer);
         check_vk_result(err);
         err = vkQueueSubmit(d->device.queue, 1, &end_info, VK_NULL_HANDLE);
         check_vk_result(err);

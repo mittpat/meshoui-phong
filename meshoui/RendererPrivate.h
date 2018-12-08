@@ -63,27 +63,34 @@ namespace Meshoui
 
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
-        VkDescriptorSetLayout descriptorSetLayout;
+        VkDescriptorSetLayout descriptorSetLayout[2];
         VkDescriptorSet descriptorSet[FrameCount];
         DeviceBufferVk uniformBuffer[FrameCount];
         DeviceBufferVk materialBuffer[FrameCount];
     };
     inline ProgramPrivate::~ProgramPrivate() {}
-    inline ProgramPrivate::ProgramPrivate() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE), descriptorSetLayout(VK_NULL_HANDLE) {}
+    inline ProgramPrivate::ProgramPrivate() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE) {}
 
-    class TexturePrivate final
+    class MaterialPrivate final
     {
     public:
-        ~TexturePrivate();
-        TexturePrivate();
-        TexturePrivate(HashId n);
+        ~MaterialPrivate();
+        MaterialPrivate();
 
         HashId name;
-        //
+        VkSampler diffuseSampler;
+        VkSampler normalSampler;
+        VkSampler specularSampler;
+        VkSampler emissiveSampler;
+        VkDescriptorSet descriptorSet[FrameCount];
+        ImageBufferVk diffuseImage;
+        ImageBufferVk normalImage;
+        ImageBufferVk specularImage;
+        ImageBufferVk emissiveImage;
+        size_t referenceCount;
     };
-    inline TexturePrivate::~TexturePrivate() {}
-    inline TexturePrivate::TexturePrivate() {}
-    inline TexturePrivate::TexturePrivate(HashId n) : name(n) {}
+    inline MaterialPrivate::~MaterialPrivate() {}
+    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE) {}
 
     class MeshPrivate final
     {

@@ -38,11 +38,12 @@ namespace Meshoui
         void create(InstanceVk &instance);
         void destroy();
         void selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space);
-        void createBuffer(DeviceBufferVk &deviceBuffer, size_t size, VkBufferUsageFlags usage);
+        void createBuffer(DeviceBufferVk &deviceBuffer, VkDeviceSize size, VkBufferUsageFlags usage);
         void uploadBuffer(const DeviceBufferVk &deviceBuffer, VkDeviceSize size, const void *data);
         void deleteBuffer(const DeviceBufferVk &deviceBuffer);
 
         void createBuffer(ImageBufferVk &deviceBuffer, const VkExtent3D &extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspectMask);
+        void transferBuffer(const DeviceBufferVk &fromBuffer, ImageBufferVk &toBuffer, const VkExtent3D & extent, VkCommandBuffer commandBuffer);
         void deleteBuffer(const ImageBufferVk &deviceBuffer);
 
         VkPhysicalDevice       physicalDevice;

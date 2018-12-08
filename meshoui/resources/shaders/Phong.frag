@@ -24,12 +24,17 @@ layout(std140, binding = 1) uniform Block2
     uniform vec3 emissive;
 } materialData;
 
+layout(set=1, binding=0) uniform sampler2D uniformTextureDiffuse;
+layout(set=1, binding=1) uniform sampler2D uniformTextureNormal;
+layout(set=1, binding=2) uniform sampler2D uniformTextureSpecular;
+layout(set=1, binding=3) uniform sampler2D uniformTextureEmissive;
+
 void main()
 {
     float fragmentDist = distance(uniformData.viewPosition, inData.vertex);
 
     vec3 ambient = materialData.ambient;
-    vec4 textureDiffuse = vec4(materialData.diffuse, 1.0);
+    vec4 textureDiffuse = texture(uniformTextureDiffuse, vec2(inData.texcoord.s, 1.0 - inData.texcoord.t));
     fragment = vec4(ambient * textureDiffuse.rgb, textureDiffuse.a);
 
     vec3 norm = inData.normal;
