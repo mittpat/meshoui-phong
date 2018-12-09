@@ -10,31 +10,17 @@ using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
-const std::array<Attribute, 5> Vertex::Attributes =
-{ Attribute{"vertexPosition",  3},
-  Attribute{"vertexTexcoord",  2},
-  Attribute{"vertexNormal",    3},
-  Attribute{"vertexTangent",   3},
-  Attribute{"vertexBitangent", 3} };
-const size_t Vertex::AttributeDataSize = sizeof(Vertex);
-
-const MeshMaterial MeshMaterial::kDefault = MeshMaterial(HashId(),
-                                       {MeshMaterialValue("uniformAmbient",  conv::stofa("0.000000 0.000000 0.000000")),
-                                        MeshMaterialValue("uniformDiffuse",  conv::stofa("0.640000 0.640000 0.640000")),
-                                        MeshMaterialValue("uniformSpecular", conv::stofa("0.500000 0.500000 0.500000")),
-                                        MeshMaterialValue("uniformEmissive", conv::stofa("0.000000 0.000000 0.000000"))});
-
 MeshFile MeshFile::kDefault(const std::string & name, size_t v)
 {
     MeshFile meshFile;
     meshFile.filename = name;
-    meshFile.materials.push_back(MeshMaterial::kDefault);
+    meshFile.materials.push_back(MeshMaterial());
 
     MeshDefinition definition(name, v);
     meshFile.definitions.push_back(definition);
 
     MeshInstance instance(name, definition);
-    instance.materialId = MeshMaterial::kDefault.name;
+    instance.materialId = meshFile.materials[0].name;
     meshFile.instances.push_back(instance);
 
     return meshFile;
@@ -46,7 +32,7 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
     if (DAE::parse(filename, data, DAE::Graphics))
     {
         meshFile.filename = data.filename;
-        meshFile.materials.push_back(MeshMaterial::kDefault);
+        meshFile.materials.push_back(MeshMaterial());
         for (const auto & libraryMaterial : data.materials)
         {
             auto effect = std::find_if(data.effects.begin(), data.effects.end(), [libraryMaterial](const DAE::Effect & effect){ return effect.id == libraryMaterial.effect.url; });
@@ -56,10 +42,19 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
                 material.name = libraryMaterial.id;
                 for (const auto & value : (*effect).values)
                 {
-                    MeshMaterialValue v = value;
+                    DAE::Effect::Value v = value;
                     auto image = std::find_if(data.images.begin(), data.images.end(), [v](const DAE::Image & image){ return image.id == v.texture; });
                     if (image != data.images.end()) { v.texture = (*image).initFrom; }
-                    material.values.push_back(v);
+
+                    if (v.sid == "uniformAmbient") { material.ambient = (float3&)v.data[0]; }
+                    else if (v.sid == "uniformTextureAmbient") { material.textureAmbient = v.texture; }
+                    else if (v.sid == "uniformDiffuse") { material.diffuse = (float3&)v.data[0]; }
+                    else if (v.sid == "uniformTextureDiffuse") { material.textureDiffuse = v.texture; }
+                    else if (v.sid == "uniformSpecular") { material.specular = (float3&)v.data[0]; }
+                    else if (v.sid == "uniformTextureSpecular") { material.textureSpecular = v.texture; }
+                    else if (v.sid == "uniformEmissive") { material.emissive = (float3&)v.data[0]; }
+                    else if (v.sid == "uniformTextureEmissive") { material.textureEmissive = v.texture; }
+                    else if (v.sid == "uniformTextureNormal") { material.textureNormal = v.texture; }
                 }
                 meshFile.materials.push_back(material);
             }
@@ -74,17 +69,17 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
         }
         for (const auto & libraryNode : data.nodes)
         {
-            if (libraryNode.geometry)
+            if (libraryNode.geometry.name != HashId())
             {
-                auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [libraryNode](const MeshDefinition & definition){ return definition.definitionId == libraryNode.geometry->url; });
+                auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [libraryNode](const MeshDefinition & definition){ return definition.definitionId == libraryNode.geometry.url; });
 
                 MeshInstance instance;
                 instance.instanceId = libraryNode.id;
                 instance.definitionId = (*definition).definitionId;
-                if (libraryNode.geometry->material != HashId())
-                    instance.materialId = libraryNode.geometry->material;
+                if (libraryNode.geometry.material != HashId())
+                    instance.materialId = libraryNode.geometry.material;
                 else
-                    instance.materialId = MeshMaterial::kDefault.name;
+                    instance.materialId = meshFile.materials[0].name;
                 float3x3 rot = identity;
                 linalg::split(libraryNode.transform, instance.position, instance.scale, rot);
                 rot = transpose(rot);
@@ -92,9 +87,10 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
                 meshFile.instances.push_back(instance);
             }
         }
+        /*
         for (auto & material : meshFile.materials)
             material.repeatTexcoords = true;
-
+        */
         return !meshFile.definitions.empty() && !meshFile.instances.empty();
     }
     return false;

@@ -1,58 +1,92 @@
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
+#include <Assets.h>
 #include <Camera.h>
-#include <Renderer.h>
-#include <Program.h>
-#include <Uniform.h>
+#include <Manipulators.h>
 #include <Mesh.h>
+#include <Program.h>
+#include <Renderer.h>
+
+#include <q3.h>
 
 using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
+namespace
+{
+    const float timestep = 1.f/60;
+}
+
 int main(int, char**)
 {
+    q3Scene scene(timestep);
     Renderer renderer;
 
-    Program program;
-    program.load("meshoui/resources/shaders/Phong.shader");
-    renderer.add(&program);
-
-    Camera camera;
-    camera.position = float3(0.0, 2.0, 5.0);
-    renderer.add(&camera);
-
-    static const float3 up(0.,1.,0.);
-    static const float3 right(-1.,0.,0.);
-
-    Light light;
-    light.position = mul(rotation_matrix(qmul(rotation_quat(up, 0.8f), rotation_quat(right, 0.6f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
-    renderer.add(&light);
-
-    Model model("meshoui/resources/models/bricks.dae");
-    renderer.add(&model);
+    Program phongProgram;
+    phongProgram.load("meshoui/resources/shaders/Phong.shader");
+    renderer.add(&phongProgram);
 
     {
+        static const float3 right(-1.,0.,0.);
+        
+        ScopedSkydome skydome(&renderer);
+        ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
+        ScopedAsset island(&renderer, "meshoui/resources/models/island.dae");
+        for (const auto & mesh : island.meshes) mesh->position.y = -4.0f;
+        ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
+        std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
+        std::vector<BodyAttitude<Mesh>> bodyBakers; bodyBakers.reserve(crates.meshes.size());
+        for (const auto & mesh : crates.meshes)
+        {
+            bodies.emplace_back(&scene, mesh->position, mesh->orientation, mesh->scale);
+            bodyBakers.emplace_back(mesh, bodies.back().body);
+        }
+        ScopedBody groundBody(&scene, float3(0, -5, 0), identity, float3(100, 1, 100), false);
+        
+        
+        Camera camera;
+        camera.position = float3(0.0, 2.0, 5.0);
+        renderer.add(&camera);
         camera.enable();
+        
+        LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
+        WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
+        renderer.add(&cameraStrafer);
+        
+        Mouselook<Camera> cameraLook(&camera);
+        renderer.add(&cameraLook);
+        
+        
+        Light light;
+        light.position = float3(300.0, 1000.0, -300.0);
+        renderer.add(&light);
         light.enable(true);
+        
+        AngularVelocity<Light> lightAnimator(&light);
+        lightAnimator.angularVelocity = rotation_quat(right, 0.02f);
 
-        auto meshes = model.meshFactory<Mesh>();
-        for (auto mesh : meshes) renderer.add(mesh);
 
         bool run = true;
         while (run)
         {
-            light.position = mul(rotation_matrix(qmul(rotation_quat(up, 0.8f + renderer.time), rotation_quat(right, 0.6f))), float4(0., 0., 1., 1.0)).xyz() * 1000.0f;
-            renderer.update(0.016f);
+            lightAnimator.step(timestep);
+            cameraAnimator.step(timestep);
+            scene.Step();
+            for (const auto & bodyBaker : bodyBakers)
+                bodyBaker.bake();
+            renderer.update(timestep);
             if (renderer.shouldClose())
                 run = false;
         }
 
-        for (auto mesh : meshes) renderer.remove(mesh);
+        renderer.remove(&cameraStrafer);
+        renderer.remove(&light);
+        renderer.remove(&camera);
     }
 
-    renderer.remove(&model);
-    renderer.remove(&light);
-    renderer.remove(&camera);
-    renderer.remove(&program);
+    renderer.remove(&phongProgram);
 
     return 0;
 }

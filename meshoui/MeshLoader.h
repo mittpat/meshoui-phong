@@ -9,29 +9,29 @@
 
 namespace Meshoui
 {
-    typedef DAE::Effect::Value MeshMaterialValue;
-
-    class MeshMaterial final
+    struct MeshMaterial final
     {
-    public:
-        static const MeshMaterial kDefault;
-
-        ~MeshMaterial();
         MeshMaterial();
-        MeshMaterial(HashId n, const std::vector<MeshMaterialValue> & v);
 
         HashId name;
-        std::vector<MeshMaterialValue> values;
-        bool repeatTexcoords;
+
+        linalg::aliases::float3 ambient;
+        linalg::aliases::float3 diffuse;
+        linalg::aliases::float3 specular;
+        linalg::aliases::float3 emissive;
+
+        std::string textureAmbient;
+        std::string textureDiffuse;
+        std::string textureNormal;
+        std::string textureSpecular;
+        std::string textureEmissive;
     };
-    inline MeshMaterial::~MeshMaterial() {}
-    inline MeshMaterial::MeshMaterial() : repeatTexcoords(false) {}
-    inline MeshMaterial::MeshMaterial(HashId n, const std::vector<MeshMaterialValue> & v) : name(n), values(v), repeatTexcoords(false) {}
+    inline MeshMaterial::MeshMaterial() : ambient(0.0f, 0.0f, 0.0f), diffuse(0.64f, 0.64f, 0.64f), specular(0.5f, 0.5f, 0.5f), emissive(0.0f, 0.0f, 0.0f) {}
 
     struct Attribute final
     {
         HashId name;
-        std::size_t size;
+        uint32_t offset;
     };
 
     struct Vertex final
@@ -44,9 +44,6 @@ namespace Meshoui
         linalg::aliases::float3 normal;
         linalg::aliases::float3 tangent;
         linalg::aliases::float3 bitangent;
-
-        static const std::array<Attribute, 5> Attributes;
-        static const size_t AttributeDataSize;
     };
     inline Vertex::~Vertex() {}
     inline Vertex::Vertex() : position(linalg::zero), texcoord(linalg::zero), normal(linalg::aliases::float3(0.f, 1.f, 0.f)), tangent(linalg::aliases::float3(1.f, 0.f, 0.f)), bitangent(linalg::aliases::float3(0.f, 0.f, 1.f)) {}

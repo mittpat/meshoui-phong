@@ -7,7 +7,7 @@
 using namespace linalg;
 using namespace linalg::aliases;
 
-#include <Octree.h>
+#include <octree.h>
 
 using namespace Meshoui;
 

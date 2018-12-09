@@ -1,20 +1,15 @@
 #include "Mesh.h"
 #include "Program.h"
+#include "Renderer.h"
 #include "RendererPrivate.h"
-#include "TextureLoader.h"
-#include "Uniform.h"
-
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
 #include <fstream>
 
-#ifndef GL_FLOAT_MAT4_ARB
-#define GL_FLOAT_MAT4_ARB GL_FLOAT_MAT4
-#endif
+#include <lodepng.h>
+#include <nv_dds.h>
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -23,336 +18,128 @@ using namespace Meshoui;
 
 namespace
 {
-    const ProgramRegistration & registrationFor(const ProgramRegistrations & programRegistrations, Program * program)
+    const float4x4 vkCorrMatrix = {{1.0f, 0.0f, 0.0f, 0.0f},
+                                   {0.0f,-1.0f, 0.0f, 0.0f},
+                                   {0.0f, 0.0f, 0.5f, 0.0f},
+                                   {0.0f, 0.0f, 0.5f, 1.0f}};
+
+    void check_vk_result(VkResult err)
     {
-        auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
-        {
-            return pair.first == program;
-        });
-        if (found != programRegistrations.end())
-        {
-            return found->second;
-        }
-        static const ProgramRegistration Invalid;
-        return Invalid;
+        if (err == 0) return;
+        printf("VkResult %d\n", err);
+        if (err < 0)
+            abort();
     }
 
-    const MeshRegistration & registrationFor(const MeshRegistrations & meshRegistrations, Mesh * mesh)
+    void texture(ImageBufferVk & imageBuffer, const std::string & filename, float4 fallbackColor, DeviceVk & device, SwapChainVk & swapChain, uint32_t frameIndex)
     {
-        if (mesh != nullptr)
+        VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+        unsigned width = 0, height = 0;
+        std::vector<uint8_t> data;
+
+        auto ddsfilename = std::filesystem::path(filename).replace_extension(".dds");
+        auto pngfilename = std::filesystem::path(filename).replace_extension(".png");
+        if (std::filesystem::exists(ddsfilename))
         {
-            auto found = std::find_if(meshRegistrations.begin(), meshRegistrations.end(), [mesh](const MeshRegistration & meshRegistration)
+            nv_dds::CDDSImage image;
+            image.load(ddsfilename, false);
+            width = image.get_width();
+            height = image.get_height();
+            data.resize(image.get_size());
+            std::memcpy(data.data(), image, image.get_size());
+
+            #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT   0x83F0
+            #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
+            #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT  0x83F2
+            #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
+            switch (image.get_format())
             {
-                return meshRegistration.definitionId == mesh->definitionId;
-            });
-            if (found != meshRegistrations.end())
-            {
-                return *found;
+            case 0x83F0: format = VK_FORMAT_BC1_RGB_UNORM_BLOCK; break;
+            case 0x83F1: format = VK_FORMAT_BC1_RGBA_UNORM_BLOCK; break;
+            case 0x83F2: format = VK_FORMAT_BC2_UNORM_BLOCK; break;
+            case 0x83F3: format = VK_FORMAT_BC3_UNORM_BLOCK; break;
+            default: abort();
             }
         }
-        static const MeshRegistration Invalid;
-        return Invalid;
-    }
-
-    void texture(GLuint * buffer, const std::string & filename, bool repeat)
-    {
-        if (TextureLoader::loadDDS(buffer, std::filesystem::path(filename).replace_extension(".dds"), repeat))
-            return;
-        if (TextureLoader::loadPNG(buffer, std::filesystem::path(filename).replace_extension(".png"), repeat))
-            return;
-    }
-
-    void setUniform(const TextureRegistrations & textureRegistrations, Mesh * mesh, IUniform * uniform, const ProgramUniform & programUniform)
-    {
-        GLenum type = programUniform.type;
-        switch (type)
+        else if (std::filesystem::exists(pngfilename))
         {
-        case GL_FLOAT_VEC2_ARB:
-            glUniform2fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_VEC3_ARB:
-            glUniform3fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_VEC4_ARB:
-            glUniform4fv(programUniform.index, 1, (float*)uniform->data());
-            break;
-        case GL_FLOAT_MAT4_ARB:
-            glUniformMatrix4fv(programUniform.index, 1, GL_FALSE, (float*)uniform->data());
-            break;
-        case GL_SAMPLER_2D_ARB:
-            if (programUniform.buffer > 0)
+            unsigned error = lodepng::decode(data, width, height, pngfilename);
+            if (error != 0)
             {
-                glUniform1i(programUniform.enabler, true);
-                glUniform1i(programUniform.index, programUniform.unit);
-                glActiveTexture(GL_TEXTURE0 + programUniform.unit);
-                glBindTexture(GL_TEXTURE_2D, programUniform.buffer);
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16);
-            }
-            else
-            {
-                HashId textureName = dynamic_cast<UniformSampler2D *>(uniform)->filename;
-                auto textureRegistration = std::find_if(textureRegistrations.begin(), textureRegistrations.end(), [textureName](const TextureRegistration & textureRegistration)
-                {
-                    return textureRegistration.name == textureName;
-                });
-                if (textureRegistration != textureRegistrations.end()
-                    && (*textureRegistration).buffer > 0)
-                {
-                    glUniform1i(programUniform.enabler, true);
-                    glUniform1i(programUniform.index, programUniform.unit);
-                    glActiveTexture(GL_TEXTURE0 + programUniform.unit);
-                    glBindTexture(GL_TEXTURE_2D, (*textureRegistration).buffer);
-
-                    Render::Flags flags = mesh ? mesh->renderFlags : Render::Default;
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, flags & Render::Mipmap ? GL_LINEAR_MIPMAP_LINEAR : (flags & Render::Filtering ? GL_LINEAR : GL_NEAREST));
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, flags & Render::Filtering ? GL_LINEAR : GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, flags & Render::Anisotropic ? 16 : 1);
-                }
-                else
-                {
-                    glUniform1i(programUniform.enabler, false);
-                }
-            }
-            break;
-        case GL_INT:
-            glUniform1iv(programUniform.index, programUniform.size, (int*)uniform->data());
-            break;
-        default:
-            break;
-        }
-    }
-
-    bool registerShader(GLenum shaderType, const std::vector<std::string> & defines, const std::string & shaderSource, GLuint & shader, std::string * const error)
-    {
-        shader = glCreateShader(shaderType);
-        std::vector<const char *> shaderSource_str;
-        for (const auto & def : defines)
-            shaderSource_str.push_back(def.c_str());
-        shaderSource_str.push_back(shaderSource.c_str());
-
-        glShaderSource(shader, shaderSource_str.size(), shaderSource_str.data(), nullptr);
-        glCompileShader(shader);
-
-        GLint shaderCompiled = GL_FALSE;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &shaderCompiled);
-        if (shaderCompiled != GL_TRUE)
-        {
-            if (error != nullptr)
-            {
-                GLint infoLogLength = 0;
-                glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLength );
-                error->resize(infoLogLength);
-                glGetShaderInfoLog(shader, infoLogLength, &infoLogLength, &(*error)[0]);
-            }
-
-            glDeleteShader(shader);
-            return false;
-        }
-        return true;
-    }
-}
-
-void RendererPrivate::unregisterProgram(const ProgramRegistration & programRegistration)
-{
-    if (glIsProgram(programRegistration.program))
-    {
-        glDeleteProgram(programRegistration.program);
-    }
-    for (auto uniform : programRegistration.uniforms)
-    {
-        glDeleteTextures(1, &uniform.buffer);
-    }
-    glDeleteVertexArrays(1, &programRegistration.vertexArray);
-}
-
-bool RendererPrivate::registerProgram(Program * program, ProgramRegistration & programRegistration)
-{
-    GLuint vertex, fragment;
-    if (!registerShader(GL_VERTEX_SHADER, program->defines, program->vertexShaderSource, vertex, &program->lastError))
-        return false;
-
-    if (!registerShader(GL_FRAGMENT_SHADER, program->defines, program->fragmentShaderSource, fragment, &program->lastError))
-        return false;
-
-    programRegistration.program = glCreateProgram();
-    glAttachShader(programRegistration.program, vertex);
-    glAttachShader(programRegistration.program, fragment);
-    glLinkProgram(programRegistration.program);
-
-    glDetachShader(programRegistration.program, vertex);
-    glDetachShader(programRegistration.program, fragment);
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    GLint programSuccess = GL_FALSE;
-    glGetProgramiv(programRegistration.program, GL_LINK_STATUS, &programSuccess);
-    if (programSuccess != GL_TRUE)
-    {
-        {
-            GLint infoLogLength = 0;
-            glGetProgramiv(programRegistration.program, GL_INFO_LOG_LENGTH, &infoLogLength);
-            program->lastError.resize(infoLogLength);
-            glGetProgramInfoLog(programRegistration.program, infoLogLength, &infoLogLength, &program->lastError[0]);
-        }
-
-        unregisterProgram(programRegistration);
-        program->linked = false;
-    }
-    else
-    {
-        GLuint unit = 0;
-        GLint count = 0;
-        glGetProgramiv(programRegistration.program, GL_ACTIVE_UNIFORMS, &count);
-        programRegistration.uniforms.resize(count);
-        for (GLint i = 0; i < count; i++)
-        {
-            std::string name;
-            GLsizei nameLength = 32;
-            name.resize(nameLength);
-            glGetActiveUniform(programRegistration.program, i,
-                               nameLength, &nameLength, &programRegistration.uniforms[i].size,
-                               &programRegistration.uniforms[i].type, &name[0]);
-            name.resize(nameLength);
-            programRegistration.uniforms[i].name = name;
-            programRegistration.uniforms[i].index = glGetUniformLocation(programRegistration.program, name.c_str());
-
-            if (!program->uniform(name))
-            {
-                if (auto uniform = UniformFactory::makeUniform(name, programRegistration.uniforms[i].type, programRegistration.uniforms[i].size))
-                {
-                    program->add(uniform);
-                }
-            }
-
-            if (auto sampler = dynamic_cast<UniformSampler2D *>(program->uniform(name)))
-            {
-                programRegistration.uniforms[i].unit = unit++;
-                programRegistration.uniforms[i].enabler = glGetUniformLocation(programRegistration.program, (name + "Active").c_str());
-                if (!sampler->filename.empty())
-                {
-                    texture(&programRegistration.uniforms[i].buffer, sampler->filename, true);
-                }
+                printf("TextureLoader::loadPNG: error '%d' : '%s'\n", error, lodepng_error_text(error));
+                abort();
             }
         }
-
-        glGetProgramiv(programRegistration.program, GL_ACTIVE_ATTRIBUTES, &count);
-        programRegistration.attributes.resize(count);
-        for (GLint i = 0; i < count; i++)
+        else
         {
-            std::string name;
-            GLsizei nameLength = 16;
-            name.resize(nameLength);
-            glGetActiveAttrib(programRegistration.program, i,
-                              nameLength, &nameLength, &programRegistration.attributes[i].size,
-                              &programRegistration.attributes[i].type, &name[0]);
-            name.resize(nameLength);
-            programRegistration.attributes[i].name = name;
-            programRegistration.attributes[i].index = glGetAttribLocation(programRegistration.program, name.c_str());
+            // use fallback
+            width = height = 1;
+            data.resize(4);
+            data[0] = fallbackColor.x * 0xFF;
+            data[1] = fallbackColor.y * 0xFF;
+            data[2] = fallbackColor.z * 0xFF;
+            data[3] = fallbackColor.w * 0xFF;
         }
 
-        glGenVertexArrays(1, &programRegistration.vertexArray);
-    }
+        // Use any command queue
+        VkCommandPool commandPool = swapChain.frames[frameIndex].pool;
+        VkCommandBuffer commandBuffer = swapChain.frames[frameIndex].buffer;
 
-    program->linked = true;
-    return program->linked;
-}
+        // begin
+        VkResult err = vkResetCommandPool(device.device, commandPool, 0);
+        check_vk_result(err);
+        VkCommandBufferBeginInfo begin_info = {};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        err = vkBeginCommandBuffer(commandBuffer, &begin_info);
+        check_vk_result(err);
 
-void RendererPrivate::bindProgram(const ProgramRegistration & programRegistration)
-{
-    glUseProgram(programRegistration.program);
-    glBindVertexArray(programRegistration.vertexArray);
-}
+        // create buffer
+        device.createBuffer(imageBuffer, {width, height, 1}, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-void RendererPrivate::unbindProgram(const ProgramRegistration & programRegistration)
-{
-    glBindVertexArray(0);
-    glUseProgram(0);
-}
+        // upload
+        DeviceBufferVk upload;
+        device.createBuffer(upload, data.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        device.uploadBuffer(upload, data.size(), data.data());
+        device.transferBuffer(upload, imageBuffer, {width, height, 1}, commandBuffer);
 
-void RendererPrivate::unregisterMesh(const MeshRegistration & meshRegistration)
-{
-    if (meshRegistration.indexBuffer != 0)
-        glDeleteBuffers(1, &meshRegistration.indexBuffer);
-    if (meshRegistration.vertexBuffer != 0)
-        glDeleteBuffers(1, &meshRegistration.vertexBuffer);
-}
+        // end
+        VkSubmitInfo end_info = {};
+        end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        end_info.commandBufferCount = 1;
+        end_info.pCommandBuffers = &commandBuffer;
+        err = vkEndCommandBuffer(commandBuffer);
+        check_vk_result(err);
+        err = vkQueueSubmit(device.queue, 1, &end_info, VK_NULL_HANDLE);
+        check_vk_result(err);
 
-void RendererPrivate::registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration)
-{
-    if (!meshDefinition.indices.empty())
-    {
-        glGenBuffers(1, &meshRegistration.indexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshDefinition.indices.size() * sizeof(unsigned int), nullptr, GL_STATIC_DRAW);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, meshDefinition.indices.size() * sizeof(unsigned int), meshDefinition.indices.data());
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
+        // wait
+        err = vkDeviceWaitIdle(device.device);
+        check_vk_result(err);
 
-    glGenBuffers(1, &meshRegistration.vertexBuffer);
-    glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, meshDefinition.vertices.size() * Vertex::AttributeDataSize, nullptr, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, meshDefinition.vertices.size() * Vertex::AttributeDataSize, meshDefinition.vertices.data());
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    meshRegistration.indexBufferSize = meshDefinition.indices.size();
-    meshRegistration.vertexBufferSize = meshDefinition.vertices.size();
-    meshRegistration.definitionId = meshDefinition.definitionId;
-}
-
-void RendererPrivate::bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration)
-{
-    if (meshRegistration.indexBuffer != 0)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshRegistration.indexBuffer);
-
-    if (meshRegistration.vertexBuffer != 0)
-        glBindBuffer(GL_ARRAY_BUFFER, meshRegistration.vertexBuffer);
-
-    size_t offset = 0;
-    for (const Attribute & attributeDef : Vertex::Attributes)
-    {
-        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeDef](const ProgramAttribute & attribute)
-        {
-            return attribute.name == attributeDef.name;
-        });
-        if (found != programRegistration.attributes.end())
-        {
-            glEnableVertexAttribArray((*found).index);
-            glVertexAttribPointer((*found).index, attributeDef.size, GL_FLOAT, GL_FALSE, Vertex::AttributeDataSize, (void*)offset);
-        }
-        offset += attributeDef.size * sizeof(GLfloat);
+        device.deleteBuffer(upload);
     }
 }
 
-void RendererPrivate::unbindMesh(const MeshRegistration &, const ProgramRegistration & programRegistration)
-{
-    for (const Attribute & attributeDef : Vertex::Attributes)
-    {
-        auto found = std::find_if(programRegistration.attributes.begin(), programRegistration.attributes.end(), [attributeDef](const ProgramAttribute & attribute)
-        {
-            return attribute.name == attributeDef.name;
-        });
-        if (found != programRegistration.attributes.end())
-        {
-            glDisableVertexAttribArray((*found).index);
-        }
-    }
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-RendererPrivate::RendererPrivate() 
-    : window(nullptr)
+RendererPrivate::RendererPrivate(Renderer * r)
+    : renderer(r)
+    , window(nullptr)
+    , instance()
+    , device()
+    , swapChain()
+    , frameIndex(0)
+    , pipelineCache(VK_NULL_HANDLE)
+    , surface(VK_NULL_HANDLE)
+    , surfaceFormat()
+    , depthBuffer()
     , toFullscreen(false)
-    , fullscreen(false)
-    , projectionMatrix(linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f))
+    , isFullscreen(false)
+    , toVSync(true)
+    , isVSync(true)
+    , projectionMatrix(mul(vkCorrMatrix, linalg::perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f)))
     , camera(nullptr)
 {
-    
+    memset(&surfaceFormat, 0, sizeof(surfaceFormat));
 }
 
 void RendererPrivate::registerGraphics(Model *model)
@@ -363,17 +150,354 @@ void RendererPrivate::registerGraphics(Model *model)
 
 void RendererPrivate::registerGraphics(Mesh * mesh)
 {
-    mesh->d = this;
-    const MeshRegistration * meshRegistration = &registrationFor(meshRegistrations, mesh);
-    const_cast<MeshRegistration *>(meshRegistration)->referenceCount += 1;
+    // mesh
+    {
+        if (mesh->d != nullptr)
+            abort();
+
+        for (auto * other : renderer->meshes)
+        {
+            if (other != mesh && other->definitionId == mesh->definitionId)
+            {
+                mesh->d = other->d;
+            }
+        }
+        if (mesh->d == nullptr)
+        {
+            const auto & meshFile = load(mesh->filename);
+            auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [mesh](const MeshDefinition &definition)
+            {
+                return definition.definitionId == mesh->definitionId;
+            });
+            if (definition == meshFile.definitions.end())
+            {
+                abort();
+            }
+
+            MeshPrivate * meshPrivate = mesh->d = new MeshPrivate();
+            meshPrivate->indexBufferSize = definition->indices.size();
+            meshPrivate->definitionId = definition->definitionId;
+
+            VkDeviceSize vertex_size = definition->vertices.size() * sizeof(Vertex);
+            VkDeviceSize index_size = definition->indices.size() * sizeof(unsigned int);
+            device.createBuffer(meshPrivate->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            device.createBuffer(meshPrivate->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+            device.uploadBuffer(meshPrivate->vertexBuffer, vertex_size, definition->vertices.data());
+            device.uploadBuffer(meshPrivate->indexBuffer, index_size, definition->indices.data());
+        }
+        mesh->d->referenceCount += 1;
+    }
+
+    //material
+    {
+        if (mesh->m != nullptr)
+            abort();
+
+        for (auto * other : renderer->meshes)
+        {
+            if (other != mesh && other->materialId == mesh->materialId)
+            {
+                mesh->m = other->m;
+            }
+        }
+        if (mesh->m == nullptr)
+        {
+            const auto & meshFile = load(mesh->filename);
+            auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [mesh](const MeshMaterial &material)
+            {
+                return material.name == mesh->materialId;
+            });
+            if (material == meshFile.materials.end())
+            {
+                abort();
+            }
+
+            MaterialPrivate * materialPrivate = mesh->m = new MaterialPrivate();
+            materialPrivate->name = material->name;
+            texture(materialPrivate->ambientImage, sibling(material->textureAmbient, meshFile.filename), float4(material->ambient, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), linalg::zero, device, swapChain, frameIndex);
+            texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), float4(material->emissive, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->specularImage, sibling(material->textureSpecular, meshFile.filename), float4(material->specular, 1.0f), device, swapChain, frameIndex);
+
+            VkResult err;
+            {
+                VkSamplerCreateInfo info = {};
+                info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+                info.magFilter = VK_FILTER_LINEAR;
+                info.minFilter = VK_FILTER_LINEAR;
+                info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                info.minLod = -1000;
+                info.maxLod = 1000;
+                info.maxAnisotropy = 1.0f;
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->ambientSampler);
+                check_vk_result(err);
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->diffuseSampler);
+                check_vk_result(err);
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->normalSampler);
+                check_vk_result(err);
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->specularSampler);
+                check_vk_result(err);
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->emissiveSampler);
+                check_vk_result(err);
+            }
+
+            {
+                VkDescriptorSetAllocateInfo alloc_info = {};
+                alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                alloc_info.descriptorPool = device.descriptorPool;
+                alloc_info.descriptorSetCount = 1;
+                alloc_info.pSetLayouts = &mesh->program->d->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT];
+                err = vkAllocateDescriptorSets(device.device, &alloc_info, &materialPrivate->descriptorSet);
+                check_vk_result(err);
+            }
+
+            {
+                VkDescriptorImageInfo desc_image[5] = {};
+                desc_image[0].sampler = materialPrivate->ambientSampler;
+                desc_image[0].imageView = materialPrivate->ambientImage.view;
+                desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                desc_image[1].sampler = materialPrivate->diffuseSampler;
+                desc_image[1].imageView = materialPrivate->diffuseImage.view;
+                desc_image[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                desc_image[2].sampler = materialPrivate->normalSampler;
+                desc_image[2].imageView = materialPrivate->normalImage.view;
+                desc_image[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                desc_image[3].sampler = materialPrivate->specularSampler;
+                desc_image[3].imageView = materialPrivate->specularImage.view;
+                desc_image[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                desc_image[4].sampler = materialPrivate->emissiveSampler;
+                desc_image[4].imageView = materialPrivate->emissiveImage.view;
+                desc_image[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                VkWriteDescriptorSet write_desc[5] = {};
+                for (uint32_t i = 0; i < 5; ++i)
+                {
+                    write_desc[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write_desc[i].dstSet = materialPrivate->descriptorSet;
+                    write_desc[i].dstBinding = i;
+                    write_desc[i].descriptorCount = 1;
+                    write_desc[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    write_desc[i].pImageInfo = &desc_image[i];
+                }
+                vkUpdateDescriptorSets(device.device, 5, write_desc, 0, nullptr);
+            }
+        }
+        mesh->m->referenceCount += 1;
+    }
 }
 
 void RendererPrivate::registerGraphics(Program * program)
 {
-    program->d = this;
-    ProgramRegistration programRegistration;
-    registerProgram(program, programRegistration);
-    programRegistrations.push_back(std::make_pair(program, programRegistration));
+    if (program->d != nullptr)
+        abort();
+
+    ProgramPrivate * programPrivate = program->d = new ProgramPrivate();
+
+    VkResult err;
+    VkShaderModule vert_module;
+    VkShaderModule frag_module;
+
+    // Create The Shader Modules:
+    {
+        VkShaderModuleCreateInfo vert_info = {};
+        vert_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        vert_info.codeSize = program->vertexShaderSource.size();
+        vert_info.pCode = (uint32_t*)program->vertexShaderSource.data();
+        err = vkCreateShaderModule(device.device, &vert_info, device.allocator, &vert_module);
+        check_vk_result(err);
+        VkShaderModuleCreateInfo frag_info = {};
+        frag_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        frag_info.codeSize = program->fragmentShaderSource.size();
+        frag_info.pCode = (uint32_t*)program->fragmentShaderSource.data();
+        err = vkCreateShaderModule(device.device, &frag_info, device.allocator, &frag_module);
+        check_vk_result(err);
+    }
+
+    {
+        VkDescriptorSetLayoutBinding binding[2];
+        binding[0].binding = 0;
+        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        binding[0].descriptorCount = 1;
+        binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
+        binding[1].binding = 1;
+        binding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        binding[1].descriptorCount = 1;
+        binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = countof(binding);
+        info.pBindings = binding;
+        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT]);
+        check_vk_result(err);
+    }
+
+    {
+        VkDescriptorSetLayoutBinding binding[5];
+        for (uint32_t i = 0; i < 5; ++i)
+        {
+            binding[i].binding = i;
+            binding[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            binding[i].descriptorCount = 1;
+            binding[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            binding[i].pImmutableSamplers = VK_NULL_HANDLE;
+        }
+        VkDescriptorSetLayoutCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = countof(binding);
+        info.pBindings = binding;
+        err = vkCreateDescriptorSetLayout(device.device, &info, device.allocator, &programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT]);
+        check_vk_result(err);
+    }
+
+    {
+        VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
+        for (size_t i = 0; i < FrameCount; ++i)
+            descriptorSetLayout[i] = programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT];
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = device.descriptorPool;
+        alloc_info.descriptorSetCount = FrameCount;
+        alloc_info.pSetLayouts = descriptorSetLayout;
+        err = vkAllocateDescriptorSets(device.device, &alloc_info, programPrivate->descriptorSet);
+        check_vk_result(err);
+    }
+
+    for (size_t i = 0; i < FrameCount; ++i)
+    {
+        device.createBuffer(programPrivate->uniformBuffer[i], sizeof(Blocks::Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+        VkDescriptorBufferInfo bufferInfo[1] = {};
+        bufferInfo[0].buffer = programPrivate->uniformBuffer[i].buffer;
+        bufferInfo[0].offset = 0;
+        bufferInfo[0].range = sizeof(Blocks::Uniform);
+
+        VkWriteDescriptorSet descriptorWrite[1] = {};
+        descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite[0].dstSet = programPrivate->descriptorSet[i];
+        descriptorWrite[0].dstBinding = 0;
+        descriptorWrite[0].dstArrayElement = 0;
+        descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite[0].descriptorCount = 1;
+        descriptorWrite[0].pBufferInfo = &bufferInfo[0];
+
+        vkUpdateDescriptorSets(device.device, 1, descriptorWrite, 0, nullptr);
+    }
+
+    {
+        // model, view & projection
+        std::vector<VkPushConstantRange> push_constants;
+        push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant)});
+        VkPipelineLayoutCreateInfo layout_info = {};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_info.setLayoutCount = countof(programPrivate->descriptorSetLayout);
+        layout_info.pSetLayouts = programPrivate->descriptorSetLayout;
+        layout_info.pushConstantRangeCount = push_constants.size();
+        layout_info.pPushConstantRanges = push_constants.data();
+        err = vkCreatePipelineLayout(device.device, &layout_info, device.allocator, &programPrivate->pipelineLayout);
+        check_vk_result(err);
+    }
+
+    VkPipelineShaderStageCreateInfo stage[2] = {};
+    stage[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stage[0].module = vert_module;
+    stage[0].pName = "main";
+    stage[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stage[1].module = frag_module;
+    stage[1].pName = "main";
+
+    VkVertexInputBindingDescription binding_desc[1] = {};
+    binding_desc[0].stride = sizeof(Vertex);
+    binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::vector<VkVertexInputAttributeDescription> attribute_desc;
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, position)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct Vertex, texcoord)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, normal)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, tangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct Vertex, bitangent)});
+
+    VkPipelineVertexInputStateCreateInfo vertex_info = {};
+    vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_info.vertexBindingDescriptionCount = 1;
+    vertex_info.pVertexBindingDescriptions = binding_desc;
+    vertex_info.vertexAttributeDescriptionCount = attribute_desc.size();
+    vertex_info.pVertexAttributeDescriptions = attribute_desc.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkPipelineViewportStateCreateInfo viewport_info = {};
+    viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_info.viewportCount = 1;
+    viewport_info.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo raster_info = {};
+    raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    raster_info.polygonMode = VK_POLYGON_MODE_FILL;
+    raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster_info.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo ms_info = {};
+    ms_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    ms_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState color_attachment[1] = {};
+    color_attachment[0].blendEnable = VK_TRUE;
+    color_attachment[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_attachment[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    color_attachment[0].colorBlendOp = VK_BLEND_OP_ADD;
+    color_attachment[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    color_attachment[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_attachment[0].alphaBlendOp = VK_BLEND_OP_ADD;
+    color_attachment[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depth_info = {};
+    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_info.depthTestEnable = (program->features & Feature::DepthTest) ? VK_TRUE : VK_FALSE;
+    depth_info.depthWriteEnable = (program->features & Feature::DepthWrite) ? VK_TRUE : VK_FALSE;
+    depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_info.depthBoundsTestEnable = VK_FALSE;
+    depth_info.stencilTestEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo blend_info = {};
+    blend_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend_info.attachmentCount = 1;
+    blend_info.pAttachments = color_attachment;
+
+    VkDynamicState dynamic_states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamic_state = {};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = countof(dynamic_states);
+    dynamic_state.pDynamicStates = dynamic_states;
+
+    VkGraphicsPipelineCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    info.flags = 0;
+    info.stageCount = 2;
+    info.pStages = stage;
+    info.pVertexInputState = &vertex_info;
+    info.pInputAssemblyState = &inputAssembly;
+    info.pViewportState = &viewport_info;
+    info.pRasterizationState = &raster_info;
+    info.pMultisampleState = &ms_info;
+    info.pDepthStencilState = &depth_info;
+    info.pColorBlendState = &blend_info;
+    info.pDynamicState = &dynamic_state;
+    info.layout = programPrivate->pipelineLayout;
+    info.renderPass = swapChain.renderPass;
+    err = vkCreateGraphicsPipelines(device.device, pipelineCache, 1, &info, device.allocator, &programPrivate->pipeline);
+    check_vk_result(err);
+
+    vkDestroyShaderModule(device.device, frag_module, nullptr);
+    vkDestroyShaderModule(device.device, vert_module, nullptr);
 }
 
 void RendererPrivate::registerGraphics(Camera * cam)
@@ -381,68 +505,91 @@ void RendererPrivate::registerGraphics(Camera * cam)
     cam->d = this;
 }
 
-void RendererPrivate::registerGraphics(const MeshFile &meshFile)
+void RendererPrivate::registerGraphics(const MeshFile &)
 {
-    for (const auto & definition : meshFile.definitions)
-    {
-        printf("%s\n", definition.definitionId.str.c_str());
-
-        MeshRegistration meshRegistration;
-        registerMesh(definition, meshRegistration);
-        meshRegistrations.push_back(meshRegistration);
-    }
-    for (const auto & material : meshFile.materials)
-    {
-        for (auto value : material.values)
-        {
-            if (value.texture)
-            {
-                TextureRegistration textureRegistration = TextureRegistration(*value.texture);
-                texture(&textureRegistration.buffer, sibling(*value.texture, meshFile.filename), material.repeatTexcoords);
-                textureRegistrations.push_back(textureRegistration);
-            }
-        }
-    }
+    //
 }
 
-void RendererPrivate::unregisterGraphics(Model *model)
+void RendererPrivate::unregisterGraphics(Model * model)
 {
     model->d = nullptr;
 }
 
 void RendererPrivate::unregisterGraphics(Mesh * mesh)
 {
-    auto found = std::find_if(meshRegistrations.begin(), meshRegistrations.end(), [mesh](const MeshRegistration & meshRegistration)
+    //mesh
     {
-        return meshRegistration.definitionId == mesh->definitionId;
-    });
-    if (found != meshRegistrations.end())
-    {
-        MeshRegistration & meshRegistration = *found;
-        if (meshRegistration.referenceCount > 0)
-            meshRegistration.referenceCount--;
-        if (meshRegistration.referenceCount == 0)
+        if (mesh->d == nullptr)
+            abort();
+
+        MeshPrivate * meshPrivate = mesh->d;
+
+        if (meshPrivate->referenceCount > 0)
+            meshPrivate->referenceCount--;
+        if (meshPrivate->referenceCount == 0)
         {
-            unregisterMesh(meshRegistration);
-            meshRegistrations.erase(found);
+            vkQueueWaitIdle(device.queue);
+            device.deleteBuffer(meshPrivate->vertexBuffer);
+            device.deleteBuffer(meshPrivate->indexBuffer);
         }
+
+        delete mesh->d;
+        mesh->d = nullptr;
     }
-    for (auto * uniform : mesh->uniforms) { delete uniform; }
-    mesh->uniforms.clear();
-    mesh->d = nullptr;
+
+    //material
+    {
+        if (mesh->m == nullptr)
+            abort();
+
+        MaterialPrivate * materialPrivate = mesh->m;
+
+        if (materialPrivate->referenceCount > 0)
+            materialPrivate->referenceCount--;
+        if (materialPrivate->referenceCount == 0)
+        {
+            vkQueueWaitIdle(device.queue);
+            device.deleteBuffer(materialPrivate->ambientImage);
+            device.deleteBuffer(materialPrivate->diffuseImage);
+            device.deleteBuffer(materialPrivate->normalImage);
+            device.deleteBuffer(materialPrivate->specularImage);
+            device.deleteBuffer(materialPrivate->emissiveImage);
+
+            vkDestroySampler(device.device, materialPrivate->ambientSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->diffuseSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->normalSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->specularSampler, device.allocator);
+            vkDestroySampler(device.device, materialPrivate->emissiveSampler, device.allocator);
+        }
+
+        delete mesh->d;
+        mesh->d = nullptr;
+    }
 }
 
 void RendererPrivate::unregisterGraphics(Program * program)
 {
-    auto found = std::find_if(programRegistrations.begin(), programRegistrations.end(), [program](const std::pair<Program*, ProgramRegistration> & pair)
-    {
-        return pair.first == program;
-    });
-    if (found != programRegistrations.end())
-    {
-        unregisterProgram(found->second);
-        programRegistrations.erase(found);
-    }
+    if (program->d == nullptr)
+        abort();
+
+    ProgramPrivate * programPrivate = program->d;
+
+    vkQueueWaitIdle(device.queue);
+    for (size_t i = 0; i < FrameCount; ++i)
+        device.deleteBuffer(programPrivate->uniformBuffer[i]);
+
+    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT], device.allocator);
+    vkDestroyDescriptorSetLayout(device.device, programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT], device.allocator);
+    vkDestroyPipelineLayout(device.device, programPrivate->pipelineLayout, device.allocator);
+    vkDestroyPipeline(device.device, programPrivate->pipeline, device.allocator);
+    programPrivate->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT] = VK_NULL_HANDLE;
+    programPrivate->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
+    programPrivate->pipelineLayout = VK_NULL_HANDLE;
+    programPrivate->pipeline = VK_NULL_HANDLE;
+    memset(&programPrivate->uniformBuffer, 0, sizeof(programPrivate->uniformBuffer));
+    memset(&programPrivate->descriptorSet, 0, sizeof(programPrivate->descriptorSet));
+
+    delete program->d;
     program->d = nullptr;
 }
 
@@ -454,12 +601,33 @@ void RendererPrivate::unregisterGraphics(Camera *cam)
 
 void RendererPrivate::bindGraphics(Mesh * mesh)
 {
-    bindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
+    if (mesh->d == nullptr)
+        abort();
+
+    MeshPrivate * meshPrivate = mesh->d;
+
+    VkDeviceSize offset = 0;
+    auto & frame = swapChain.frames[frameIndex];
+    vkCmdBindVertexBuffers(frame.buffer, 0, 1, &meshPrivate->vertexBuffer.buffer, &offset);
+    vkCmdBindIndexBuffer(frame.buffer, meshPrivate->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    MaterialPrivate * materialPrivate = mesh->m;
+
+    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->program->d->pipelineLayout, 1, 1, &materialPrivate->descriptorSet, 0, nullptr);
 }
 
 void RendererPrivate::bindGraphics(Program * program)
 {
-    bindProgram(registrationFor(programRegistrations, program));
+    if (program->d == nullptr)
+        abort();
+
+    ProgramPrivate * programPrivate = program->d;
+
+    auto & frame = swapChain.frames[frameIndex];
+    vkCmdBindPipeline(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programPrivate->pipeline);
+    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, programPrivate->pipelineLayout, 0, 1, &programPrivate->descriptorSet[frameIndex], 0, nullptr);
+
+    device.uploadBuffer(programPrivate->uniformBuffer[frameIndex], sizeof(Blocks::Uniform), &uniforms);
 }
 
 void RendererPrivate::bindGraphics(Camera *cam, bool asLight)
@@ -470,14 +638,14 @@ void RendererPrivate::bindGraphics(Camera *cam, bool asLight)
         camera = cam;
 }
 
-void RendererPrivate::unbindGraphics(Mesh * mesh)
+void RendererPrivate::unbindGraphics(Mesh *)
 {
-    unbindMesh(registrationFor(meshRegistrations, mesh), registrationFor(programRegistrations, mesh->program));
+    //
 }
 
-void RendererPrivate::unbindGraphics(Program * program)
+void RendererPrivate::unbindGraphics(Program *)
 {
-    unbindProgram(registrationFor(programRegistrations, program));
+    //
 }
 
 void RendererPrivate::unbindGraphics(Camera *cam)
@@ -488,85 +656,12 @@ void RendererPrivate::unbindGraphics(Camera *cam)
         lights.erase(std::remove(lights.begin(), lights.end(), cam));
 }
 
-void RendererPrivate::setProgramUniforms(Mesh * mesh)
+void RendererPrivate::draw(Mesh *mesh)
 {
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, mesh->program);
-    for (const ProgramUniform & programUniform : programRegistration.uniforms)
-    {
-        if (auto * uniform = mesh->uniform(programUniform.name))
-        {
-            setUniform(textureRegistrations, mesh, uniform, programUniform);
-        }
-    }
-}
+    auto & frame = swapChain.frames[frameIndex];
 
-void RendererPrivate::setProgramUniform(Program * program, IUniform * uniform)
-{
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
-    auto programUniform = std::find_if(programRegistration.uniforms.begin(), programRegistration.uniforms.end(), [uniform](const ProgramUniform & programUniform)
-    {
-        return programUniform.name == uniform->name;
-    });
-    if (programUniform != programRegistration.uniforms.end())
-    {
-        setUniform(textureRegistrations, nullptr, uniform, *programUniform);
-    }
-}
-
-void RendererPrivate::unsetProgramUniform(Program *program, IUniform * uniform)
-{
-    const ProgramRegistration & programRegistration = registrationFor(programRegistrations, program);
-    auto programUniform = std::find_if(programRegistration.uniforms.begin(), programRegistration.uniforms.end(), [uniform](const ProgramUniform & programUniform)
-    {
-        return programUniform.name == uniform->name;
-    });
-    if (programUniform != programRegistration.uniforms.end())
-    {
-        static const std::array<GLfloat, 16> blank = {0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f};
-
-        GLenum type = (*programUniform).type;
-        switch (type)
-        {
-        case GL_FLOAT:
-            glUniform1fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC2_ARB:
-            glUniform2fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC3_ARB:
-            glUniform3fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_VEC4_ARB:
-            glUniform4fv((*programUniform).index, 1, blank.data());
-            break;
-        case GL_FLOAT_MAT4_ARB:
-            glUniformMatrix4fv((*programUniform).index, 1, GL_FALSE, blank.data());
-            break;
-        case GL_SAMPLER_2D_ARB:
-            glUniform1i((*programUniform).enabler, false);
-            glUniform1i((*programUniform).index, 0);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            break;
-        case GL_INT:
-            glUniform1iv((*programUniform).index, (*programUniform).size, (int*)blank.data());
-            break;
-        default:
-            break;
-        }
-    }
-}
-
-void RendererPrivate::draw(Program *, Mesh * mesh)
-{
-    if (mesh->renderFlags & Render::Points)
-    {
-        glDrawArrays(GL_POINTS, 0, registrationFor(meshRegistrations, mesh).vertexBufferSize);
-    }
-    else
-    {
-        glDrawElements(GL_TRIANGLES, registrationFor(meshRegistrations, mesh).indexBufferSize, GL_UNSIGNED_INT, 0);
-    }
+    vkCmdPushConstants(frame.buffer, mesh->program->d->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Blocks::PushConstant), &pushConstants);
+    vkCmdDrawIndexed(frame.buffer, mesh->d->indexBufferSize, 1, 0, 0, 0);
 }
 
 void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *> &meshes)
@@ -578,6 +673,7 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         Mesh * mesh = meshes[i];
         mesh->instanceId = instance.instanceId;
         mesh->definitionId = instance.definitionId;
+        mesh->materialId = instance.materialId;
         mesh->filename = meshFile.filename;
         mesh->scale = instance.scale;
         mesh->position = instance.position;
@@ -586,21 +682,6 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         if (definition->doubleSided)
         {
             mesh->renderFlags &= ~Render::BackFaceCulling;
-        }
-        auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [instance](const MeshMaterial & material) { return material.name == instance.materialId; });
-        for (auto value : material->values)
-        {
-            IUniform * uniform = nullptr;
-            if (value.texture)
-            {
-                uniform = new UniformSampler2D(value.sid, *value.texture);
-            }
-            else
-            {
-                uniform = UniformFactory::makeUniform(value.sid, enumForVectorSize(value.data->size()));
-                uniform->setData(value.data->data());
-            }
-            mesh->add(uniform);
         }
     }
 }

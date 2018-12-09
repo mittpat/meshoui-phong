@@ -298,12 +298,12 @@ void DAE::parse_library_visual_scenes(pugi::xml_node branch, DAE::Data &data)
             if (strcmp(visualNode.name(), "instance_geometry") == 0)
             {
                 currentNode.geometry = DAE::InstanceGeometry();
-                currentNode.geometry->name = visualNode.attribute("name").as_string();
-                currentNode.geometry->url = HashId(remainder(visualNode.attribute("url").as_string(), "#"), data.filename);
+                currentNode.geometry.name = visualNode.attribute("name").as_string();
+                currentNode.geometry.url = HashId(remainder(visualNode.attribute("url").as_string(), "#"), data.filename);
                 if (auto bind_material = visualNode.child("bind_material"))
                     if (auto technique_common = bind_material.child("technique_common"))
                         if (auto instance_material = technique_common.child("instance_material"))
-                            currentNode.geometry->material = remainder(instance_material.attribute("target").as_string(), "#");
+                            currentNode.geometry.material = remainder(instance_material.attribute("target").as_string(), "#");
             }
             else if (strcmp(visualNode.name(), "matrix") == 0)
             {

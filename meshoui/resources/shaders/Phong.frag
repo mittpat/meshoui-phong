@@ -1,81 +1,48 @@
-precision highp float;
+#version 450 core
 
-out vec4 fragment;
+layout(location = 0) out vec4 fragment;
 
-in vec3 vertex;
-in vec3 normal;
-in vec2 texcoord;
-in mat3 TBN;
+layout(location = 0) in VertexData
+{
+    vec3 vertex;
+    vec3 normal;
+    vec2 texcoord;
+    mat3 TBN;
+} inData;
 
-#ifdef PARTICLES
-in vec2 gl_PointCoord;
-#endif
+layout(std140, binding = 0) uniform Block
+{
+    uniform vec3 viewPosition;
+    uniform vec3 lightPosition;
+} uniformData;
 
-uniform sampler2D uniformTextureDiffuse;
-uniform sampler2D uniformTextureNormal;
-uniform sampler2D uniformTextureSpecular;
-
-uniform bool uniformTextureDiffuseActive;
-uniform bool uniformTextureNormalActive;
-uniform bool uniformTextureSpecularActive;
-
-uniform vec3 uniformLightPosition;
-uniform vec3 uniformViewPosition;
-uniform vec3 uniformLightAmbient;
-uniform vec3 uniformLightColor;
-uniform vec3 uniformAmbient;
-uniform vec3 uniformDiffuse;
-uniform vec3 uniformSpecular;
-uniform vec3 uniformEmissive;
-
-#ifdef FOG
-uniform vec3 uniformFogColor;
-uniform vec2 uniformFog;// (100.0, 50.0)
-#endif
+layout(set = 1, binding = 0) uniform sampler2D uniformTextureAmbient;
+layout(set = 1, binding = 1) uniform sampler2D uniformTextureDiffuse;
+layout(set = 1, binding = 2) uniform sampler2D uniformTextureNormal;
+layout(set = 1, binding = 3) uniform sampler2D uniformTextureSpecular;
+layout(set = 1, binding = 4) uniform sampler2D uniformTextureEmissive;
 
 void main()
 {
-    float fragmentDist = distance(uniformViewPosition, vertex);
+    vec2 texcoord = vec2(inData.texcoord.s, 1.0 - inData.texcoord.t);
 
-#ifdef PARTICLES
-    vec2 texcoorda = gl_PointCoord * max(1.0, sqrt(fragmentDist));
-#else
-    vec2 texcoorda = texcoord;
-#endif
+    vec4 textureAmbient = texture(uniformTextureAmbient, texcoord);
+    vec4 textureDiffuse = texture(uniformTextureDiffuse, texcoord);
+    fragment = vec4(textureAmbient.rgb * textureDiffuse.rgb, textureDiffuse.a);
 
-    vec4 textureDiffuse = texture(uniformTextureDiffuse, vec2(texcoorda.s, 1.0 - texcoorda.t));
-
-#ifndef PARTICLES
-    if (textureDiffuse.a < 0.1)
-        discard;
-    textureDiffuse.a = 1.0;
-#endif
-
-    vec3 ambient = (uniformAmbient + uniformLightAmbient) * uniformLightColor;
-    textureDiffuse = uniformTextureDiffuseActive ? textureDiffuse : vec4(uniformDiffuse, 1.0);
-    fragment = vec4(ambient * textureDiffuse.rgb, textureDiffuse.a);
-
-    vec3 norm = normalize(TBN * (2.0 * normalize(texture(uniformTextureNormal, vec2(texcoorda.s, 1.0 - texcoorda.t)).rgb) - 1.0));
-    norm = uniformTextureNormalActive ? norm : normal;
-    vec3 lightDir = normalize(uniformLightPosition - vertex);
-    float diffuseFactor = max(dot(norm, lightDir), 0.0);
+    vec4 textureNormal = texture(uniformTextureNormal, texcoord);
+    // discard textureNormal when ~= (0,0,0)
+    vec3 textureNormal_worldspace = length(textureNormal) > 0.1 ? normalize(inData.TBN * (2.0 * textureNormal.rgb - 1.0)) : inData.normal;
+    vec3 lightDirection_worldspace = normalize(uniformData.lightPosition - inData.vertex);
+    float diffuseFactor = dot(textureNormal_worldspace, lightDirection_worldspace);
     if (diffuseFactor > 0.0)
     {
-        vec3 textureSpecular = texture(uniformTextureSpecular, vec2(texcoorda.s, 1.0 - texcoorda.t)).rgb;
-        textureSpecular = uniformTextureSpecularActive ? textureSpecular : uniformSpecular;
+        vec3 eyeDirection_worldspace = normalize(uniformData.viewPosition - inData.vertex);
+        vec3 reflectDirection_worldspace = reflect(-lightDirection_worldspace, textureNormal_worldspace);
 
-        vec3 viewDir = normalize(uniformViewPosition - vertex);
-        vec3 reflectDir = reflect(-lightDir, norm);
-        float specularFactor = pow(max(dot(viewDir, reflectDir), 0.0), 8.0);
+        float specularFactor = pow(max(dot(eyeDirection_worldspace, reflectDirection_worldspace), 0.0), 8.0);
+        vec4 textureSpecular = texture(uniformTextureSpecular, texcoord);
 
-        vec3 specular = textureSpecular * specularFactor * uniformLightColor;
-        vec3 diffuse = diffuseFactor * uniformLightColor;
-
-        fragment += vec4(diffuse * textureDiffuse.rgb + specular, 0.0);
+        fragment += vec4(diffuseFactor * textureDiffuse.rgb + specularFactor * textureSpecular.rgb, 0.0);
     }
-
-#ifdef FOG
-    vec3 fogColor = mix(ambient, uniformFogColor, pow(max(dot(vec3(0.0,1.0,0.0), lightDir), 0.0), 0.25));
-    fragment = mix(fragment, vec4(fogColor, fragment.a), clamp((fragmentDist - uniformFog.x) / uniformFog.y, 0.0, 1.0));
-#endif
 }

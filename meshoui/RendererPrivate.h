@@ -1,113 +1,111 @@
 #pragma once
 
-#include "gltypes.h"
+#include <vulkan/vulkan.h>
+
 #include "Camera.h"
 #include "Mesh.h"
 #include "MeshLoader.h"
+#include "DeviceVk.h"
+#include "InstanceVk.h"
+#include "SwapChainVk.h"
 
 #include <hashid.h>
 #include <string>
 #include <vector>
 
-class GLFWwindow;
+struct GLFWwindow;
 namespace Meshoui
 {
-    class ProgramUniform final
+    namespace Blocks
+    {
+        struct PushConstant
+        {
+            ~PushConstant();
+            PushConstant();
+
+            linalg::aliases::float4x4 model;
+            linalg::aliases::float4x4 view;
+            linalg::aliases::float4x4 projection;
+        };
+        inline PushConstant::~PushConstant() {}
+        inline PushConstant::PushConstant() : model(linalg::identity), view(linalg::identity), projection(linalg::identity) {}
+
+        struct Uniform
+        {
+            ~Uniform();
+            Uniform();
+
+            alignas(16) linalg::aliases::float3 position;
+            alignas(16) linalg::aliases::float3 light;
+        };
+        inline Uniform::~Uniform() {}
+        inline Uniform::Uniform() : position(linalg::zero), light(linalg::zero) {}
+    }
+
+#define MESHOUI_PROGRAM_DESC_LAYOUT 0
+#define MESHOUI_MATERIAL_DESC_LAYOUT 1
+    class ProgramPrivate final
     {
     public:
-        ~ProgramUniform();
-        ProgramUniform();
+        ~ProgramPrivate();
+        ProgramPrivate();
 
-        GLuint index;
-        HashId name;
-        GLint size;
-        GLenum type;
-        GLuint buffer;
-        GLuint unit;
-        GLuint enabler;
+        VkPipelineLayout pipelineLayout;
+        VkPipeline pipeline;
+        // the buffers bound to this descriptor set may change frame to frame, one set per frame
+        VkDescriptorSetLayout descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT+1];
+        VkDescriptorSet descriptorSet[FrameCount];
+        DeviceBufferVk uniformBuffer[FrameCount];
     };
-    inline ProgramUniform::~ProgramUniform() {}
-    inline ProgramUniform::ProgramUniform() : index(0), size(0), type(0), buffer(0), unit(0), enabler(0) {}
+    inline ProgramPrivate::~ProgramPrivate() {}
+    inline ProgramPrivate::ProgramPrivate() : pipelineLayout(VK_NULL_HANDLE), pipeline(VK_NULL_HANDLE) {}
 
-    class ProgramAttribute final
+    class MaterialPrivate final
     {
     public:
-        ~ProgramAttribute();
-        ProgramAttribute();
-
-        GLuint index;
-        HashId name;
-        GLint size;
-        GLenum type;
-    };
-    inline ProgramAttribute::~ProgramAttribute() {}
-    inline ProgramAttribute::ProgramAttribute() : index(0), size(0), type(0) {}
-
-    class ProgramRegistration final
-    {
-    public:
-        ~ProgramRegistration();
-        ProgramRegistration();
-
-        GLuint program;
-
-        std::vector<ProgramAttribute> attributes;
-        std::vector<ProgramUniform> uniforms;
-        GLuint vertexArray;
-    };
-    inline ProgramRegistration::~ProgramRegistration() {}
-    inline ProgramRegistration::ProgramRegistration() : program(0), vertexArray(0) {}
-
-    class TextureRegistration final
-    {
-    public:
-        ~TextureRegistration();
-        TextureRegistration();
-        TextureRegistration(HashId n);
+        ~MaterialPrivate();
+        MaterialPrivate();
 
         HashId name;
-        GLuint buffer;
-    };
-    inline TextureRegistration::~TextureRegistration() {}
-    inline TextureRegistration::TextureRegistration() : buffer(0) {}
-    inline TextureRegistration::TextureRegistration(HashId n) : name(n), buffer(0) {}
-
-    class MeshRegistration final
-    {
-    public:
-        ~MeshRegistration();
-        MeshRegistration();
-
-        HashId definitionId;
-        GLuint indexBuffer;
-        GLuint vertexBuffer;
-        size_t indexBufferSize;
-        size_t vertexBufferSize;
+        VkSampler ambientSampler;
+        VkSampler diffuseSampler;
+        VkSampler normalSampler;
+        VkSampler specularSampler;
+        VkSampler emissiveSampler;
+        // this descriptor set uses only immutable samplers, one set per swapchain
+        VkDescriptorSet descriptorSet;
+        ImageBufferVk ambientImage;
+        ImageBufferVk diffuseImage;
+        ImageBufferVk normalImage;
+        ImageBufferVk specularImage;
+        ImageBufferVk emissiveImage;
         size_t referenceCount;
     };
-    inline MeshRegistration::~MeshRegistration() {}
-    inline MeshRegistration::MeshRegistration() : indexBuffer(0), vertexBuffer(0), indexBufferSize(0), vertexBufferSize(0), referenceCount(0) {}
+    inline MaterialPrivate::~MaterialPrivate() {}
+    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), ambientSampler(VK_NULL_HANDLE), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
 
-    class IGraphics;
-    class IUniform;
-    class Program;
-    typedef std::vector<std::pair<Program *, ProgramRegistration>> ProgramRegistrations;
-    typedef std::vector<MeshRegistration> MeshRegistrations;
-    typedef std::vector<TextureRegistration> TextureRegistrations;
+    class MeshPrivate final
+    {
+    public:
+        ~MeshPrivate();
+        MeshPrivate();
+
+        HashId definitionId;
+        DeviceBufferVk vertexBuffer;
+        DeviceBufferVk indexBuffer;
+        size_t indexBufferSize;
+        size_t referenceCount;
+    };
+    inline MeshPrivate::~MeshPrivate() {}
+    inline MeshPrivate::MeshPrivate() : indexBufferSize(0), referenceCount(0) {}
+
+    class Renderer;
     class RendererPrivate final
     {
     public:
-        static void unregisterProgram(const ProgramRegistration & programRegistration);
-        static bool registerProgram(Program * program, ProgramRegistration & programRegistration);
-        static void bindProgram(const ProgramRegistration & programRegistration);
-        static void unbindProgram(const ProgramRegistration &);
-        static void unregisterMesh(const MeshRegistration & meshRegistration);
-        static void registerMesh(const MeshDefinition & meshDefinition, MeshRegistration & meshRegistration);
-        static void bindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
-        static void unbindMesh(const MeshRegistration & meshRegistration, const ProgramRegistration & programRegistration);
-
         ~RendererPrivate();
-        RendererPrivate();
+        RendererPrivate() = delete;
+        RendererPrivate(Renderer * r);
 
         void registerGraphics(Model * model);
         void registerGraphics(Mesh * mesh);
@@ -124,26 +122,37 @@ namespace Meshoui
         void unbindGraphics(Mesh * mesh);
         void unbindGraphics(Program * program);
         void unbindGraphics(Camera * cam);
-        void setProgramUniforms(Mesh * mesh);
-        void setProgramUniform(Program * program, IUniform * uniform);
-        void unsetProgramUniform(Program * program, IUniform * uniform);
-        void draw(Program * program, Mesh * mesh);
+        void draw(Mesh * mesh);
         void fill(const std::string & filename, const std::vector<Mesh *> & meshes);
         const MeshFile & load(const std::string & filename);
 
-        GLFWwindow * window;
+        Renderer*          renderer;
+        GLFWwindow*        window;
+        InstanceVk         instance;
+        DeviceVk           device;
+        SwapChainVk        swapChain;
+        uint32_t           frameIndex;
+        VkPipelineCache    pipelineCache;
+        VkSurfaceKHR       surface;
+        VkSurfaceFormatKHR surfaceFormat;
 
-        ProgramRegistrations programRegistrations;
-        MeshRegistrations meshRegistrations;
-        TextureRegistrations textureRegistrations;
+        ImageBufferVk  depthBuffer;
+
         MeshFiles meshFiles;
 
         bool toFullscreen;
-        bool fullscreen;
+        bool isFullscreen;
+
+        bool toVSync;
+        bool isVSync;
 
         linalg::aliases::float4x4 projectionMatrix;
         Camera * camera;
         std::vector<Light *> lights;
+
+        Blocks::PushConstant pushConstants;
+        Blocks::Uniform uniforms;
     };
-    inline RendererPrivate::~RendererPrivate() {}
 }
+
+inline Meshoui::RendererPrivate::~RendererPrivate() {}

@@ -3,26 +3,35 @@
 #include <cstring>
 #include <linalg.h>
 #include <experimental/filesystem>
+#include <sstream>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 inline float degreesToRadians(float angle) { return angle * M_PI / 180.0; }
 inline float radiansToDegrees(float rad) { return rad * 180.0 / M_PI; }
+
+template < typename T, size_t N >
+size_t countof( T ( & arr )[ N ] )
+{
+    return std::extent< T[ N ] >::value;
+}
 
 inline std::string sibling(const std::string & path, const std::string & other)
 {
     std::experimental::filesystem::path parentpath(other);
     std::experimental::filesystem::path parentdirectory = parentpath.parent_path();
-    return parentdirectory / path;
+    return (parentdirectory / path).u8string();
 }
 
 inline std::vector<std::string> split(const std::string & str, char sep, bool keepEmptyParts = false)
 {
     std::vector<std::string> values;
     std::istringstream splitter(str);
-    std::string s;
-    while (std::getline(splitter, s, sep))
+    for (std::string line; std::getline(splitter, line, sep); )
     {
-        if (keepEmptyParts || !s.empty())
-            values.push_back(s);
+        if (keepEmptyParts || !line.empty())
+            values.push_back(line);
     }
     return values;
 }
@@ -51,20 +60,23 @@ inline const char * remainder(const char *str, const char *match)
     return ret ? &str[strlen(match)] : nullptr;
 }
 
-struct AABB final
+namespace linalg
 {
-    AABB();
-    void extend(linalg::aliases::float3 p);
-    linalg::aliases::float3 center() const;
-    linalg::aliases::float3 half() const;
-    linalg::aliases::float3 lower;
-    linalg::aliases::float3 upper;
-};
-inline AABB::AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
-                      upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
-inline void AABB::extend(linalg::aliases::float3 p) { lower = linalg::min(lower, p); upper = linalg::max(upper, p); }
-inline linalg::aliases::float3 AABB::center() const { return (lower + upper) * 0.5f; }
-inline linalg::aliases::float3 AABB::half() const { return (upper - lower) * 0.5f; }
+    struct AABB final
+    {
+        AABB();
+        void extend(aliases::float3 p);
+        aliases::float3 center() const;
+        aliases::float3 half() const;
+        aliases::float3 lower;
+        aliases::float3 upper;
+    };
+    inline AABB::AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
+                          upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
+    inline void AABB::extend(aliases::float3 p) { lower = min(lower, p); upper = max(upper, p); }
+    inline aliases::float3 AABB::center() const { return (lower + upper) * 0.5f; }
+    inline aliases::float3 AABB::half() const { return (upper - lower) * 0.5f; }
+}
 
 namespace conv
 {

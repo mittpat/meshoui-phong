@@ -1,10 +1,14 @@
 add_library(commonlib
     hashid.h
     loose.h
+    octree.h
     collada.cpp
     collada.h)
 
-include_directories(../3rdparty/linalg)
-include_directories(../3rdparty/pugixml)
+use_pugixml()
+use_linalg()
 
-target_link_libraries(commonlib stdc++fs pugixml)
+target_link_libraries(commonlib pugixml)
+if(NOT MSVC)
+    target_link_libraries(commonlib stdc++fs)
+endif()

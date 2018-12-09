@@ -5,10 +5,15 @@
 #include <algorithm>
 #include <vector>
 
+#include "IKeyboard.h"
+#include "IMouse.h"
 #include "Mesh.h"
 
 namespace Meshoui
 {
+    struct GlfwCallbacks;
+    struct WidgetCallbacks;
+
     class Camera;
     class MeshFile;
     class Program;
@@ -27,11 +32,15 @@ namespace Meshoui
         void add(Program * program);
         void add(Camera * camera);
         void add(Widget * widget);
+        void add(IKeyboard * keyboard);
+        void add(IMouse * mouse);
         void remove(Model * model);
         void remove(Mesh * mesh);
         void remove(Program * program);
         void remove(Camera * camera);
         void remove(Widget * widget);
+        void remove(IKeyboard * keyboard);
+        void remove(IMouse * mouse);
 
         void update(float s);
         void postUpdate();
@@ -42,12 +51,19 @@ namespace Meshoui
 
         Program * defaultProgram;
         float time;
+        bool overlay;
 
     private:
         std::vector<Camera *> cameras;
+        std::vector<IKeyboard *> keyboards;
+        std::vector<IMouse *> mice;
         std::vector<Mesh *> meshes;
         std::vector<Model *> models;
         std::vector<Program *> programs;
         std::vector<Widget *> widgets;
+
+        friend class RendererPrivate;
+        friend struct GlfwCallbacks;
+        WidgetCallbacks * widgetCallbacks;
     };
 }
