@@ -1,4 +1,4 @@
-# meshouivk - Simple Collada parser and viewer (Vulkan)
+# meshouivk - Simple Collada parser and viewer
 
 ![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.png)
 
@@ -14,6 +14,7 @@ Master targets Vulkan 1.1.
 Todo
 -------
 
+* Improve Cameras and Lights
 * Nvidia RTX realtime shadows
 
 
