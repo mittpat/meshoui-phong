@@ -67,12 +67,14 @@ namespace Meshoui
         MaterialPrivate();
 
         HashId name;
+        VkSampler ambientSampler;
         VkSampler diffuseSampler;
         VkSampler normalSampler;
         VkSampler specularSampler;
         VkSampler emissiveSampler;
         // this descriptor set uses only immutable samplers, one set per swapchain
         VkDescriptorSet descriptorSet;
+        ImageBufferVk ambientImage;
         ImageBufferVk diffuseImage;
         ImageBufferVk normalImage;
         ImageBufferVk specularImage;
@@ -80,7 +82,7 @@ namespace Meshoui
         size_t referenceCount;
     };
     inline MaterialPrivate::~MaterialPrivate() {}
-    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
+    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), ambientSampler(VK_NULL_HANDLE), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
 
     class MeshPrivate final
     {

@@ -16,20 +16,19 @@ layout(std140, binding = 0) uniform Block
     uniform vec3 lightPosition;
 } uniformData;
 
-layout(set = 1, binding = 0) uniform sampler2D uniformTextureDiffuse;
-layout(set = 1, binding = 1) uniform sampler2D uniformTextureNormal;
-layout(set = 1, binding = 2) uniform sampler2D uniformTextureSpecular;
-layout(set = 1, binding = 3) uniform sampler2D uniformTextureEmissive;
+layout(set = 1, binding = 0) uniform sampler2D uniformTextureAmbient;
+layout(set = 1, binding = 1) uniform sampler2D uniformTextureDiffuse;
+layout(set = 1, binding = 2) uniform sampler2D uniformTextureNormal;
+layout(set = 1, binding = 3) uniform sampler2D uniformTextureSpecular;
+layout(set = 1, binding = 4) uniform sampler2D uniformTextureEmissive;
 
 void main()
 {
     vec2 texcoord = vec2(inData.texcoord.s, 1.0 - inData.texcoord.t);
 
-    float fragmentDist = distance(uniformData.viewPosition, inData.vertex);
-
-    vec3 ambient = vec3(0.0, 0.0, 0.0);//materialData.ambient;
+    vec4 textureAmbient = texture(uniformTextureAmbient, texcoord);
     vec4 textureDiffuse = texture(uniformTextureDiffuse, texcoord);
-    fragment = vec4(ambient * textureDiffuse.rgb, textureDiffuse.a);
+    fragment = vec4(textureAmbient.rgb * textureDiffuse.rgb, textureDiffuse.a);
 
     vec4 textureNormal = texture(uniformTextureNormal, texcoord);
     // discard textureNormal when ~= (0,0,0)

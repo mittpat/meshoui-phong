@@ -214,6 +214,7 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
 
             MaterialPrivate * materialPrivate = mesh->m = new MaterialPrivate();
             materialPrivate->name = material->name;
+            texture(materialPrivate->ambientImage, sibling(material->textureAmbient, meshFile.filename), float4(material->ambient, 1.0f), device, swapChain, frameIndex);
             texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
             texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), linalg::zero, device, swapChain, frameIndex);
             texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), float4(material->emissive, 1.0f), device, swapChain, frameIndex);
@@ -232,6 +233,8 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
                 info.minLod = -1000;
                 info.maxLod = 1000;
                 info.maxAnisotropy = 1.0f;
+                err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->ambientSampler);
+                check_vk_result(err);
                 err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->diffuseSampler);
                 check_vk_result(err);
                 err = vkCreateSampler(device.device, &info, device.allocator, &materialPrivate->normalSampler);
@@ -253,45 +256,33 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             }
 
             {
-                VkDescriptorImageInfo desc_image[4] = {};
-                desc_image[0].sampler = materialPrivate->diffuseSampler;
-                desc_image[0].imageView = materialPrivate->diffuseImage.view;
+                VkDescriptorImageInfo desc_image[5] = {};
+                desc_image[0].sampler = materialPrivate->ambientSampler;
+                desc_image[0].imageView = materialPrivate->ambientImage.view;
                 desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                desc_image[1].sampler = materialPrivate->normalSampler;
-                desc_image[1].imageView = materialPrivate->normalImage.view;
+                desc_image[1].sampler = materialPrivate->diffuseSampler;
+                desc_image[1].imageView = materialPrivate->diffuseImage.view;
                 desc_image[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                desc_image[2].sampler = materialPrivate->specularSampler;
-                desc_image[2].imageView = materialPrivate->specularImage.view;
+                desc_image[2].sampler = materialPrivate->normalSampler;
+                desc_image[2].imageView = materialPrivate->normalImage.view;
                 desc_image[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                desc_image[3].sampler = materialPrivate->emissiveSampler;
-                desc_image[3].imageView = materialPrivate->emissiveImage.view;
+                desc_image[3].sampler = materialPrivate->specularSampler;
+                desc_image[3].imageView = materialPrivate->specularImage.view;
                 desc_image[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                VkWriteDescriptorSet write_desc[4] = {};
-                write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[0].dstSet = materialPrivate->descriptorSet;
-                write_desc[0].dstBinding = 0;
-                write_desc[0].descriptorCount = 1;
-                write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                write_desc[0].pImageInfo = &desc_image[0];
-                write_desc[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[1].dstSet = materialPrivate->descriptorSet;
-                write_desc[1].dstBinding = 1;
-                write_desc[1].descriptorCount = 1;
-                write_desc[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                write_desc[1].pImageInfo = &desc_image[1];
-                write_desc[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[2].dstSet = materialPrivate->descriptorSet;
-                write_desc[2].dstBinding = 2;
-                write_desc[2].descriptorCount = 1;
-                write_desc[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                write_desc[2].pImageInfo = &desc_image[2];
-                write_desc[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[3].dstSet = materialPrivate->descriptorSet;
-                write_desc[3].dstBinding = 3;
-                write_desc[3].descriptorCount = 1;
-                write_desc[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                write_desc[3].pImageInfo = &desc_image[3];
-                vkUpdateDescriptorSets(device.device, 4, write_desc, 0, nullptr);
+                desc_image[4].sampler = materialPrivate->emissiveSampler;
+                desc_image[4].imageView = materialPrivate->emissiveImage.view;
+                desc_image[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                VkWriteDescriptorSet write_desc[5] = {};
+                for (uint32_t i = 0; i < 5; ++i)
+                {
+                    write_desc[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write_desc[i].dstSet = materialPrivate->descriptorSet;
+                    write_desc[i].dstBinding = i;
+                    write_desc[i].descriptorCount = 1;
+                    write_desc[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    write_desc[i].pImageInfo = &desc_image[i];
+                }
+                vkUpdateDescriptorSets(device.device, 5, write_desc, 0, nullptr);
             }
         }
         mesh->m->referenceCount += 1;
@@ -345,28 +336,15 @@ void RendererPrivate::registerGraphics(Program * program)
     }
 
     {
-        VkDescriptorSetLayoutBinding binding[4];
-        binding[0].binding = 0;
-        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding[0].descriptorCount = 1;
-        binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding[0].pImmutableSamplers = VK_NULL_HANDLE;
-        binding[1].binding = 1;
-        binding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding[1].descriptorCount = 1;
-        binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding[1].pImmutableSamplers = VK_NULL_HANDLE;
-        binding[2].binding = 2;
-        binding[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding[2].descriptorCount = 1;
-        binding[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding[2].pImmutableSamplers = VK_NULL_HANDLE;
-        binding[3].binding = 3;
-        binding[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding[3].descriptorCount = 1;
-        binding[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding[3].pImmutableSamplers = VK_NULL_HANDLE;
-
+        VkDescriptorSetLayoutBinding binding[5];
+        for (uint32_t i = 0; i < 5; ++i)
+        {
+            binding[i].binding = i;
+            binding[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            binding[i].descriptorCount = 1;
+            binding[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            binding[i].pImmutableSamplers = VK_NULL_HANDLE;
+        }
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = countof(binding);
@@ -571,11 +549,13 @@ void RendererPrivate::unregisterGraphics(Mesh * mesh)
         if (materialPrivate->referenceCount == 0)
         {
             vkQueueWaitIdle(device.queue);
+            device.deleteBuffer(materialPrivate->ambientImage);
             device.deleteBuffer(materialPrivate->diffuseImage);
             device.deleteBuffer(materialPrivate->normalImage);
             device.deleteBuffer(materialPrivate->specularImage);
             device.deleteBuffer(materialPrivate->emissiveImage);
 
+            vkDestroySampler(device.device, materialPrivate->ambientSampler, device.allocator);
             vkDestroySampler(device.device, materialPrivate->diffuseSampler, device.allocator);
             vkDestroySampler(device.device, materialPrivate->normalSampler, device.allocator);
             vkDestroySampler(device.device, materialPrivate->specularSampler, device.allocator);
