@@ -20,6 +20,7 @@ namespace Meshoui
         linalg::aliases::float3 specular;
         linalg::aliases::float3 emissive;
 
+        std::string textureAmbient;
         std::string textureDiffuse;
         std::string textureNormal;
         std::string textureSpecular;

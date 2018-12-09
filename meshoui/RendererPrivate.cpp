@@ -243,19 +243,15 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             }
 
             {
-                VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
-                for (size_t i = 0; i < FrameCount; ++i)
-                    descriptorSetLayout[i] = mesh->program->d->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT];
                 VkDescriptorSetAllocateInfo alloc_info = {};
                 alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
                 alloc_info.descriptorPool = device.descriptorPool;
-                alloc_info.descriptorSetCount = FrameCount;
-                alloc_info.pSetLayouts = descriptorSetLayout;
-                err = vkAllocateDescriptorSets(device.device, &alloc_info, materialPrivate->descriptorSet);
+                alloc_info.descriptorSetCount = 1;
+                alloc_info.pSetLayouts = &mesh->program->d->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT];
+                err = vkAllocateDescriptorSets(device.device, &alloc_info, &materialPrivate->descriptorSet);
                 check_vk_result(err);
             }
 
-            for (size_t i = 0; i < FrameCount; ++i)
             {
                 VkDescriptorImageInfo desc_image[4] = {};
                 desc_image[0].sampler = materialPrivate->diffuseSampler;
@@ -272,25 +268,25 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
                 desc_image[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 VkWriteDescriptorSet write_desc[4] = {};
                 write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[0].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[0].dstSet = materialPrivate->descriptorSet;
                 write_desc[0].dstBinding = 0;
                 write_desc[0].descriptorCount = 1;
                 write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[0].pImageInfo = &desc_image[0];
                 write_desc[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[1].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[1].dstSet = materialPrivate->descriptorSet;
                 write_desc[1].dstBinding = 1;
                 write_desc[1].descriptorCount = 1;
                 write_desc[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[1].pImageInfo = &desc_image[1];
                 write_desc[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[2].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[2].dstSet = materialPrivate->descriptorSet;
                 write_desc[2].dstBinding = 2;
                 write_desc[2].descriptorCount = 1;
                 write_desc[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 write_desc[2].pImageInfo = &desc_image[2];
                 write_desc[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                write_desc[3].dstSet = materialPrivate->descriptorSet[i];
+                write_desc[3].dstSet = materialPrivate->descriptorSet;
                 write_desc[3].dstBinding = 3;
                 write_desc[3].descriptorCount = 1;
                 write_desc[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -637,7 +633,7 @@ void RendererPrivate::bindGraphics(Mesh * mesh)
 
     MaterialPrivate * materialPrivate = mesh->m;
 
-    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->program->d->pipelineLayout, 1, 1, &materialPrivate->descriptorSet[frameIndex], 0, nullptr);
+    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->program->d->pipelineLayout, 1, 1, &materialPrivate->descriptorSet, 0, nullptr);
 }
 
 void RendererPrivate::bindGraphics(Program * program)

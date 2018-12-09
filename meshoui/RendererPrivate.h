@@ -52,6 +52,7 @@ namespace Meshoui
 
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;
+        // the buffers bound to this descriptor set may change frame to frame, one set per frame
         VkDescriptorSetLayout descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT+1];
         VkDescriptorSet descriptorSet[FrameCount];
         DeviceBufferVk uniformBuffer[FrameCount];
@@ -70,7 +71,8 @@ namespace Meshoui
         VkSampler normalSampler;
         VkSampler specularSampler;
         VkSampler emissiveSampler;
-        VkDescriptorSet descriptorSet[FrameCount];
+        // this descriptor set uses only immutable samplers, one set per swapchain
+        VkDescriptorSet descriptorSet;
         ImageBufferVk diffuseImage;
         ImageBufferVk normalImage;
         ImageBufferVk specularImage;
@@ -78,7 +80,7 @@ namespace Meshoui
         size_t referenceCount;
     };
     inline MaterialPrivate::~MaterialPrivate() {}
-    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE) {}
+    inline MaterialPrivate::MaterialPrivate() : referenceCount(0), diffuseSampler(VK_NULL_HANDLE), normalSampler(VK_NULL_HANDLE), specularSampler(VK_NULL_HANDLE), emissiveSampler(VK_NULL_HANDLE), descriptorSet(VK_NULL_HANDLE) {}
 
     class MeshPrivate final
     {

@@ -47,6 +47,7 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
                     if (image != data.images.end()) { v.texture = (*image).initFrom; }
 
                     if (v.sid == "uniformAmbient") { material.ambient = (float3&)v.data[0]; }
+                    else if (v.sid == "uniformTextureAmbient") { material.textureAmbient = v.texture; }
                     else if (v.sid == "uniformDiffuse") { material.diffuse = (float3&)v.data[0]; }
                     else if (v.sid == "uniformTextureDiffuse") { material.textureDiffuse = v.texture; }
                     else if (v.sid == "uniformSpecular") { material.specular = (float3&)v.data[0]; }
