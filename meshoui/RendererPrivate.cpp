@@ -215,7 +215,7 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             MaterialPrivate * materialPrivate = mesh->m = new MaterialPrivate();
             materialPrivate->name = material->name;
             texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
-            texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), float4(0.5f, 0.5f, 1.0f, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), linalg::zero, device, swapChain, frameIndex);
             texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), float4(material->emissive, 1.0f), device, swapChain, frameIndex);
             texture(materialPrivate->specularImage, sibling(material->textureSpecular, meshFile.filename), float4(material->specular, 1.0f), device, swapChain, frameIndex);
 
