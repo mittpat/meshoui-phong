@@ -1,6 +1,6 @@
 # meshoui - Simple Collada parser and viewer
 
-![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/screenshot.png)
+![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.png)
 
 
 Notes
@@ -22,7 +22,7 @@ Todo
 qu3e
 -------
 
-![animation](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/qu3e.gif)
+![animation](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/qu3e.gif)
 
 
 License
