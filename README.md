@@ -1,4 +1,4 @@
-# meshoui - Simple Collada parser and viewer
+# meshouivk - Simple Collada parser and viewer (Vulkan)
 
 ![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.png)
 
@@ -6,16 +6,14 @@
 Notes
 -------
 
-The Collada support is only very very partial. Some Blender files were tested, but other files on the web are known to fail with a blank screen.
+The Collada support is partial. Only phong material is supported.
 
-This branch targets Vulkan 1.1. Only texture mapping is missing (wip).
+Master targets Vulkan 1.1.
 
 
 Todo
 -------
 
-* Texture mapping
-* Improve Cameras and Lights
 * Nvidia RTX realtime shadows
 
 
