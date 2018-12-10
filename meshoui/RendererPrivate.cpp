@@ -42,7 +42,7 @@ namespace
         if (std::filesystem::exists(ddsfilename))
         {
             nv_dds::CDDSImage image;
-            image.load(ddsfilename, false);
+            image.load(ddsfilename.u8string(), false);
             width = image.get_width();
             height = image.get_height();
             data.resize(image.get_size());
@@ -63,7 +63,7 @@ namespace
         }
         else if (std::filesystem::exists(pngfilename))
         {
-            unsigned error = lodepng::decode(data, width, height, pngfilename);
+            unsigned error = lodepng::decode(data, width, height, pngfilename.u8string());
             if (error != 0)
             {
                 printf("TextureLoader::loadPNG: error '%d' : '%s'\n", error, lodepng_error_text(error));
