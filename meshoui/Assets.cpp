@@ -3,6 +3,8 @@
 #include <q3.h>
 
 using namespace Meshoui;
+using namespace linalg;
+using namespace linalg::aliases;
 
 ScopedAsset::ScopedAsset(Renderer *r, const std::string &filename)
     : renderer(r)
@@ -38,12 +40,16 @@ ScopedSkydome::~ScopedSkydome()
     renderer->remove(&program);
 }
 
-ScopedBody::ScopedBody(q3Scene *s, const linalg::aliases::float3 & position, const linalg::aliases::float4 & orientation, const linalg::aliases::float3 &scale, bool dynamic)
+ScopedBody::ScopedBody(q3Scene *s, const float4x4 & modelMatrix, bool dynamic, bool upright)
     : scene(s)
     , body(nullptr)
 {
     q3BodyDef def;
     def.bodyType = dynamic ? eDynamicBody : eKinematicBody;
+    if (upright)
+    {
+        def.lockAxisX = def.lockAxisZ = true;
+    }
     body = scene->CreateBody(def);
 
     q3BoxDef boxDef;
@@ -51,13 +57,25 @@ ScopedBody::ScopedBody(q3Scene *s, const linalg::aliases::float3 & position, con
     q3Transform tx;
     q3Identity(tx);
 
+    float3 position;
+    float3x3 rotation;
+    float3 scale;
+    linalg::split(modelMatrix, position, scale, rotation);
+    float4 orientation = rotation_quat(rotation);
+
     boxDef.Set(tx, (q3Vec3&)scale * 2.f);
     body->AddBox(boxDef);
-    linalg::aliases::float3 axis = linalg::qaxis(orientation);
-    body->SetTransform((q3Vec3&)position, (q3Vec3&)axis, linalg::qangle(orientation));
+    float3 axis = qaxis(orientation);
+    body->SetTransform((q3Vec3&)position, (q3Vec3&)axis, qangle(orientation));
 }
 
 ScopedBody::~ScopedBody()
 {
     scene->RemoveBody(body);
+}
+
+float4x4 ScopedBody::modelMatrix() const
+{
+    const auto transform = body->GetTransform();
+    return pose_matrix(rotation_quat((float3x3&)transform.rotation), (float3&)transform.position);
 }

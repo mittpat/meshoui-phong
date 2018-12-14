@@ -28,8 +28,12 @@ namespace Meshoui
 
     struct ScopedBody final
     {
-        ScopedBody(q3Scene * s, const linalg::aliases::float3 & position = linalg::zero, const linalg::aliases::float4 & orientation = linalg::identity, const linalg::aliases::float3 & scale = linalg::aliases::float3(1.f, 1.f, 1.f), bool dynamic = true);
+        ScopedBody(q3Scene * s,
+                   const linalg::aliases::float4x4 & modelMatrix = linalg::identity,
+                   bool dynamic = true, bool upright = false);
         ~ScopedBody();
+
+        linalg::aliases::float4x4 modelMatrix() const;
 
         q3Scene * scene;
         q3Body * body;

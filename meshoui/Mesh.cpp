@@ -23,8 +23,3 @@ Mesh::~Mesh()
 {
 
 }
-
-linalg::aliases::float4x4 Mesh::modelMatrix() const
-{
-    return mul(translation_matrix(position), mul(rotation_matrix(orientation), scaling_matrix(scale)));
-}

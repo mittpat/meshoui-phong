@@ -80,10 +80,7 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
                     instance.materialId = libraryNode.geometry.material;
                 else
                     instance.materialId = meshFile.materials[0].name;
-                float3x3 rot = identity;
-                linalg::split(libraryNode.transform, instance.position, instance.scale, rot);
-                rot = transpose(rot);
-                instance.orientation = rotation_quat(rot);
+                instance.modelMatrix = libraryNode.transform;
                 meshFile.instances.push_back(instance);
             }
         }

@@ -176,7 +176,7 @@
     <geometry id="Cube_001-mesh" name="Cube.001">
       <mesh>
         <source id="Cube_001-mesh-positions">
-          <float_array id="Cube_001-mesh-positions-array" count="24">-5.158592 0.122177 3.453586 -5.158592 4.548241 3.453586 -5.158592 4.548241 -1.246414 -5.158592 0.122177 -1.246414 -1.158592 4.548241 -1.246414 -1.158592 0.122177 -1.246414 -1.158592 4.548241 3.453586 -1.158592 0.122177 3.453586</float_array>
+          <float_array id="Cube_001-mesh-positions-array" count="24">-2 -2.213032 2.35 -2 2.213032 2.35 -2 2.213032 -2.35 -2 -2.213032 -2.35 2 2.213032 -2.35 2 -2.213032 -2.35 2 2.213032 2.35 2 -2.213032 2.35</float_array>
           <technique_common>
             <accessor source="#Cube_001-mesh-positions-array" count="8" stride="3">
               <param name="X" type="float"/>
@@ -228,7 +228,7 @@
         <instance_light url="#Lamp-light"/>
       </node>
       <node id="Cube_001" name="Cube_001" type="NODE">
-        <matrix sid="transform">1 0 0 0 0 -4.37114e-8 -1 0 0 1 -4.37114e-8 0 0 0 0 1</matrix>
+        <matrix sid="transform">1 0 0 0 0 0 -1 0 0 1 0 0 0 0 0 1</matrix>
         <instance_geometry url="#Cube_001-mesh" name="Cube_001">
           <bind_material>
             <technique_common>

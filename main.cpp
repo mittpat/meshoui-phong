@@ -29,56 +29,42 @@ int main(int, char**)
     renderer.add(&phongProgram);
 
     {
-        static const float3 right(-1.,0.,0.);
-        
         ScopedSkydome skydome(&renderer);
         ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
         ScopedAsset island(&renderer, "meshoui/resources/models/island.dae");
-        for (const auto & mesh : island.meshes) mesh->position.y = -4.0f;
+        for (const auto & mesh : island.meshes) mesh->modelMatrix.w.y = -4.0f;
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
         std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
-        std::vector<BodyAttitude<Mesh>> bodyBakers; bodyBakers.reserve(crates.meshes.size());
-        for (const auto & mesh : crates.meshes)
-        {
-            bodies.emplace_back(&scene, mesh->position, mesh->orientation, mesh->scale);
-            bodyBakers.emplace_back(mesh, bodies.back().body);
-        }
-        ScopedBody groundBody(&scene, float3(0, -5, 0), identity, float3(100, 1, 100), false);
-        
+        for (const auto & mesh : crates.meshes) { bodies.emplace_back(&scene, mesh->modelMatrix); }
+        bricks.meshes[0]->modelMatrix.w = float4(float3(-5.0, 2.0, 0.0), 1.0);
+        float4x4 groundModel = mul(pose_matrix(float4(0,0,0,1), float3(0,-5,0)), scaling_matrix(float3(100,1,100)));
+        ScopedBody groundBody(&scene, groundModel, false);
         
         Camera camera;
-        camera.position = float3(0.0, 2.0, 5.0);
+        camera.modelMatrix.w = float4(float3(0.0, 2.0, 5.0), 1.0);
         renderer.add(&camera);
         camera.enable();
-        
+
         LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
         WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
         renderer.add(&cameraStrafer);
-        
+
         Mouselook<Camera> cameraLook(&camera);
         renderer.add(&cameraLook);
-        
-        
+
         Light light;
-        light.position = float3(300.0, 1000.0, -300.0);
+        light.modelMatrix.w = float4(float3(300.0, 1000.0, -300.0), 1.0);
         renderer.add(&light);
         light.enable(true);
         
-        AngularVelocity<Light> lightAnimator(&light);
-        lightAnimator.angularVelocity = rotation_quat(right, 0.02f);
-
-
         bool run = true;
         while (run)
         {
-            lightAnimator.step(timestep);
             cameraAnimator.step(timestep);
             scene.Step();
-            for (const auto & bodyBaker : bodyBakers)
-                bodyBaker.bake();
+            for (size_t i = 0; i < crates.meshes.size(); ++i) { crates.meshes[i]->modelMatrix = bodies[i].modelMatrix(); }
             renderer.update(timestep);
-            if (renderer.shouldClose())
-                run = false;
+            if (renderer.shouldClose()) { run = false; }
         }
 
         renderer.remove(&cameraStrafer);

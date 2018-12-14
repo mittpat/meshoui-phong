@@ -15,21 +15,15 @@ void Camera::disable()
     d->unbindGraphics(this);
 }
 
-/*float4x4 Camera::modelMatrix() const
-{
-    const float4x4 parentMatrix = mul(translation_matrix(position), mul(rotation_matrix(orientation), scaling_matrix(float3(1.0, 1.0, 1.0))));
-    const float4x4 localMatrix = mul(translation_matrix(localPosition), mul(rotation_matrix(localOrientation), scaling_matrix(float3(1.0, 1.0, 1.0))));
-    return mul(localMatrix, parentMatrix);
-}*/
-
 linalg::aliases::float4x4 Camera::viewMatrix(View::Flags op) const
 {
-    linalg::aliases::float4x4 ret = identity;
-    if (op & View::Scaling)
-        ret = mul(scaling_matrix(float3(1.0, 1.0, 1.0)), ret);
-    if (op & View::Rotation)
-        ret = mul(rotation_matrix(orientation), ret);
-    if (op & View::Translation)
-        ret = mul(translation_matrix(position), ret);
-    return inverse(ret);
+    float4x4 ret = inverse(modelMatrix);
+    if ((op & View::Translation) == 0) { ret.w = float4(0.f, 0.f, 0.f, 1.f); }
+    if ((op & View::Rotation) == 0)
+    {
+        ret.x = float4(1.f, 0.f, 0.f, 0.f);
+        ret.y = float4(0.f, 1.f, 0.f, 0.f);
+        ret.z = float4(0.f, 0.f, 1.f, 0.f);
+    }
+    return ret;
 }

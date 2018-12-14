@@ -67,12 +67,10 @@ namespace Meshoui
         HashId instanceId;
         HashId definitionId;
         HashId materialId;
-        linalg::aliases::float3 scale;
-        linalg::aliases::float4 orientation;
-        linalg::aliases::float3 position;
+        linalg::aliases::float4x4 modelMatrix;
     };
-    inline MeshInstance::MeshInstance() : scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
-    inline MeshInstance::MeshInstance(HashId name, const MeshDefinition & definition) : instanceId(name), definitionId(definition.definitionId), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f) {}
+    inline MeshInstance::MeshInstance() : modelMatrix(linalg::identity) {}
+    inline MeshInstance::MeshInstance(HashId name, const MeshDefinition & definition) : instanceId(name), definitionId(definition.definitionId), modelMatrix(linalg::identity) {}
 
     struct MeshFile final
     {

@@ -19,8 +19,6 @@ namespace Meshoui
         virtual ~Mesh();
         Mesh();
 
-        linalg::aliases::float4x4 modelMatrix() const;
-
         Program * program;
 
         HashId instanceId;
@@ -28,9 +26,7 @@ namespace Meshoui
         HashId materialId;
         std::string filename;
 
-        linalg::aliases::float3 scale;
-        linalg::aliases::float4 orientation;
-        linalg::aliases::float3 position;
+        linalg::aliases::float4x4 modelMatrix;
 
         View::Flags viewFlags;
         Render::Flags renderFlags;
@@ -40,7 +36,7 @@ namespace Meshoui
         MeshPrivate * d;
         MaterialPrivate * m;
     };
-    inline Mesh::Mesh() : program(nullptr), scale(1.f, 1.f, 1.f), orientation(linalg::identity), position(0.f, 0.f, 0.f), viewFlags(View::All), renderFlags(Render::Default), d(nullptr), m(nullptr) {}
+    inline Mesh::Mesh() : program(nullptr), modelMatrix(linalg::identity), viewFlags(View::All), renderFlags(Render::Default), d(nullptr), m(nullptr) {}
 
     // Mesh factory
     class RendererPrivate;
@@ -72,7 +68,7 @@ namespace Meshoui
         std::vector<T *> meshes; meshes.reserve(count);
         for (size_t i = 0; i < count; ++i) meshes.emplace_back(new T());
         fill(std::vector<Mesh *>(meshes.begin(), meshes.end()));
-        for (size_t i = 0; i < count; ++i) meshes[i]->position += position;
+        for (size_t i = 0; i < count; ++i) meshes[i]->modelMatrix.w += linalg::aliases::float4(position, 0.0f);
         return meshes;
     }
 }

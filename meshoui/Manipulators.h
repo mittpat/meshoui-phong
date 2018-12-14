@@ -15,51 +15,6 @@
 namespace Meshoui
 {
     template<typename T>
-    struct LinearAcceleration
-    {
-        LinearAcceleration(T * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
-        void step(float s)
-        {
-            linalg::aliases::float3 forward = qzdir(target->orientation);
-            linalg::aliases::float3 right = qxdir(target->orientation);
-
-            linearVelocity *= (1.0f - damping);
-            linearVelocity += s * linearAcceleration;
-            target->position += s * (linearVelocity.z * forward) + s * (linearVelocity.x * right);
-        }
-        T * target;
-        float damping;
-        linalg::aliases::float3 linearVelocity;
-        linalg::aliases::float3 linearAcceleration;
-    };
-
-    template<typename T>
-    struct AngularVelocity
-    {
-        AngularVelocity(T * t) : target(t), angularVelocity(linalg::identity) {}
-        void step(float s)
-        {
-            target->position = linalg::mul(linalg::rotation_matrix(linalg::rotation_quat(linalg::qaxis(angularVelocity), linalg::qangle(angularVelocity) * s)), linalg::aliases::float4(target->position, 1.0)).xyz();
-        }
-        T * target;
-        linalg::aliases::float4 angularVelocity;
-    };
-
-    template<typename T>
-    struct BodyAttitude
-    {
-        BodyAttitude(T * t, q3Body * b) : target(t), body(b) {}
-        void bake() const
-        {
-            const auto transform = body->GetTransform();
-            target->position = (linalg::aliases::float3&)transform.position;
-            target->orientation = linalg::rotation_quat((linalg::aliases::float3x3&)transform.rotation);
-        }
-        T * target;
-        q3Body * body;
-    };
-
-    template<typename T>
     struct WASD
         : IKeyboard
     {
@@ -88,6 +43,25 @@ namespace Meshoui
             }
         }
         T * target;
+    };
+
+    template<typename T>
+    struct LinearAcceleration
+    {
+        LinearAcceleration(T * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
+        void step(float s)
+        {
+            linalg::aliases::float3 forward = mul(target->modelMatrix, linalg::aliases::float4(0,0,1,0)).xyz();
+            linalg::aliases::float3 right = mul(target->modelMatrix, linalg::aliases::float4(1,0,0,0)).xyz();
+
+            linearVelocity *= (1.0f - damping);
+            linearVelocity += s * linearAcceleration;
+            target->modelMatrix.w += linalg::aliases::float4(s * (linearVelocity.z * forward) + s * (linearVelocity.x * right), 0);
+        }
+        T * target;
+        float damping;
+        linalg::aliases::float3 linearVelocity;
+        linalg::aliases::float3 linearAcceleration;
     };
 
     template<typename T>
@@ -167,7 +141,7 @@ namespace Meshoui
     struct Mouselook
         : IMouse
     {
-        Mouselook(T * t) : target(t), previousX(0), previousY(0), once(false) {}
+        Mouselook(T * t) : target(t), previousX(0), previousY(0), yaw(0), pitch(0), once(false) {}
         virtual void cursorPositionAction(void *, double xpos, double ypos, bool overlay) override
         {
             if (overlay)
@@ -180,12 +154,15 @@ namespace Meshoui
 
                 static const float rotationScaler = 0.001f;
                 {
-                    linalg::aliases::float3 right = qxdir(target->orientation);
-                    target->orientation = qmul(rotation_quat(right, float(-deltaY * rotationScaler * M_PI/2)), target->orientation);
-                }
-                {
-                    linalg::aliases::float3 up(0.,1.,0.);
-                    target->orientation = qmul(rotation_quat(up, float(-deltaX * rotationScaler * M_PI)), target->orientation);
+                    linalg::aliases::float3 position = target->modelMatrix.w.xyz();
+
+                    yaw += deltaX * rotationScaler * M_PI;
+                    pitch += deltaY * rotationScaler * M_PI/2;
+
+                    linalg::aliases::float4x4 yawM = rotation_matrix(rotation_quat(linalg::aliases::float3(0,-1,0), float(yaw)));
+                    linalg::aliases::float4x4 pitchM = rotation_matrix(rotation_quat(linalg::aliases::float3(-1,0,0), float(pitch)));
+
+                    target->modelMatrix = mul(mul(translation_matrix(position), yawM), pitchM);
                 }
             }
 
@@ -198,7 +175,7 @@ namespace Meshoui
             once = false;
         }
         T * target;
-        double previousX, previousY;
+        double previousX, previousY, yaw, pitch;
         bool once;
     };
 }

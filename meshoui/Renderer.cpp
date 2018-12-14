@@ -353,8 +353,8 @@ void Renderer::renderMeshes()
     VkRect2D scissor{{0, 0}, {d->swapChain.extent.width, d->swapChain.extent.height}};
     vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
 
-    d->uniforms.position = d->camera->position;
-    d->uniforms.light = d->lights[0]->position;
+    d->uniforms.position = d->camera->modelMatrix.w.xyz();
+    d->uniforms.light = d->lights[0]->modelMatrix.w.xyz();
 
     Program * currentProgram = nullptr;
 
@@ -371,7 +371,7 @@ void Renderer::renderMeshes()
         }
         d->bindGraphics(mesh);
 
-        d->pushConstants.model = mesh->modelMatrix();
+        d->pushConstants.model = mesh->modelMatrix;
         if (d->camera != nullptr)
             d->pushConstants.view = d->camera->viewMatrix(mesh->viewFlags);
         d->pushConstants.projection = mesh->viewFlags == View::None ? identity : d->projectionMatrix;

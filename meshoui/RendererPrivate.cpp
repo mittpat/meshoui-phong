@@ -675,9 +675,7 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         mesh->definitionId = instance.definitionId;
         mesh->materialId = instance.materialId;
         mesh->filename = meshFile.filename;
-        mesh->scale = instance.scale;
-        mesh->position = instance.position;
-        mesh->orientation = instance.orientation;
+        mesh->modelMatrix = instance.modelMatrix;
         auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [instance](const auto & definition){ return definition.definitionId == instance.definitionId; });
         if (definition->doubleSided)
         {

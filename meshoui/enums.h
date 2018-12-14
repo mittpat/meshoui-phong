@@ -4,7 +4,7 @@ namespace Meshoui
 {
     struct View
     {
-        enum Flag { None = 0x0, Rotation = 0x01, Translation = 0x02, Scaling = 0x04, All = 0xFF };
+        enum Flag { None = 0x0, Rotation = 0x01, Translation = 0x02, All = 0xFF };
         typedef int Flags;
     };
 
