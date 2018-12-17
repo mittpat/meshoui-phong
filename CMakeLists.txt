@@ -27,5 +27,5 @@ include_directories(meshoui)
 use_linalg()
 use_qu3e()
 
-add_executable(meshouiview main.cpp)
-target_link_libraries(meshouiview meshouilib)
+add_executable(meshouiview main.cpp assets.h assets.cpp manipulators.h)
+target_link_libraries(meshouiview meshouilib qu3e)

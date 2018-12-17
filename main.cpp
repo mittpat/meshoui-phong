@@ -1,9 +1,10 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include <Assets.h>
+#include "assets.h"
+#include "manipulators.h"
+
 #include <Camera.h>
-#include <Manipulators.h>
 #include <Mesh.h>
 #include <Program.h>
 #include <Renderer.h>

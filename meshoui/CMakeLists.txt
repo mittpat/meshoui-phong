@@ -11,8 +11,6 @@ add_library(meshouilib
     vk/SwapChainVk.h
     enums.h
     hashid.h
-    Assets.cpp
-    Assets.h
     Camera.cpp
     Camera.h
     IKeyboard.cpp
@@ -21,8 +19,6 @@ add_library(meshouilib
     IMouse.h
     InputCallbacks.cpp
     InputCallbacks.h
-    Manipulators.cpp
-    Manipulators.h
     Mesh.cpp
     Mesh.h
     MeshLoader.cpp
@@ -50,8 +46,6 @@ add_custom_target(meshouilib_data SOURCES ${Resources})
 find_package(Vulkan REQUIRED)
 
 use_linalg()
-use_pugixml()
-use_qu3e()
 include_directories(${Vulkan_INCLUDE_DIR})
 include_directories(../3rdparty/glfw/include)
 include_directories(../3rdparty/imgui)
@@ -59,7 +53,7 @@ include_directories(../3rdparty/lodepng)
 include_directories(../3rdparty/nv_dds)
 include_directories(../common)
 
-target_link_libraries(meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng pugixml nv_dds qu3e)
+target_link_libraries(meshouilib commonlib ${Vulkan_LIBRARIES} glfw imgui lodepng nv_dds)
 if(NOT MSVC)
     target_link_libraries(meshouilib stdc++fs)
 endif()

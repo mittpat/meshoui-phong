@@ -1,4 +1,4 @@
-#include "Assets.h"
+#include "assets.h"
 
 #include <q3.h>
 
