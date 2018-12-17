@@ -2,9 +2,21 @@
 #include "MeshLoaderPrivate.h"
 
 #include <collada.h>
-#include <loose.h>
 #include <linalg.h>
 #include <functional>
+
+#include <experimental/filesystem>
+
+namespace std { namespace filesystem = experimental::filesystem; }
+namespace
+{
+    std::string sibling(const std::string & path, const std::string & other)
+    {
+        std::filesystem::path parentpath(other);
+        std::filesystem::path parentdirectory = parentpath.parent_path();
+        return (parentdirectory / path).u8string();
+    }
+}
 
 using namespace linalg;
 using namespace linalg::aliases;

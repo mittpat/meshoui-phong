@@ -10,6 +10,7 @@ add_library(meshouilib
     vk/SwapChainVk.cpp
     vk/SwapChainVk.h
     enums.h
+    hashid.h
     Assets.cpp
     Assets.h
     Camera.cpp
@@ -28,7 +29,6 @@ add_library(meshouilib
     MeshLoader.h
     MeshLoaderPrivate.cpp
     MeshLoaderPrivate.h
-    Program.cpp
     Program.h
     Renderer.cpp
     Renderer.h

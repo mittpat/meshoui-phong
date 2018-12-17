@@ -3,9 +3,9 @@
 #include "Renderer.h"
 #include "RendererPrivate.h"
 
-#include <loose.h>
 #include <algorithm>
 #include <experimental/filesystem>
+#include <cstring>
 #include <fstream>
 
 #include <lodepng.h>
@@ -30,6 +30,9 @@ namespace
         if (err < 0)
             abort();
     }
+
+    template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
+    constexpr float degreesToRadians(float angle) { return angle * 3.14159265359f / 180.0f; }
 
     void texture(ImageBufferVk & imageBuffer, const std::string & filename, float4 fallbackColor, DeviceVk & device, SwapChainVk & swapChain, uint32_t frameIndex)
     {

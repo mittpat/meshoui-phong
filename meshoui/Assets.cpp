@@ -2,6 +2,8 @@
 
 #include <q3.h>
 
+#include <fstream>
+
 using namespace Meshoui;
 using namespace linalg;
 using namespace linalg::aliases;
@@ -23,8 +25,16 @@ ScopedAsset::~ScopedAsset()
 
 ScopedSkydome::ScopedSkydome(Renderer *r)
     : ScopedAsset(r, "meshoui/resources/models/skydome.dae")
-    , program("meshoui/resources/shaders/Skydome.shader")
 {
+    {
+        std::ifstream fileStream("meshoui/resources/shaders/Skydome.vert.spv", std::ifstream::binary);
+        program.vertexShaderSource = std::vector<char>(std::istreambuf_iterator<char>(fileStream), std::istreambuf_iterator<char>());
+    }
+    {
+        std::ifstream fileStream("meshoui/resources/shaders/Skydome.frag.spv", std::ifstream::binary);
+        program.fragmentShaderSource = std::vector<char>(std::istreambuf_iterator<char>(fileStream), std::istreambuf_iterator<char>());
+    }
+
     program.features &= ~Feature::DepthTest;
     program.features &= ~Feature::DepthWrite;
     renderer->add(&program);

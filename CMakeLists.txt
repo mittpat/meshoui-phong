@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(meshoui VERSION 0.1.0)
 
-include(CTest)
-enable_testing()
-
 set(meshoui_root ${CMAKE_CURRENT_SOURCE_DIR})
 if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
@@ -23,14 +20,12 @@ include(CMake/modules/3p_qu3e.cmake)
 
 add_subdirectory(common)
 add_subdirectory(meshoui)
-add_subdirectory(tests)
 
 include_directories(common)
 include_directories(meshoui)
 
 use_linalg()
 use_qu3e()
-include_directories(3rdparty/lodepng)
 
 add_executable(meshouiview main.cpp)
-target_link_libraries(meshouiview meshouilib lodepng)
+target_link_libraries(meshouiview meshouilib)

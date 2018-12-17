@@ -1,7 +1,7 @@
 #pragma once
 
 #include <collada.h>
-#include <hashid.h>
+#include "hashid.h"
 #include <linalg.h>
 
 #include <string>

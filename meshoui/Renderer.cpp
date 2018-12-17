@@ -9,8 +9,6 @@
 #include "Program.h"
 #include "Widget.h"
 
-#include <loose.h>
-
 #include <algorithm>
 #include <set>
 

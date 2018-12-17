@@ -1,6 +1,6 @@
 #pragma once
 
-#include <hashid.h>
+#include <string>
 
 namespace Meshoui
 {
@@ -11,7 +11,7 @@ namespace Meshoui
         Widget();
 
         virtual void draw() = 0;
-        HashId window;
+        std::string window;
     };
     inline Widget::~Widget() {}
     inline Widget::Widget() : window("Main window") {}

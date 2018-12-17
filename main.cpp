@@ -8,9 +8,9 @@
 #include <Program.h>
 #include <Renderer.h>
 
-#include <lodepng.h>
-
 #include <q3.h>
+
+#include <fstream>
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -19,6 +19,18 @@ using namespace Meshoui;
 namespace
 {
     const float timestep = 1.f/60;
+
+    void phongProgramSPIRV(Program * phongProgram, const std::string & vert, const std::string & frag)
+    {
+        {
+            std::ifstream fileStream(vert, std::ifstream::binary);
+            phongProgram->vertexShaderSource = std::vector<char>(std::istreambuf_iterator<char>(fileStream), std::istreambuf_iterator<char>());
+        }
+        {
+            std::ifstream fileStream(frag, std::ifstream::binary);
+            phongProgram->fragmentShaderSource = std::vector<char>(std::istreambuf_iterator<char>(fileStream), std::istreambuf_iterator<char>());
+        }
+    }
 }
 
 int main(int, char**)
@@ -27,7 +39,8 @@ int main(int, char**)
     Renderer renderer;
 
     Program phongProgram;
-    phongProgram.load("meshoui/resources/shaders/Phong.shader");
+    phongProgramSPIRV(&phongProgram, "meshoui/resources/shaders/Phong.vert.spv",
+                                     "meshoui/resources/shaders/Phong.frag.spv");
     renderer.add(&phongProgram);
 
     {

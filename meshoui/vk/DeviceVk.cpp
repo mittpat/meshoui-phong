@@ -1,8 +1,6 @@
 #include "DeviceVk.h"
 #include "InstanceVk.h"
 
-#include <loose.h>
-
 #include <cstdio>
 #include <cstdlib>
 #include <string.h>
@@ -16,6 +14,8 @@ namespace
         if (err < 0)
             abort();
     }
+
+    template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
 }
 
 using namespace Meshoui;

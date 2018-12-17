@@ -4,39 +4,132 @@
 #include <algorithm>
 #include <collada.h>
 #include <linalg.h>
-#include <loose.h>
 
 using namespace linalg;
 using namespace linalg::aliases;
-
-#include <octree.h>
-
 using namespace Meshoui;
 
 namespace
 {
-    #define DOT_PRODUCT_THRESHOLD 0.9
+    #define DOT_PRODUCT_THRESHOLD 0.9f
     struct Node
     {
-        Node(const Vertex & v, unsigned int i);
-        float3 position() const;
-        bool operator==(const Vertex & rhs) const;
+        Node(const Vertex & v, unsigned int i) : vertex(v), index(i) {}
+        float3 position() const { return vertex.position; }
+        bool operator==(const Vertex &rhs) const { return vertex.position == rhs.position && vertex.texcoord == rhs.texcoord && linalg::dot(vertex.normal, rhs.normal) > DOT_PRODUCT_THRESHOLD; }
         Vertex vertex;
         unsigned int index;
     };
-    inline Node::Node(const Vertex & v, unsigned int i) : vertex(v), index(i) {}
-    inline float3 Node::position() const { return vertex.position; }
-    inline bool Node::operator==(const Vertex &rhs) const { return vertex.position == rhs.position && vertex.texcoord == rhs.texcoord && linalg::dot(vertex.normal, rhs.normal) > DOT_PRODUCT_THRESHOLD; }
+
+    template<typename T>
+    struct Octree final
+    {
+        ~Octree() { for (auto * child : children) { delete child; } }
+        Octree(const float3 & origin, const float3 & halfDimension) : origin(origin), halfDimension(halfDimension), children({}), data() {}
+        Octree(const Octree & copy) : origin(copy.origin), halfDimension(copy.halfDimension), data(copy.data) {}
+        bool isLeafNode() const { return children[0] == nullptr; }
+
+        unsigned getOctantContainingPoint(const float3 & point) const
+        {
+            unsigned oct = 0;
+            if (point.x >= origin.x) oct |= 4;
+            if (point.y >= origin.y) oct |= 2;
+            if (point.z >= origin.z) oct |= 1;
+            return oct;
+        }
+
+        void insert(const T & point)
+        {
+            if (isLeafNode())
+            {
+                if (data.empty() || point.position() == data.front().position())
+                {
+                    data.push_back(point);
+                    return;
+                }
+                else
+                {
+                    float3 nextHalfDimension = halfDimension*.5f;
+                    if (nextHalfDimension.x == 0.f || nextHalfDimension.y == 0.f || nextHalfDimension.z == 0.f)
+                    {
+                        data.push_back(point);
+                    }
+                    else
+                    {
+                        for (unsigned i = 0; i < 8; ++i)
+                        {
+                            float3 newOrigin = origin;
+                            newOrigin.x += halfDimension.x * (i&4 ? .5f : -.5f);
+                            newOrigin.y += halfDimension.y * (i&2 ? .5f : -.5f);
+                            newOrigin.z += halfDimension.z * (i&1 ? .5f : -.5f);
+                            children[i] = new Octree(newOrigin, nextHalfDimension);
+                        }
+                        for (const auto & oldPoint : data)
+                        {
+                            children[getOctantContainingPoint(oldPoint.position())]->insert(oldPoint);
+                        }
+                        data.clear();
+                        children[getOctantContainingPoint(point.position())]->insert(point);
+                    }
+                }
+            }
+            else
+            {
+                unsigned octant = getOctantContainingPoint(point.position());
+                children[octant]->insert(point);
+            }
+        }
+
+        void getPointsInsideBox(const float3 & bmin, const float3 & bmax, std::vector<T> & results)
+        {
+            if (isLeafNode())
+            {
+                if (!data.empty())
+                {
+                    for (const auto & point : data)
+                    {
+                        const float3 p = point.position();
+                        if (p.x > bmax.x || p.y > bmax.y || p.z > bmax.z) return;
+                        if (p.x < bmin.x || p.y < bmin.y || p.z < bmin.z) return;
+                        results.push_back(point);
+                    }
+                }
+            }
+            else
+            {
+                for (auto * child : children)
+                {
+                    const float3 cmax = child->origin + child->halfDimension;
+                    const float3 cmin = child->origin - child->halfDimension;
+                    if (cmax.x < bmin.x || cmax.y < bmin.y || cmax.z < bmin.z) continue;
+                    if (cmin.x > bmax.x || cmin.y > bmax.y || cmin.z > bmax.z) continue;
+                    child->getPointsInsideBox(bmin, bmax, results);
+                }
+            }
+        }
+
+        float3 origin, halfDimension;
+        std::array<Octree*, 8> children;
+        std::vector<T> data;
+    };
 }
 
 void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & mesh, bool renormalize)
 {
-    linalg::AABB bbox;
+    struct AABB final
+    {
+        AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
+                 upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
+        void extend(float3 p) { lower = min(lower, p); upper = max(upper, p); }
+        float3 center() const { return (lower + upper) * 0.5f; }
+        float3 half() const { return (upper - lower) * 0.5f; }
+        float3 lower, upper;
+    } bbox;
     for (const auto & vertex : mesh.vertices)
         bbox.extend({vertex.x,vertex.y,vertex.z});
 
     std::vector<Node> nodes;
-    nodes.reserve(sqrt(mesh.triangles.size()));
+    nodes.reserve(unsigned(sqrt(mesh.triangles.size())));
     Octree<Node> octree(bbox.center(), bbox.half());
 
     printf("Loading '%s'\n", definition.definitionId.str.empty() ? "(unnamed root)" : definition.definitionId.str.c_str());
@@ -111,7 +204,7 @@ void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & me
             if (found == nodes.end())
             {
                 definition.vertices.push_back(vertex);
-                definition.indices.push_back(definition.vertices.size() - 1);
+                definition.indices.push_back(unsigned(definition.vertices.size()) - 1);
                 octree.insert(Node(vertex, definition.indices.back()));
             }
             else
