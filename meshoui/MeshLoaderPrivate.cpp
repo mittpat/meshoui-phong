@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <collada.h>
+#include <linalg.h>
+#include <loose.h>
 
 using namespace linalg;
 using namespace linalg::aliases;
@@ -29,12 +31,13 @@ namespace
 
 void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & mesh, bool renormalize)
 {
+    linalg::AABB bbox;
+    for (const auto & vertex : mesh.vertices)
+        bbox.extend({vertex.x,vertex.y,vertex.z});
+
     std::vector<Node> nodes;
     nodes.reserve(sqrt(mesh.triangles.size()));
-    Octree<Node> octree(mesh.bbox.center(), mesh.bbox.half());
-
-    //definition.definitionId = mesh.id;
-    //definition.doubleSided = mesh.doubleSided;
+    Octree<Node> octree(bbox.center(), bbox.half());
 
     printf("Loading '%s'\n", definition.definitionId.str.empty() ? "(unnamed root)" : definition.definitionId.str.c_str());
 
@@ -43,26 +46,18 @@ void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & me
     {
         std::array<Vertex, 3> avertex;
 
-        uint3 ivertices = mesh.triangles[i].vertices;
-        avertex[0].position = mesh.vertices[ivertices[0]-1];
-        avertex[1].position = mesh.vertices[ivertices[1]-1];
-        avertex[2].position = mesh.vertices[ivertices[2]-1];
+        const auto & ivertices = mesh.triangles[i].vertices;
+        avertex[0].position = (const float3&)mesh.vertices[ivertices.x-1];
+        avertex[1].position = (const float3&)mesh.vertices[ivertices.y-1];
+        avertex[2].position = (const float3&)mesh.vertices[ivertices.z-1];
 
-        uint3 itexcoords = mesh.triangles[i].texcoords;
-        if (itexcoords[0]-1 < mesh.texcoords.size())
-            avertex[0].texcoord = mesh.texcoords[itexcoords[0]-1];
-        if (itexcoords[1]-1 < mesh.texcoords.size())
-            avertex[1].texcoord = mesh.texcoords[itexcoords[1]-1];
-        if (itexcoords[2]-1 < mesh.texcoords.size())
-            avertex[2].texcoord = mesh.texcoords[itexcoords[2]-1];
-
-        uint3 inormals = mesh.triangles[i].normals;
-        if (inormals[0]-1 < mesh.normals.size())
-            avertex[0].normal = mesh.normals[inormals[0]-1];
-        if (inormals[1]-1 < mesh.normals.size())
-            avertex[1].normal = mesh.normals[inormals[1]-1];
-        if (inormals[2]-1 < mesh.normals.size())
-            avertex[2].normal = mesh.normals[inormals[2]-1];
+        const auto & itexcoords = mesh.triangles[i].texcoords;
+        if (itexcoords.x-1 < mesh.texcoords.size())
+            avertex[0].texcoord = (const float2&)mesh.texcoords[itexcoords.x-1];
+        if (itexcoords.y-1 < mesh.texcoords.size())
+            avertex[1].texcoord = (const float2&)mesh.texcoords[itexcoords.y-1];
+        if (itexcoords.z-1 < mesh.texcoords.size())
+            avertex[2].texcoord = (const float2&)mesh.texcoords[itexcoords.z-1];
 
         if (renormalize)
         {
@@ -72,6 +67,16 @@ void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & me
             avertex[0].normal = normal;
             avertex[1].normal = normal;
             avertex[2].normal = normal;
+        }
+        else
+        {
+            const auto & inormals = mesh.triangles[i].normals;
+            if (inormals.x-1 < mesh.normals.size())
+                avertex[0].normal = (const float3&)mesh.normals[inormals.x-1];
+            if (inormals.y-1 < mesh.normals.size())
+                avertex[1].normal = (const float3&)mesh.normals[inormals.y-1];
+            if (inormals.z-1 < mesh.normals.size())
+                avertex[2].normal = (const float3&)mesh.normals[inormals.z-1];
         }
 
         // tangent + bitangent

@@ -13,7 +13,7 @@ namespace Meshoui
     {
         MeshMaterial();
 
-        HashId name;
+        HashId materialId;
 
         linalg::aliases::float3 ambient;
         linalg::aliases::float3 diffuse;
@@ -86,5 +86,6 @@ namespace Meshoui
     namespace MeshLoader
     {
         bool load(const std::string & filename, MeshFile &meshFile);
+        void cube(const std::string & name, MeshFile &meshFile);
     }
 }

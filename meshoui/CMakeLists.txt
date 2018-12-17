@@ -20,6 +20,7 @@ add_library(meshouilib
     IMouse.h
     InputCallbacks.cpp
     InputCallbacks.h
+    Manipulators.cpp
     Manipulators.h
     Mesh.cpp
     Mesh.h

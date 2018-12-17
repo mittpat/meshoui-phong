@@ -205,7 +205,7 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             const auto & meshFile = load(mesh->filename);
             auto material = std::find_if(meshFile.materials.begin(), meshFile.materials.end(), [mesh](const MeshMaterial &material)
             {
-                return material.name == mesh->materialId;
+                return material.materialId == mesh->materialId;
             });
             if (material == meshFile.materials.end())
             {
@@ -213,12 +213,12 @@ void RendererPrivate::registerGraphics(Mesh * mesh)
             }
 
             MaterialPrivate * materialPrivate = mesh->m = new MaterialPrivate();
-            materialPrivate->name = material->name;
-            texture(materialPrivate->ambientImage, sibling(material->textureAmbient, meshFile.filename), float4(material->ambient, 1.0f), device, swapChain, frameIndex);
-            texture(materialPrivate->diffuseImage, sibling(material->textureDiffuse, meshFile.filename), float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
-            texture(materialPrivate->normalImage, sibling(material->textureNormal, meshFile.filename), linalg::zero, device, swapChain, frameIndex);
-            texture(materialPrivate->emissiveImage, sibling(material->textureEmissive, meshFile.filename), float4(material->emissive, 1.0f), device, swapChain, frameIndex);
-            texture(materialPrivate->specularImage, sibling(material->textureSpecular, meshFile.filename), float4(material->specular, 1.0f), device, swapChain, frameIndex);
+            materialPrivate->materialId = material->materialId;
+            texture(materialPrivate->ambientImage, material->textureAmbient, float4(material->ambient, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->diffuseImage, material->textureDiffuse, float4(material->diffuse, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->normalImage, material->textureNormal, linalg::zero, device, swapChain, frameIndex);
+            texture(materialPrivate->emissiveImage, material->textureEmissive, float4(material->emissive, 1.0f), device, swapChain, frameIndex);
+            texture(materialPrivate->specularImage, material->textureSpecular, float4(material->specular, 1.0f), device, swapChain, frameIndex);
 
             VkResult err;
             {

@@ -14,68 +14,62 @@
 
 namespace Meshoui
 {
-    template<typename T>
-    struct WASD
-        : IKeyboard
+    struct LinearAcceleration final
     {
-        WASD(T * t) : target(t) {}
-        virtual void keyAction(void *, int key, int, int action, int) override
-        {
-            if (action == GLFW_PRESS)
-            {
-                switch (key)
-                {
-                case GLFW_KEY_W:
-                    target->position.z -= 0.1;
-                    break;
-                case GLFW_KEY_A:
-                    target->position.x -= 0.1;
-                    break;
-                case GLFW_KEY_S:
-                    target->position.z += 0.1;
-                    break;
-                case GLFW_KEY_D:
-                    target->position.x += 0.1;
-                    break;
-                default:
-                    break;
-                }
-            }
-        }
-        T * target;
-    };
-
-    template<typename T>
-    struct LinearAcceleration
-    {
-        LinearAcceleration(T * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
+        LinearAcceleration(linalg::aliases::float4x4 * t, float d = 0.f) : target(t), damping(d), linearVelocity(linalg::zero), linearAcceleration(linalg::zero) {}
         void step(float s)
         {
-            linalg::aliases::float3 forward = mul(target->modelMatrix, linalg::aliases::float4(0,0,1,0)).xyz();
-            linalg::aliases::float3 right = mul(target->modelMatrix, linalg::aliases::float4(1,0,0,0)).xyz();
+            linalg::aliases::float3 forward = mul(*target, linalg::aliases::float4(0,0,1,0)).xyz();
+            linalg::aliases::float3 right = mul(*target, linalg::aliases::float4(1,0,0,0)).xyz();
 
             linearVelocity *= (1.0f - damping);
             linearVelocity += s * linearAcceleration;
-            target->modelMatrix.w += linalg::aliases::float4(s * (linearVelocity.z * forward) + s * (linearVelocity.x * right), 0);
+            target->w += linalg::aliases::float4(s * (linearVelocity.z * forward) + s * (linearVelocity.x * right), 0);
         }
-        T * target;
+        linalg::aliases::float4x4 * target;
         float damping;
         linalg::aliases::float3 linearVelocity;
         linalg::aliases::float3 linearAcceleration;
     };
 
-    template<typename T>
-    struct WASD<LinearAcceleration<T>>
+    struct BodyAcceleration final
+    {
+        BodyAcceleration(q3Body * b, float d = 0.f) : body(b), damping(d), linearAcceleration(linalg::zero) {}
+        void step(float s)
+        {
+            const auto transform = body->GetTransform();
+            const auto target = pose_matrix(rotation_quat((linalg::aliases::float3x3&)transform.rotation), (linalg::aliases::float3&)transform.position);
+
+            linalg::aliases::float3 forward = mul(target, linalg::aliases::float4(0,0,1,0)).xyz();
+            linalg::aliases::float3 right = mul(target, linalg::aliases::float4(1,0,0,0)).xyz();
+
+            linalg::aliases::float3 linearVelocity;
+            (q3Vec3&)linearVelocity = body->GetLinearVelocity();
+            linearVelocity.x *= (1.0f - damping);
+            linearVelocity.z *= (1.0f - damping);
+            linearVelocity += s * (linearAcceleration.z * forward) + s * (linearAcceleration.x * right);
+            body->SetLinearVelocity((q3Vec3&)linearVelocity);
+        }
+        q3Body * body;
+        float damping;
+        linalg::aliases::float3 linearAcceleration;
+    };
+
+    template <typename T>
+    struct WASD final
         : IKeyboard
     {
-        WASD(LinearAcceleration<T> * t) : target(t), w(false), a(false), s(false), d(false) {}
+        WASD(T * t) : target(t), w(false), a(false), s(false), d(false), space(false) {}
         virtual void keyAction(void *, int key, int, int action, int) override
         {
-            static const float v = 100.f;
+            static const float v = 75.f;
             if (action == GLFW_PRESS)
             {
                 switch (key)
                 {
+                case GLFW_KEY_SPACE:
+                    space = true;
+                    break;
                 case GLFW_KEY_W:
                     if (target->linearAcceleration.z > 0.f)
                         target->linearAcceleration.z = 0.f;
@@ -108,6 +102,9 @@ namespace Meshoui
             {
                 switch (key)
                 {
+                case GLFW_KEY_SPACE:
+                    space = false;
+                    break;
                 case GLFW_KEY_W:
                     target->linearAcceleration.z = 0.0;
                     w = false;
@@ -133,15 +130,14 @@ namespace Meshoui
                 }
             }
         }
-        LinearAcceleration<T> * target;
-        bool w,a,s,d;
+        T * target;
+        bool w,a,s,d,space;
     };
 
-    template<typename T>
-    struct Mouselook
+    struct Mouselook final
         : IMouse
     {
-        Mouselook(T * t) : target(t), previousX(0), previousY(0), yaw(0), pitch(0), once(false) {}
+        Mouselook(linalg::aliases::float4x4 * al, linalg::aliases::float4x4 * az) : altitude(al), azimuth(az), previousX(0), previousY(0), yaw(0), pitch(0), once(false) {}
         virtual void cursorPositionAction(void *, double xpos, double ypos, bool overlay) override
         {
             if (overlay)
@@ -154,15 +150,15 @@ namespace Meshoui
 
                 static const float rotationScaler = 0.001f;
                 {
-                    linalg::aliases::float3 position = target->modelMatrix.w.xyz();
+                    //linalg::aliases::float3 position = target->w.xyz();
 
                     yaw += deltaX * rotationScaler * M_PI;
                     pitch += deltaY * rotationScaler * M_PI/2;
 
-                    linalg::aliases::float4x4 yawM = rotation_matrix(rotation_quat(linalg::aliases::float3(0,-1,0), float(yaw)));
-                    linalg::aliases::float4x4 pitchM = rotation_matrix(rotation_quat(linalg::aliases::float3(-1,0,0), float(pitch)));
+                    *azimuth = rotation_matrix(rotation_quat(linalg::aliases::float3(0,-1,0), float(yaw)));
+                    *altitude = rotation_matrix(rotation_quat(linalg::aliases::float3(-1,0,0), float(pitch)));
 
-                    target->modelMatrix = mul(mul(translation_matrix(position), yawM), pitchM);
+                    //*target = mul(mul(translation_matrix(position), yawM), pitchM);
                 }
             }
 
@@ -174,7 +170,8 @@ namespace Meshoui
         {
             once = false;
         }
-        T * target;
+        linalg::aliases::float4x4 * altitude;
+        linalg::aliases::float4x4 * azimuth;
         double previousX, previousY, yaw, pitch;
         bool once;
     };

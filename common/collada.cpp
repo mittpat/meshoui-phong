@@ -1,23 +1,237 @@
 #include "collada.h"
-#include "loose.h"
-#include <experimental/filesystem>
+#include <cmath>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <pugixml.hpp>
 
-using namespace linalg;
-using namespace linalg::aliases;
-namespace std { namespace filesystem = experimental::filesystem; }
+namespace DAE
+{
+    constexpr float4 operator * (const float4 & a, float b) { return {a.x*b,a.y*b,a.z*b,a.w*b}; }
+    constexpr float4 operator + (const float4 & a, const float4 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z,a.w+b.w}; }
+    constexpr float4 mul(const float4x4 & a, const float4 & b) { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
+    constexpr float4x4 mul(const float4x4 & a, const float4x4 & b) { return {mul(a,b.x), mul(a,b.y), mul(a,b.z), mul(a,b.w)}; }
+    constexpr float3 qxdir(const float4 & q) { return {q.w*q.w+q.x*q.x-q.y*q.y-q.z*q.z, (q.x*q.y+q.z*q.w)*2, (q.z*q.x-q.y*q.w)*2}; }
+    constexpr float3 qydir(const float4 & q) { return {(q.x*q.y-q.z*q.w)*2, q.w*q.w-q.x*q.x+q.y*q.y-q.z*q.z, (q.y*q.z+q.x*q.w)*2}; }
+    constexpr float3 qzdir(const float4 & q) { return {(q.z*q.x+q.y*q.w)*2, (q.y*q.z-q.x*q.w)*2, q.w*q.w-q.x*q.x-q.y*q.y+q.z*q.z}; }
+    constexpr float4 rotation_quat(const float3 & axis, float angle)
+    {
+        const auto a = std::sin(angle/2);
+        return {axis.x*a,axis.y*a,axis.z*a,std::cos(angle/2)};
+    }
+    constexpr float4x4 translation_matrix(const float3 & translation) { return {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {translation.x,translation.y,translation.z,1}}; }
+    constexpr float4x4 rotation_matrix(const float4 & rotation)
+    {
+        const auto a = qxdir(rotation);
+        const auto b = qydir(rotation);
+        const auto c = qzdir(rotation);
+        return {{a.x,a.y,a.z,0}, {b.x,b.y,b.z,0}, {c.x,c.y,c.z,0}, {0,0,0,1}};
+    }
+    constexpr float4x4 scaling_matrix(const float3 & scaling) { return {{scaling.x,0,0,0}, {0,scaling.y,0,0}, {0,0,scaling.z,0}, {0,0,0,1}}; }
+    constexpr float degreesToRadians(float angle) { return angle * 3.14159265359f / 180.0f; }
 
-inline std::string DAE::Effect::solve(HashId v) const
+    float fastExp10(int n)
+    {
+        switch (n)
+        {
+        case -9: return 0.000000001f;
+        case -8: return 0.00000001f;
+        case -7: return 0.0000001f;
+        case -6: return 0.000001f;
+        case -5: return 0.00001f;
+        case -4: return 0.0001f;
+        case -3: return 0.001f;
+        case -2: return 0.01f;
+        case -1: return 0.1f;
+        case  0: return 1.f;
+        case  1: return 10.f;
+        case  2: return 100.f;
+        case  3: return 1000.f;
+        case  4: return 10000.f;
+        case  5: return 100000.f;
+        case  6: return 1000000.f;
+        case  7: return 10000000.f;
+        case  8: return 100000000.f;
+        case  9: return 1000000000.f;
+        default:
+            return float(pow(10., n));
+        }
+    }
+
+    float stof(char *&p)
+    {
+        float r = 0.0f;
+        bool neg = false;
+        if (*p == '-')
+        {
+            neg = true;
+            ++p;
+        }
+        while (*p >= '0' && *p <= '9')
+        {
+            r = (r * 10.0f) + (*p - '0');
+            ++p;
+        }
+        if (*p == '.')
+        {
+            float f = 0.0f;
+            int n = 0;
+            ++p;
+            while (*p >= '0' && *p <= '9')
+            {
+                f = (f * 10.0f) + (*p - '0');
+                ++p;
+                ++n;
+            }
+            r += f * fastExp10(-n);
+        }
+        if (*p == 'e')
+        {
+            ++p;
+            bool negExp = false;
+            if (*p == '-')
+            {
+                negExp = true;
+                ++p;
+            }
+            int n = 0;
+            while (*p >= '0' && *p <= '9')
+            {
+                n = (n * 10) + (*p - '0');
+                ++p;
+            }
+            r *= fastExp10(negExp ? -n : n);
+        }
+        if (neg)
+        {
+            r = -r;
+        }
+        return r;
+    }
+
+    float stof(const char *p)
+    {
+        char *t = const_cast<char *>(p);
+        return stof(t);
+    }
+
+    std::vector<float> stofa(const char *p, char = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        std::vector<float> ret;
+        while (true)
+        {
+            if (*t != '\0')
+                ret.push_back(stof(t));
+            if (*t != '\0')
+                ++t;
+            else
+                break;
+        }
+        return ret;
+    }
+
+    unsigned int stoui(char *&p)
+    {
+        unsigned int r = 0U;
+        while (*p >= '0' && *p <= '9')
+        {
+            r = (r * 10U) + unsigned(*p - '0');
+            ++p;
+        }
+        return r;
+    }
+
+    unsigned int stoui(const char *p)
+    {
+        char *t = const_cast<char *>(p);
+        return stoui(t);
+    }
+
+    float2 stof2(char *&p, char = ' ')
+    {
+        float2 ret = {};
+        ret.x = stof(p); ++p;
+        ret.y = stof(p);
+        return ret;
+    }
+
+    float2 stof2(const char *p, char = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        return stof2(t);
+    }
+
+    std::vector<float2> stof2a(const char *p, char = ' ', char sep2 = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        std::vector<float2> ret = {};
+        while (true)
+        {
+            ret.push_back(stof2(t, sep2));
+            if (*t != '\0')
+                ++t;
+            else
+                break;
+        }
+        return ret;
+    }
+
+    float3 stof3(char *&p, char = ' ')
+    {
+        float3 ret = {};
+        ret.x = stof(p); ++p;
+        ret.y = stof(p); ++p;
+        ret.z = stof(p);
+        return ret;
+    }
+
+    float3 stof3(const char *p, char = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        return stof3(t);
+    }
+
+    std::vector<float3> stof3a(const char *p, char = ' ', char sep2 = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        std::vector<float3> ret = {};
+        while (true)
+        {
+            ret.push_back(stof3(t, sep2));
+            if (*t != '\0')
+                ++t;
+            else
+                break;
+        }
+        return ret;
+    }
+
+    std::vector<unsigned int> stouia(const char *p, char = ' ')
+    {
+        char *t = const_cast<char *>(p);
+        std::vector<unsigned int> ret;
+        while (true)
+        {
+            ret.push_back(stoui(t));
+            if (*t != '\0')
+                ++t;
+            else
+                break;
+        }
+        return ret;
+    }
+}
+
+const std::string &DAE::Effect::solve(const std::string &v) const
 {
     auto sampler = std::find_if(samplers.begin(), samplers.end(), [&](const Sampler & ref) { return ref.sid == v; });
     if (sampler == samplers.end())
-        return v.str;
-    v = (*sampler).source;
-    auto surface = std::find_if(surfaces.begin(), surfaces.end(), [&](const Surface & ref) { return ref.sid == v; });
+        return v;
+    const std::string &v2 = (*sampler).source;
+    auto surface = std::find_if(surfaces.begin(), surfaces.end(), [&](const Surface & ref) { return ref.sid == v2; });
     if (surface == surfaces.end())
-        return v.str;
+        return v2;
     return (*surface).initFrom;
 }
 
@@ -27,22 +241,22 @@ void DAE::parse_effect_profile_phong(pugi::xml_node branch, DAE::Effect & effect
     {
         if (strcmp(phong_value.name(), "ambient") == 0)
         {
-            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformAmbient", conv::stofa(value.child_value()))); }
+            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformAmbient", DAE::stofa(value.child_value()))); }
             if (pugi::xml_node value = phong_value.child("texture")) { effect.values.push_back(DAE::Effect::Value("uniformTextureAmbient", effect.solve(value.attribute("texture").as_string()))); }
         }
         else if (strcmp(phong_value.name(), "diffuse") == 0)
         {
-            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformDiffuse", conv::stofa(value.child_value()))); }
+            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformDiffuse", DAE::stofa(value.child_value()))); }
             if (pugi::xml_node value = phong_value.child("texture")) { effect.values.push_back(DAE::Effect::Value("uniformTextureDiffuse", effect.solve(value.attribute("texture").as_string()))); }
         }
         else if (strcmp(phong_value.name(), "specular") == 0)
         {
-            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformSpecular", conv::stofa(value.child_value()))); }
+            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformSpecular", DAE::stofa(value.child_value()))); }
             if (pugi::xml_node value = phong_value.child("texture")) { effect.values.push_back(DAE::Effect::Value("uniformTextureSpecular", effect.solve(value.attribute("texture").as_string()))); }
         }
         else if (strcmp(phong_value.name(), "emission") == 0)
         {
-            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformEmissive", conv::stofa(value.child_value()))); }
+            if (pugi::xml_node value = phong_value.child("color"))   { effect.values.push_back(DAE::Effect::Value("uniformEmissive", DAE::stofa(value.child_value()))); }
             if (pugi::xml_node value = phong_value.child("texture")) { effect.values.push_back(DAE::Effect::Value("uniformTextureEmissive", effect.solve(value.attribute("texture").as_string()))); }
         }
         else if (strcmp(phong_value.name(), "bump") == 0)
@@ -74,7 +288,7 @@ void DAE::parse_effect_profile(pugi::xml_node branch, DAE::Effect & effect)
                 DAE::Sampler reference;
                 reference.sid = profile_value.attribute("sid").as_string();
                 if ((reference.source = sampler2D.child_value("source")).empty())
-                    reference.source = remainder(sampler2D.child("instance_image").attribute("url").as_string(), "#");
+                    reference.source = &sampler2D.child("instance_image").attribute("url").as_string()[1]; //#...
                 effect.samplers.push_back(reference);
             }
         }
@@ -91,12 +305,18 @@ void DAE::parse_effect_profile(pugi::xml_node branch, DAE::Effect & effect)
 
 void DAE::parse_geometry_mesh(pugi::xml_node branch, DAE::Geometry & geometry)
 {
+    enum
+    {
+        kVertexIdx   = 0,
+        kNormalIdx   = 1,
+        kTexcoordIdx = 2
+    };
     struct Input
     {
-        Input() : offset(0) {}
-        HashId id;
-        HashId source;
+        Input() : idx(0), offset(0) {}
+        unsigned int idx;
         unsigned int offset;
+        std::string source;
     };
 
     std::vector<Input> inputs;
@@ -110,47 +330,35 @@ void DAE::parse_geometry_mesh(pugi::xml_node branch, DAE::Geometry & geometry)
         if (strcmp(elem.name(), "input") == 0)
         {
             Input input;
-            input.id = elem.attribute("semantic").as_string();
-            input.source = remainder(elem.attribute("source").as_string(), "#");
+            const char * name = elem.attribute("semantic").as_string();
+            if (strcmp(name, "POSITION") == 0 || strcmp(name, "VERTEX") == 0) { input.idx = kVertexIdx; }
+            else if (strcmp(name, "NORMAL") == 0) { input.idx = kNormalIdx; }
+            else if (strcmp(name, "TEXCOORD") == 0) { input.idx = kTexcoordIdx; }
             input.offset = elem.attribute("offset").as_uint();
+            input.source = &elem.attribute("source").as_string()[1]; //#...
             inputs.push_back(input);
         }
     }
     if (pugi::xml_node vertices = branch.child("vertices"))
     {
-        HashId id = vertices.attribute("id").as_string();
+        std::string id = vertices.attribute("id").as_string();
         auto input = std::find_if(inputs.begin(), inputs.end(), [id](const Input & input) { return id == input.source; });
         if (input != inputs.end())
         {
-            (*input).source = remainder(vertices.child("input").attribute("source").as_string(), "#");
+            (*input).source = &vertices.child("input").attribute("source").as_string()[1]; //#...
         }
     }
-    static const HashId kPosition = "POSITION";
-    static const HashId kVertex = "VERTEX";
-    static const HashId kNormal = "NORMAL";
-    static const HashId kTexcoord = "TEXCOORD";
     for (pugi::xml_node source : branch)
     {
         if (strcmp(source.name(), "source") == 0)
         {
-            HashId id = source.attribute("id").as_string();
+            std::string id = source.attribute("id").as_string();
             auto input = std::find_if(inputs.begin(), inputs.end(), [id](const Input & input) { return id == input.source; });
             if (input != inputs.end())
             {
-                if (kPosition == (*input).id || kVertex == (*input).id)
-                {
-                    geometry.mesh.vertices = conv::stof3a(source.child_value("float_array"));
-                    for (float3 vertex : geometry.mesh.vertices)
-                        geometry.mesh.bbox.extend(vertex);
-                }
-                else if (kNormal == (*input).id)
-                {
-                    geometry.mesh.normals = conv::stof3a(source.child_value("float_array"));
-                }
-                else if (kTexcoord == (*input).id)
-                {
-                    geometry.mesh.texcoords = conv::stof2a(source.child_value("float_array"));
-                }
+                if ((*input).idx == kVertexIdx) { geometry.mesh.vertices = DAE::stof3a(source.child_value("float_array")); }
+                else if ((*input).idx == kNormalIdx) { geometry.mesh.normals = DAE::stof3a(source.child_value("float_array")); }
+                else if ((*input).idx == kTexcoordIdx) { geometry.mesh.texcoords = DAE::stof2a(source.child_value("float_array")); }
             }
         }
     }
@@ -159,19 +367,19 @@ void DAE::parse_geometry_mesh(pugi::xml_node branch, DAE::Geometry & geometry)
         std::vector<unsigned int> polygons(polylist.attribute("count").as_uint(), 3);
         if (auto data = polylist.child("vcount"))
         {
-            polygons = conv::stouia(data.child_value());
+            polygons = DAE::stouia(data.child_value());
         }
         if (auto data = polylist.child("p"))
         {
             unsigned int max = 0;
-            std::map<size_t, unsigned int> sourceIndexes;
+            int sourceIndexes[3] = {-1,-1,-1};
             for (const auto & input : inputs)
             {
-                sourceIndexes[input.id] = input.offset;
+                sourceIndexes[input.idx] = int(input.offset);
                 max = std::max(max, input.offset);
             }
             max += 1;
-            std::vector<unsigned int> indexes = conv::stouia(data.child_value());
+            std::vector<unsigned int> indexes = DAE::stouia(data.child_value());
             size_t i = 0;
             for (size_t j = 0; j < polygons.size(); ++j)
             {
@@ -179,23 +387,23 @@ void DAE::parse_geometry_mesh(pugi::xml_node branch, DAE::Geometry & geometry)
                 for (size_t k = 2; k < vcount; ++k)
                 {
                     Triangle face;
-                    if (sourceIndexes.find(kVertex) != sourceIndexes.end())
+                    if (sourceIndexes[kVertexIdx] >= 0)
                     {
-                        face.vertices.x = 1+indexes[i+sourceIndexes[kVertex]+(0  )*max];
-                        face.vertices.y = 1+indexes[i+sourceIndexes[kVertex]+(k-1)*max];
-                        face.vertices.z = 1+indexes[i+sourceIndexes[kVertex]+(k  )*max];
+                        face.vertices.x = 1+indexes[i+unsigned(sourceIndexes[kVertexIdx])+(0  )*max];
+                        face.vertices.y = 1+indexes[i+unsigned(sourceIndexes[kVertexIdx])+(k-1)*max];
+                        face.vertices.z = 1+indexes[i+unsigned(sourceIndexes[kVertexIdx])+(k  )*max];
                     }
-                    if (sourceIndexes.find(kNormal) != sourceIndexes.end())
+                    if (sourceIndexes[kNormalIdx] >= 0)
                     {
-                        face.normals.x = 1+indexes[i+sourceIndexes[kNormal]+(0  )*max];
-                        face.normals.y = 1+indexes[i+sourceIndexes[kNormal]+(k-1)*max];
-                        face.normals.z = 1+indexes[i+sourceIndexes[kNormal]+(k  )*max];
+                        face.normals.x = 1+indexes[i+unsigned(sourceIndexes[kNormalIdx])+(0  )*max];
+                        face.normals.y = 1+indexes[i+unsigned(sourceIndexes[kNormalIdx])+(k-1)*max];
+                        face.normals.z = 1+indexes[i+unsigned(sourceIndexes[kNormalIdx])+(k  )*max];
                     }
-                    if (sourceIndexes.find(kTexcoord) != sourceIndexes.end())
+                    if (sourceIndexes[kTexcoordIdx] >= 0)
                     {
-                        face.texcoords.x = 1+indexes[i+sourceIndexes[kTexcoord]+(0  )*max];
-                        face.texcoords.y = 1+indexes[i+sourceIndexes[kTexcoord]+(k-1)*max];
-                        face.texcoords.z = 1+indexes[i+sourceIndexes[kTexcoord]+(k  )*max];
+                        face.texcoords.x = 1+indexes[i+unsigned(sourceIndexes[kTexcoordIdx])+(0  )*max];
+                        face.texcoords.y = 1+indexes[i+unsigned(sourceIndexes[kTexcoordIdx])+(k-1)*max];
+                        face.texcoords.z = 1+indexes[i+unsigned(sourceIndexes[kTexcoordIdx])+(k  )*max];
                     }
                     geometry.mesh.triangles.push_back(face);
                 }
@@ -234,7 +442,7 @@ void DAE::parse_library_materials(pugi::xml_node branch, DAE::Data & data)
     {
         DAE::Material libraryMaterial;
         libraryMaterial.id = library_material.attribute("id").as_string();
-        libraryMaterial.effect.url = remainder(library_material.child("instance_effect").attribute("url").value(), "#");
+        libraryMaterial.effect.url = &library_material.child("instance_effect").attribute("url").value()[1]; //#...
         data.materials.push_back(libraryMaterial);
     }
 }
@@ -244,9 +452,9 @@ void DAE::parse_library_geometries(pugi::xml_node branch, DAE::Data & data)
     for (pugi::xml_node library_geometry : branch)
     {
         Geometry geometry;
-        geometry.id = HashId(library_geometry.attribute("id").as_string(), data.filename);
-        geometry.doubleSided = conv::stoui(library_geometry.child("extra").child("technique").child_value("double_sided"));
+        geometry.id = library_geometry.attribute("id").as_string();
         parse_geometry_mesh(library_geometry.child("mesh"), geometry);
+        geometry.doubleSided = DAE::stoui(library_geometry.child("extra").child("technique").child_value("double_sided"));
         data.geometries.push_back(geometry);
     }
 }
@@ -262,7 +470,7 @@ void DAE::parse_library_physics_models(pugi::xml_node branch, DAE::Data &data)
             DAE::RigidBody body;
             body.sid = rigid_body.attribute("sid").as_string();
             body.dynamic = strcmp(rigid_body.child("technique_common").child_value("dynamic"), "true") == 0;
-            body.shape.halfExtents = conv::stof3(rigid_body.child("technique_common").child("shape").child("box").child_value("half_extents"));
+            body.shape.halfExtents = DAE::stof3(rigid_body.child("technique_common").child("shape").child("box").child_value("half_extents"));
             model.bodies.push_back(body);
         }
         data.models.push_back(model);
@@ -279,8 +487,8 @@ void DAE::parse_library_physics_scenes(pugi::xml_node branch, DAE::Data &data)
             {
                 DAE::InstancePhysicsModel model;
                 model.sid = instance_physics_model.attribute("sid").as_string();
-                model.url = remainder(instance_physics_model.attribute("url").as_string(), "#");
-                model.parent = remainder(instance_physics_model.attribute("parent").as_string(), "#");
+                model.url = &instance_physics_model.attribute("url").as_string()[1]; //#...
+                model.parent = &instance_physics_model.attribute("parent").as_string()[1]; //#...
                 data.instances.push_back(model);
             }
         }
@@ -299,35 +507,35 @@ void DAE::parse_library_visual_scenes(pugi::xml_node branch, DAE::Data &data)
             {
                 currentNode.geometry = DAE::InstanceGeometry();
                 currentNode.geometry.name = visualNode.attribute("name").as_string();
-                currentNode.geometry.url = HashId(remainder(visualNode.attribute("url").as_string(), "#"), data.filename);
+                currentNode.geometry.url = &visualNode.attribute("url").as_string()[1]; //#...
                 if (auto bind_material = visualNode.child("bind_material"))
                     if (auto technique_common = bind_material.child("technique_common"))
                         if (auto instance_material = technique_common.child("instance_material"))
-                            currentNode.geometry.material = remainder(instance_material.attribute("target").as_string(), "#");
+                            currentNode.geometry.material = &instance_material.attribute("target").as_string()[1];
             }
             else if (strcmp(visualNode.name(), "matrix") == 0)
             {
                 // Collada is row major
-                // linalg.h is column major
-                auto m44 = conv::stofa(visualNode.child_value());
+                // we are column major
+                auto m44 = DAE::stofa(visualNode.child_value());
                 currentNode.transform = mul(currentNode.transform,
-                                            float4x4(float4(m44[0], m44[4], m44[8], m44[12]),
-                                                     float4(m44[1], m44[5], m44[9], m44[13]),
-                                                     float4(m44[2], m44[6], m44[10], m44[14]),
-                                                     float4(m44[3], m44[7], m44[11], m44[15])));
+                                            float4x4{{m44[0], m44[4], m44[8], m44[12]},
+                                                     {m44[1], m44[5], m44[9], m44[13]},
+                                                     {m44[2], m44[6], m44[10], m44[14]},
+                                                     {m44[3], m44[7], m44[11], m44[15]}});
             }
             else if (strcmp(visualNode.name(), "translate") == 0)
             {
-                currentNode.transform = mul(currentNode.transform, translation_matrix(conv::stof3(visualNode.child_value())));
+                currentNode.transform = mul(currentNode.transform, translation_matrix(DAE::stof3(visualNode.child_value())));
             }
             else if (strcmp(visualNode.name(), "rotate") == 0)
             {
-                auto v4 = float4(conv::stofa(visualNode.child_value()).data());
-                currentNode.transform = mul(currentNode.transform, rotation_matrix(rotation_quat(float3(v4.x, v4.y, v4.z), degreesToRadians(v4.w))));
+                auto v4 = DAE::stofa(visualNode.child_value()).data();
+                currentNode.transform = mul(currentNode.transform, rotation_matrix(rotation_quat(float3{v4[0], v4[1], v4[2]}, DAE::degreesToRadians(v4[3]))));
             }
             else if (strcmp(visualNode.name(), "scale") == 0)
             {
-                currentNode.transform = mul(currentNode.transform, scaling_matrix(conv::stof3(visualNode.child_value())));
+                currentNode.transform = mul(currentNode.transform, scaling_matrix(DAE::stof3(visualNode.child_value())));
             }
         }
 
@@ -344,17 +552,17 @@ void DAE::parse_library_visual_scenes(pugi::xml_node branch, DAE::Data &data)
 
         if (data.upAxis == "Z_UP")
         {
-            currentNode.transform = mul(float4x4(float4(1, 0, 0, 0),
-                                                 float4(0, 0,-1, 0),
-                                                 float4(0, 1, 0, 0),
-                                                 float4(0, 0, 0, 1)), currentNode.transform);
+            currentNode.transform = mul(float4x4{{1, 0, 0, 0},
+                                                 {0, 0,-1, 0},
+                                                 {0, 1, 0, 0},
+                                                 {0, 0, 0, 1}}, currentNode.transform);
         }
         else if (data.upAxis == "X_UP")
         {
-            currentNode.transform = mul(float4x4(float4( 0, 1, 0, 0),
-                                                 float4(-1, 0, 0, 0),
-                                                 float4( 0, 0, 1, 0),
-                                                 float4( 0, 0, 0, 1)), currentNode.transform);
+            currentNode.transform = mul(float4x4{{ 0, 1, 0, 0},
+                                                 {-1, 0, 0, 0},
+                                                 { 0, 0, 1, 0},
+                                                 { 0, 0, 0, 1}}, currentNode.transform);
         }
     };
 
@@ -394,17 +602,11 @@ void DAE::parse(pugi::xml_node root, DAE::Data &data, Flags flags)
 
 bool DAE::parse(const std::string &filename, DAE::Data & data, Flags flags)
 {
-    if (std::filesystem::path(filename).extension() != ".dae")
-        return false;
-
-    if (!std::filesystem::exists(filename))
-        return false;
-
     data.filename = filename;
-    printf("Loading '%s'\n", std::filesystem::absolute(filename).c_str());
+    printf("Loading '%s'\n", data.filename.c_str());
 
     pugi::xml_document doc;
-    pugi::xml_parse_result result = doc.load_file(filename.c_str());
+    pugi::xml_parse_result result = doc.load_file(data.filename.c_str());
     if (result.status != pugi::status_ok)
         return false;
 

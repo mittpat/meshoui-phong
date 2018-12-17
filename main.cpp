@@ -8,6 +8,8 @@
 #include <Program.h>
 #include <Renderer.h>
 
+#include <lodepng.h>
+
 #include <q3.h>
 
 using namespace linalg;
@@ -31,38 +33,46 @@ int main(int, char**)
     {
         ScopedSkydome skydome(&renderer);
         ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
+        bricks.meshes[0]->modelMatrix.w = float4(float3(0.0, 5, 0.0), 1.0);
         ScopedAsset island(&renderer, "meshoui/resources/models/island.dae");
         for (const auto & mesh : island.meshes) mesh->modelMatrix.w.y = -4.0f;
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");
         std::vector<ScopedBody> bodies; bodies.reserve(crates.meshes.size());
-        for (const auto & mesh : crates.meshes) { bodies.emplace_back(&scene, mesh->modelMatrix); }
-        bricks.meshes[0]->modelMatrix.w = float4(float3(-5.0, 2.0, 0.0), 1.0);
+        for (const auto & mesh : crates.meshes) { bodies.emplace_back(&scene, mesh->modelMatrix, &mesh->modelMatrix); }
         float4x4 groundModel = mul(pose_matrix(float4(0,0,0,1), float3(0,-5,0)), scaling_matrix(float3(100,1,100)));
-        ScopedBody groundBody(&scene, groundModel, false);
-        
+        ScopedBody groundBody(&scene, groundModel, nullptr, false);
+
         Camera camera;
-        camera.modelMatrix.w = float4(float3(0.0, 2.0, 5.0), 1.0);
+        camera.modelMatrix.w = float4(float3(-5.0, 0.0, 5.0), 1.0);
         renderer.add(&camera);
         camera.enable();
 
-        LinearAcceleration<Camera> cameraAnimator(&camera, 0.1f);
-        WASD<LinearAcceleration<Camera>> cameraStrafer(&cameraAnimator);
-        renderer.add(&cameraStrafer);
+        float4x4 playerBodyModel = identity;
+        ScopedBody playerBody(&scene, camera.modelMatrix, &playerBodyModel, true, true, 0.25f);
 
-        Mouselook<Camera> cameraLook(&camera);
+        float4x4 playerHeadAltitude = identity;
+        float4x4 playerHeadAzimuth = identity;
+        BodyAcceleration cameraAnimator(playerBody.body, 0.1f);
+        WASD<BodyAcceleration> cameraStrafer(&cameraAnimator);
+        renderer.add(&cameraStrafer);
+        Mouselook cameraLook(&playerHeadAltitude, &playerHeadAzimuth);
         renderer.add(&cameraLook);
 
         Light light;
-        light.modelMatrix.w = float4(float3(300.0, 1000.0, -300.0), 1.0);
+        light.modelMatrix.w = float4(float3(600.0, 1000.0, -300.0), 1.0);
         renderer.add(&light);
         light.enable(true);
-        
+
         bool run = true;
         while (run)
         {
             cameraAnimator.step(timestep);
             scene.Step();
-            for (size_t i = 0; i < crates.meshes.size(); ++i) { crates.meshes[i]->modelMatrix = bodies[i].modelMatrix(); }
+            for (auto & body : bodies) { body.step(timestep); }
+            playerBody.step(timestep);
+            camera.modelMatrix = mul(playerBodyModel, mul(translation_matrix(float3(0,1.8,0)), playerHeadAltitude));
+            playerBody.setAzimuth(playerHeadAzimuth);
+            playerBody.jump(cameraStrafer.space);
             renderer.update(timestep);
             if (renderer.shouldClose()) { run = false; }
         }

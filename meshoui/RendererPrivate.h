@@ -66,7 +66,7 @@ namespace Meshoui
         ~MaterialPrivate();
         MaterialPrivate();
 
-        HashId name;
+        HashId materialId;
         VkSampler ambientSampler;
         VkSampler diffuseSampler;
         VkSampler normalSampler;

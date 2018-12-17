@@ -30,6 +30,7 @@ include_directories(meshoui)
 
 use_linalg()
 use_qu3e()
+include_directories(3rdparty/lodepng)
 
 add_executable(meshouiview main.cpp)
-target_link_libraries(meshouiview meshouilib)
+target_link_libraries(meshouiview meshouilib lodepng)

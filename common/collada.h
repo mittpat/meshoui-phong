@@ -1,29 +1,60 @@
 #pragma once
 
-#include <linalg.h>
+#include <string>
 #include <vector>
-#include "hashid.h"
-#include "loose.h"
 
 namespace pugi { class xml_node; }
 
 namespace DAE
 {
+    struct uint3 final
+    {
+        unsigned x,y,z;
+    };
+
+    struct float2 final
+    {
+        float x,y;
+    };
+
+    struct float3 final
+    {
+        float x,y,z;
+    };
+
+    struct float4 final
+    {
+        float x,y,z,w;
+    };
+
+    struct float4x4 final
+    {
+        float4 x,y,z,w;
+    };
+
+#if !defined(MESHOUI_COLLADA_CONSTANTS_H)
+#define MESHOUI_COLLADA_CONSTANTS_H 1
+    const float4x4 float4x4Identity = {{1.f,0.f,0.f,0.f},
+                                       {0.f,1.f,0.f,0.f},
+                                       {0.f,0.f,1.f,0.f},
+                                       {0.f,0.f,0.f,1.f}};
+#endif
+
     struct Image final
     {
-        HashId id;
+        std::string id;
         std::string initFrom;
     };
 
     struct Surface final
     {
-        HashId sid;
+        std::string sid;
         std::string initFrom;
     };
 
     struct Sampler final
     {
-        HashId sid;
+        std::string sid;
         std::string source;
     };
 
@@ -31,88 +62,93 @@ namespace DAE
     {
         struct Value final
         {
-            Value(HashId i, const std::vector<float> & d);
-            Value(HashId i, const std::string & t);
+            Value(const std::string & i, const std::vector<float> & d);
+            Value(const std::string & i, const std::string & t);
 
-            HashId sid;
+            std::string sid;
             std::vector<float> data;
             std::string texture;
         };
 
-        HashId id;
+        std::string id;
         std::vector<Surface> surfaces;
         std::vector<Sampler> samplers;
         std::vector<Value> values;
-        std::string solve(HashId v) const;
+        const std::string & solve(const std::string & v) const;
     };
-    inline Effect::Value::Value(HashId i, const std::vector<float> & d) : sid(i), data(d) {}
-    inline Effect::Value::Value(HashId i, const std::string & t) : sid(i), texture(t) {}
+    inline Effect::Value::Value(const std::string & i, const std::vector<float> & d) : sid(i), data(d) {}
+    inline Effect::Value::Value(const std::string & i, const std::string & t) : sid(i), texture(t) {}
 
     struct InstanceEffect final
     {
-        HashId url;
+        std::string url;
     };
 
     struct Material final
     {
-        HashId id;
+        std::string id;
         InstanceEffect effect;
     };
 
     struct Triangle final
     {
         Triangle();
-        linalg::aliases::uint3 vertices;
-        linalg::aliases::uint3 texcoords;
-        linalg::aliases::uint3 normals;
+        Triangle(const uint3 & v,
+                 const uint3 & t,
+                 const uint3 & n);
+        uint3 vertices;
+        uint3 texcoords;
+        uint3 normals;
     };
-    inline Triangle::Triangle() : vertices(linalg::zero), texcoords(linalg::zero), normals(linalg::zero) {}
+    inline Triangle::Triangle() : vertices{0,0,0}, texcoords{0,0,0}, normals{0,0,0} {}
+    inline Triangle::Triangle(const uint3 & v,
+                              const uint3 & t,
+                              const uint3 & n) : vertices(v), texcoords(t), normals(n) {}
 
     struct Mesh final
     {
-        linalg::AABB bbox;
         std::vector<Triangle> triangles;
-        std::vector<linalg::aliases::float3> vertices;
-        std::vector<linalg::aliases::float2> texcoords;
-        std::vector<linalg::aliases::float3> normals;
+        std::vector<float3> vertices;
+        std::vector<float2> texcoords;
+        std::vector<float3> normals;
     };
 
     struct Geometry final
     {
         Geometry();
-        HashId id;
-        bool doubleSided;
+        std::string id;
         Mesh mesh;
+        bool doubleSided;
     };
     inline Geometry::Geometry() : doubleSided(false) {}
 
     struct InstanceGeometry final
     {
-        HashId url;
-        HashId name;
-        HashId material;
+        std::string url;
+        std::string name;
+        std::string material;
     };
 
     struct Node final
     {
         Node();
-        HashId id;
-        linalg::aliases::float4x4 transform;
+        std::string id;
+        float4x4 transform;
         InstanceGeometry geometry;
     };
-    inline Node::Node() : transform(linalg::identity) {}
+    inline Node::Node() : transform(float4x4Identity) {}
 
     struct Shape final
     {
         Shape();
-        linalg::aliases::float3 halfExtents;
+        float3 halfExtents;
     };
-    inline Shape::Shape() : halfExtents(1.f, 1.f, 1.f) {}
+    inline Shape::Shape() : halfExtents{1.f, 1.f, 1.f} {}
 
     struct RigidBody final
     {
         RigidBody();
-        HashId sid;
+        std::string sid;
         Shape shape;
         bool dynamic;
     };
@@ -120,15 +156,15 @@ namespace DAE
 
     struct PhysicsModel final
     {
-        HashId id;
+        std::string id;
         std::vector<RigidBody> bodies;
     };
 
     struct InstancePhysicsModel final
     {
-        HashId sid;
-        HashId url;
-        HashId parent;
+        std::string sid;
+        std::string url;
+        std::string parent;
     };
 
     struct Data final
