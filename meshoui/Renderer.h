@@ -15,7 +15,6 @@ namespace Meshoui
     struct WidgetCallbacks;
 
     class Camera;
-    class MeshFile;
     class Program;
     class Widget;
     class RendererPrivate;

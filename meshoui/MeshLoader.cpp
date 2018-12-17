@@ -22,22 +22,6 @@ using namespace linalg;
 using namespace linalg::aliases;
 using namespace Meshoui;
 
-MeshFile MeshFile::kDefault(const std::string & name, size_t v)
-{
-    MeshFile meshFile;
-    meshFile.filename = name;
-    meshFile.materials.push_back(MeshMaterial());
-
-    MeshDefinition definition(name, v);
-    meshFile.definitions.push_back(definition);
-
-    MeshInstance instance(name, definition);
-    instance.materialId = meshFile.materials[0].materialId;
-    meshFile.instances.push_back(instance);
-
-    return meshFile;
-}
-
 bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
 {
     if (filename == "builtin_shape_cube")

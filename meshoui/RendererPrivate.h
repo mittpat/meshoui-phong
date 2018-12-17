@@ -138,7 +138,7 @@ namespace Meshoui
 
         ImageBufferVk  depthBuffer;
 
-        MeshFiles meshFiles;
+        std::vector<MeshFile> meshFiles;
 
         bool toFullscreen;
         bool isFullscreen;
