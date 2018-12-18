@@ -1,8 +1,11 @@
 #include "MeshLoader.h"
 #include "MeshLoaderPrivate.h"
 
-#include <collada.h>
 #include <linalg.h>
+using namespace linalg;
+using namespace linalg::aliases;
+#define MESHOUI_COLLADA_LINALG
+#include <collada.h>
 #include <functional>
 
 #include <experimental/filesystem>
@@ -18,8 +21,6 @@ namespace
     }
 }
 
-using namespace linalg;
-using namespace linalg::aliases;
 using namespace Meshoui;
 
 bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
@@ -129,7 +130,7 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
                     instance.materialId = libraryNode.geometry.material;
                 else
                     instance.materialId = meshFile.materials[0].materialId;
-                instance.modelMatrix = (const float4x4&)libraryNode.transform;
+                instance.modelMatrix = libraryNode.transform;
                 meshFile.instances.push_back(instance);
             }
         }

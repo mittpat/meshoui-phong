@@ -2,11 +2,12 @@
 #include "MeshLoader.h"
 
 #include <algorithm>
-#include <collada.h>
 #include <linalg.h>
-
 using namespace linalg;
 using namespace linalg::aliases;
+#define MESHOUI_COLLADA_LINALG
+#include <collada.h>
+
 using namespace Meshoui;
 
 namespace
@@ -140,17 +141,17 @@ void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & me
         std::array<Vertex, 3> avertex;
 
         const auto & ivertices = mesh.triangles[i].vertices;
-        avertex[0].position = (const float3&)mesh.vertices[ivertices.x-1];
-        avertex[1].position = (const float3&)mesh.vertices[ivertices.y-1];
-        avertex[2].position = (const float3&)mesh.vertices[ivertices.z-1];
+        avertex[0].position = mesh.vertices[ivertices.x-1];
+        avertex[1].position = mesh.vertices[ivertices.y-1];
+        avertex[2].position = mesh.vertices[ivertices.z-1];
 
         const auto & itexcoords = mesh.triangles[i].texcoords;
         if (itexcoords.x-1 < mesh.texcoords.size())
-            avertex[0].texcoord = (const float2&)mesh.texcoords[itexcoords.x-1];
+            avertex[0].texcoord = mesh.texcoords[itexcoords.x-1];
         if (itexcoords.y-1 < mesh.texcoords.size())
-            avertex[1].texcoord = (const float2&)mesh.texcoords[itexcoords.y-1];
+            avertex[1].texcoord = mesh.texcoords[itexcoords.y-1];
         if (itexcoords.z-1 < mesh.texcoords.size())
-            avertex[2].texcoord = (const float2&)mesh.texcoords[itexcoords.z-1];
+            avertex[2].texcoord = mesh.texcoords[itexcoords.z-1];
 
         if (renormalize)
         {
@@ -165,11 +166,11 @@ void MeshLoader::buildGeometry(MeshDefinition & definition, const DAE::Mesh & me
         {
             const auto & inormals = mesh.triangles[i].normals;
             if (inormals.x-1 < mesh.normals.size())
-                avertex[0].normal = (const float3&)mesh.normals[inormals.x-1];
+                avertex[0].normal = mesh.normals[inormals.x-1];
             if (inormals.y-1 < mesh.normals.size())
-                avertex[1].normal = (const float3&)mesh.normals[inormals.y-1];
+                avertex[1].normal = mesh.normals[inormals.y-1];
             if (inormals.z-1 < mesh.normals.size())
-                avertex[2].normal = (const float3&)mesh.normals[inormals.z-1];
+                avertex[2].normal = mesh.normals[inormals.z-1];
         }
 
         // tangent + bitangent

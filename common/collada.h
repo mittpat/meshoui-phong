@@ -7,37 +7,19 @@ namespace pugi { class xml_node; }
 
 namespace DAE
 {
-    struct uint3 final
-    {
-        unsigned x,y,z;
-    };
-
-    struct float2 final
-    {
-        float x,y;
-    };
-
-    struct float3 final
-    {
-        float x,y,z;
-    };
-
-    struct float4 final
-    {
-        float x,y,z,w;
-    };
-
-    struct float4x4 final
-    {
-        float4 x,y,z,w;
-    };
-
+#if !defined(MESHOUI_COLLADA_LINALG)
+    struct uint3 final { unsigned x,y,z; };
+    struct float2 final { float x,y; };
+    struct float3 final { float x,y,z; };
+    struct float4 final { float x,y,z,w; };
+    struct float4x4 final { float4 x,y,z,w; };
 #if !defined(MESHOUI_COLLADA_CONSTANTS_H)
 #define MESHOUI_COLLADA_CONSTANTS_H 1
-    const float4x4 float4x4Identity = {{1.f,0.f,0.f,0.f},
-                                       {0.f,1.f,0.f,0.f},
-                                       {0.f,0.f,1.f,0.f},
-                                       {0.f,0.f,0.f,1.f}};
+    const float4x4 identity = {{1.f,0.f,0.f,0.f},
+                               {0.f,1.f,0.f,0.f},
+                               {0.f,0.f,1.f,0.f},
+                               {0.f,0.f,0.f,1.f}};
+#endif
 #endif
 
     struct Image final
@@ -136,7 +118,7 @@ namespace DAE
         float4x4 transform;
         InstanceGeometry geometry;
     };
-    inline Node::Node() : transform(float4x4Identity) {}
+    inline Node::Node() : transform(identity) {}
 
     struct Shape final
     {
