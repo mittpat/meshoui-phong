@@ -24,20 +24,17 @@ namespace DAE
 
     struct Image final
     {
-        std::string id;
-        std::string initFrom;
+        std::string id, initFrom;
     };
 
     struct Surface final
     {
-        std::string sid;
-        std::string initFrom;
+        std::string sid, initFrom;
     };
 
     struct Sampler final
     {
-        std::string sid;
-        std::string source;
+        std::string sid, source;
     };
 
     struct Effect final
@@ -46,7 +43,6 @@ namespace DAE
         {
             Value(const std::string & i, const std::vector<float> & d);
             Value(const std::string & i, const std::string & t);
-
             std::string sid;
             std::vector<float> data;
             std::string texture;
@@ -75,17 +71,11 @@ namespace DAE
     struct Triangle final
     {
         Triangle();
-        Triangle(const uint3 & v,
-                 const uint3 & t,
-                 const uint3 & n);
-        uint3 vertices;
-        uint3 texcoords;
-        uint3 normals;
+        Triangle(const uint3 & v, const uint3 & t, const uint3 & n);
+        uint3 vertices, texcoords, normals;
     };
     inline Triangle::Triangle() : vertices{0,0,0}, texcoords{0,0,0}, normals{0,0,0} {}
-    inline Triangle::Triangle(const uint3 & v,
-                              const uint3 & t,
-                              const uint3 & n) : vertices(v), texcoords(t), normals(n) {}
+    inline Triangle::Triangle(const uint3 & v, const uint3 & t, const uint3 & n) : vertices(v), texcoords(t), normals(n) {}
 
     struct Mesh final
     {
@@ -106,9 +96,7 @@ namespace DAE
 
     struct InstanceGeometry final
     {
-        std::string url;
-        std::string name;
-        std::string material;
+        std::string url, name, material;
     };
 
     struct Node final
@@ -144,9 +132,7 @@ namespace DAE
 
     struct InstancePhysicsModel final
     {
-        std::string sid;
-        std::string url;
-        std::string parent;
+        std::string sid, url, parent;
     };
 
     struct Data final
