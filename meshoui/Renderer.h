@@ -16,6 +16,7 @@ namespace Meshoui
 
     class Camera;
     class Program;
+    struct SimpleMesh;
     class Widget;
     class RendererPrivate;
     class Renderer final
@@ -26,6 +27,7 @@ namespace Meshoui
 
         bool shouldClose() const;
 
+        void add(SimpleMesh * mesh);
         void add(Model * model);
         void add(Mesh * mesh);
         void add(Program * program);

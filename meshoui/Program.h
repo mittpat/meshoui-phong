@@ -22,6 +22,7 @@ namespace Meshoui
         Feature::Flags features;
 
     private:
+        friend class Renderer;
         friend class RendererPrivate;
         ProgramPrivate * d;
     };

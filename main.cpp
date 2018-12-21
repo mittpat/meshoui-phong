@@ -8,13 +8,17 @@
 #include <Mesh.h>
 #include <Program.h>
 #include <Renderer.h>
+#include <MeshLoader.h>
+
+using namespace linalg;
+using namespace linalg::aliases;
+#define MESHOUI_COLLADA_LINALG
+#include <collada.h>
 
 #include <q3.h>
 
 #include <fstream>
 
-using namespace linalg;
-using namespace linalg::aliases;
 using namespace Meshoui;
 
 namespace
@@ -32,6 +36,31 @@ namespace
             phongProgram->fragmentShaderSource = std::vector<char>(std::istreambuf_iterator<char>(fileStream), std::istreambuf_iterator<char>());
         }
     }
+
+    void collada(const std::string & filename, std::vector<SimpleMesh> & simpleMeshes)
+    {
+        DAE::Data data;
+        if (DAE::parse(filename, data, DAE::Graphics))
+        {
+            for (const auto & libraryNode : data.nodes)
+            {
+                auto geometry = std::find_if(data.geometries.begin(), data.geometries.end(), [libraryNode](const DAE::Geometry & geometry){ return geometry.id == libraryNode.geometry.url; });
+                auto material = std::find_if(data.materials.begin(), data.materials.end(), [libraryNode](const DAE::Material & material){ return material.id == libraryNode.geometry.material; });
+
+                if (geometry != data.geometries.end())
+                {
+                    SimpleMesh simpleMesh;
+                    simpleMesh.geometry = MeshLoader::makeGeometry(*geometry, data);
+                    if (material != data.materials.end())
+                    {
+                        simpleMesh.material = MeshLoader::makeMaterial(*material, data);
+                    }
+                    simpleMesh.modelMatrix = libraryNode.transform;
+                    simpleMeshes.push_back(simpleMesh);
+                }
+            }
+        }
+    }
 }
 
 int main(int, char**)
@@ -44,10 +73,14 @@ int main(int, char**)
                                      "meshoui/resources/shaders/Phong.frag.spv");
     renderer.add(&phongProgram);
 
+    std::vector<SimpleMesh> simpleMeshes;
+    collada("meshoui/resources/models/bricks.dae", simpleMeshes);
+    for (auto & mesh : simpleMeshes) renderer.add(&mesh);
+
     {
         ScopedSkydome skydome(&renderer);
-        ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
-        bricks.meshes[0]->modelMatrix.w = float4(float3(0.0, 5, 0.0), 1.0);
+        //ScopedAsset bricks(&renderer, "meshoui/resources/models/bricks.dae");
+        //bricks.meshes[0]->modelMatrix.w = float4(float3(0.0, 5, 0.0), 1.0);
         ScopedAsset island(&renderer, "meshoui/resources/models/island.dae");
         for (const auto & mesh : island.meshes) mesh->modelMatrix.w.y = -4.0f;
         ScopedAsset crates(&renderer, "meshoui/resources/models/crates.dae");

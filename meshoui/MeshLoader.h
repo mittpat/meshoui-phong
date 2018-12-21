@@ -1,10 +1,17 @@
-#pragma once
+﻿#pragma once
 
 #include <linalg.h>
 #include "hashid.h"
 
 #include <string>
 #include <vector>
+
+namespace DAE
+{
+    struct Data;
+    struct Geometry;
+    struct Material;
+}
 
 namespace Meshoui
 {
@@ -37,13 +44,10 @@ namespace Meshoui
 
     struct MeshDefinition final
     {
-        MeshDefinition();
         HashId definitionId;
-        bool doubleSided;
         std::vector<unsigned int> indices;
         std::vector<Vertex> vertices;
     };
-    inline MeshDefinition::MeshDefinition() : doubleSided(false) {}
 
     struct MeshInstance final
     {
@@ -63,8 +67,25 @@ namespace Meshoui
         std::vector<MeshMaterial> materials;
     };
 
+    class MeshPrivate;
+    class MaterialPrivate;
+    struct SimpleMesh final
+    {
+        SimpleMesh();
+        MeshDefinition geometry;
+        MeshMaterial material;
+        linalg::aliases::float4x4 modelMatrix;
+
+        MeshPrivate * d;
+        MaterialPrivate * m;
+    };
+    inline SimpleMesh::SimpleMesh() : modelMatrix(linalg::identity), d(nullptr), m(nullptr) {}
+
     namespace MeshLoader
     {
+        MeshDefinition makeGeometry(const DAE::Geometry & geometry, const DAE::Data & data, bool renormalize = false);
+        MeshMaterial makeMaterial(const DAE::Material & material, const DAE::Data & data);
+
         bool load(const std::string & filename, MeshFile &meshFile);
         void cube(const std::string & name, MeshFile &meshFile);
     }

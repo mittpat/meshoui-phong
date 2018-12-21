@@ -120,110 +120,136 @@ namespace
         std::array<Octree*, 8> children;
         std::vector<T> data;
     };
-
-    void buildGeometry(Meshoui::MeshDefinition & definition, const DAE::Mesh & mesh, bool renormalize = false)
-    {
-        struct AABB final
-        {
-            AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
-                     upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
-            void extend(float3 p) { lower = min(lower, p); upper = max(upper, p); }
-            float3 center() const { return (lower + upper) * 0.5f; }
-            float3 half() const { return (upper - lower) * 0.5f; }
-            float3 lower, upper;
-        } bbox;
-        for (const auto & vertex : mesh.vertices)
-            bbox.extend({vertex.x,vertex.y,vertex.z});
-
-        std::vector<Node> nodes;
-        nodes.reserve(unsigned(sqrt(mesh.triangles.size())));
-        Octree<Node> octree(bbox.center(), bbox.half());
-
-        printf("Loading '%s'\n", definition.definitionId.str.empty() ? "(unnamed root)" : definition.definitionId.str.c_str());
-
-        // indexed
-        for (size_t i = 0; i < mesh.triangles.size(); ++i)
-        {
-            std::array<Meshoui::Vertex, 3> avertex;
-
-            const auto & ivertices = mesh.triangles[i].vertices;
-            avertex[0].position = mesh.vertices[ivertices.x-1];
-            avertex[1].position = mesh.vertices[ivertices.y-1];
-            avertex[2].position = mesh.vertices[ivertices.z-1];
-
-            const auto & itexcoords = mesh.triangles[i].texcoords;
-            if (itexcoords.x-1 < mesh.texcoords.size())
-                avertex[0].texcoord = mesh.texcoords[itexcoords.x-1];
-            if (itexcoords.y-1 < mesh.texcoords.size())
-                avertex[1].texcoord = mesh.texcoords[itexcoords.y-1];
-            if (itexcoords.z-1 < mesh.texcoords.size())
-                avertex[2].texcoord = mesh.texcoords[itexcoords.z-1];
-
-            if (renormalize)
-            {
-                float3 a = avertex[1].position - avertex[0].position;
-                float3 b = avertex[2].position - avertex[0].position;
-                float3 normal = normalize(cross(a, b));
-                avertex[0].normal = normal;
-                avertex[1].normal = normal;
-                avertex[2].normal = normal;
-            }
-            else
-            {
-                const auto & inormals = mesh.triangles[i].normals;
-                if (inormals.x-1 < mesh.normals.size())
-                    avertex[0].normal = mesh.normals[inormals.x-1];
-                if (inormals.y-1 < mesh.normals.size())
-                    avertex[1].normal = mesh.normals[inormals.y-1];
-                if (inormals.z-1 < mesh.normals.size())
-                    avertex[2].normal = mesh.normals[inormals.z-1];
-            }
-
-            // tangent + bitangent
-            float3 edge1 = avertex[1].position - avertex[0].position;
-            float3 edge2 = avertex[2].position - avertex[0].position;
-            float2 deltaUV1 = avertex[1].texcoord - avertex[0].texcoord;
-            float2 deltaUV2 = avertex[2].texcoord - avertex[0].texcoord;
-
-            float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-            if (f != 0.f)
-            {
-                f = 1.0f / f;
-
-                float3 tangent(0.f,0.f,0.f);
-                tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-                tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-                tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-                avertex[0].tangent = avertex[1].tangent = avertex[2].tangent = normalize(tangent);
-
-                float3 bitangent(0.f,0.f,0.f);
-                bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-                bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-                bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-                avertex[0].bitangent = avertex[1].bitangent = avertex[2].bitangent = normalize(bitangent);
-            }
-
-            for (auto & vertex : avertex)
-            {
-                nodes.clear();
-                octree.getPointsInsideBox(vertex.position, vertex.position, nodes);
-                auto found = std::find(nodes.begin(), nodes.end(), vertex);
-                if (found == nodes.end())
-                {
-                    definition.vertices.push_back(vertex);
-                    definition.indices.push_back(unsigned(definition.vertices.size()) - 1);
-                    octree.insert(Node(vertex, definition.indices.back()));
-                }
-                else
-                {
-                    definition.indices.push_back((*found).index);
-                }
-            }
-        }
-    }
 }
 
 using namespace Meshoui;
+
+MeshDefinition MeshLoader::makeGeometry(const DAE::Geometry &geometry, const DAE::Data &data, bool renormalize)
+{
+    MeshDefinition ret;
+    ret.definitionId = HashId(geometry.id, data.filename);
+
+    struct AABB final
+    {
+        AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
+                 upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
+        void extend(float3 p) { lower = min(lower, p); upper = max(upper, p); }
+        float3 center() const { return (lower + upper) * 0.5f; }
+        float3 half() const { return (upper - lower) * 0.5f; }
+        float3 lower, upper;
+    } bbox;
+    for (const auto & vertex : geometry.mesh.vertices)
+        bbox.extend({vertex.x,vertex.y,vertex.z});
+
+    std::vector<Node> nodes;
+    nodes.reserve(unsigned(sqrt(geometry.mesh.triangles.size())));
+    Octree<Node> octree(bbox.center(), bbox.half());
+
+    // indexed
+    for (size_t i = 0; i < geometry.mesh.triangles.size(); ++i)
+    {
+        std::array<Meshoui::Vertex, 3> avertex;
+
+        const auto & ivertices = geometry.mesh.triangles[i].vertices;
+        avertex[0].position = geometry.mesh.vertices[ivertices.x-1];
+        avertex[1].position = geometry.mesh.vertices[ivertices.y-1];
+        avertex[2].position = geometry.mesh.vertices[ivertices.z-1];
+
+        const auto & itexcoords = geometry.mesh.triangles[i].texcoords;
+        if (itexcoords.x-1 < geometry.mesh.texcoords.size())
+            avertex[0].texcoord = geometry.mesh.texcoords[itexcoords.x-1];
+        if (itexcoords.y-1 < geometry.mesh.texcoords.size())
+            avertex[1].texcoord = geometry.mesh.texcoords[itexcoords.y-1];
+        if (itexcoords.z-1 < geometry.mesh.texcoords.size())
+            avertex[2].texcoord = geometry.mesh.texcoords[itexcoords.z-1];
+
+        if (renormalize)
+        {
+            float3 a = avertex[1].position - avertex[0].position;
+            float3 b = avertex[2].position - avertex[0].position;
+            float3 normal = normalize(cross(a, b));
+            avertex[0].normal = normal;
+            avertex[1].normal = normal;
+            avertex[2].normal = normal;
+        }
+        else
+        {
+            const auto & inormals = geometry.mesh.triangles[i].normals;
+            if (inormals.x-1 < geometry.mesh.normals.size())
+                avertex[0].normal = geometry.mesh.normals[inormals.x-1];
+            if (inormals.y-1 < geometry.mesh.normals.size())
+                avertex[1].normal = geometry.mesh.normals[inormals.y-1];
+            if (inormals.z-1 < geometry.mesh.normals.size())
+                avertex[2].normal = geometry.mesh.normals[inormals.z-1];
+        }
+
+        // tangent + bitangent
+        float3 edge1 = avertex[1].position - avertex[0].position;
+        float3 edge2 = avertex[2].position - avertex[0].position;
+        float2 deltaUV1 = avertex[1].texcoord - avertex[0].texcoord;
+        float2 deltaUV2 = avertex[2].texcoord - avertex[0].texcoord;
+
+        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (f != 0.f)
+        {
+            f = 1.0f / f;
+
+            float3 tangent(0.f,0.f,0.f);
+            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            avertex[0].tangent = avertex[1].tangent = avertex[2].tangent = normalize(tangent);
+
+            float3 bitangent(0.f,0.f,0.f);
+            bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            avertex[0].bitangent = avertex[1].bitangent = avertex[2].bitangent = normalize(bitangent);
+        }
+
+        for (auto & vertex : avertex)
+        {
+            nodes.clear();
+            octree.getPointsInsideBox(vertex.position, vertex.position, nodes);
+            auto found = std::find(nodes.begin(), nodes.end(), vertex);
+            if (found == nodes.end())
+            {
+                ret.vertices.push_back(vertex);
+                ret.indices.push_back(unsigned(ret.vertices.size()) - 1);
+                octree.insert(Node(vertex, ret.indices.back()));
+            }
+            else
+            {
+                ret.indices.push_back((*found).index);
+            }
+        }
+    }
+    return ret;
+}
+
+MeshMaterial MeshLoader::makeMaterial(const DAE::Material &material, const DAE::Data &data)
+{
+    MeshMaterial ret;
+    ret.materialId = HashId(material.id, data.filename);
+    auto effect = std::find_if(data.effects.begin(), data.effects.end(), [material](const DAE::Effect & effect){ return effect.id == material.effect.url; });
+    for (const auto & value : (*effect).values)
+    {
+        DAE::Effect::Value v = value;
+        auto image = std::find_if(data.images.begin(), data.images.end(), [v](const DAE::Image & image){ return image.id == v.texture; });
+        if (image != data.images.end()) { v.texture = (*image).initFrom; }
+
+        if (v.sid == "uniformAmbient") { ret.ambient = (float3&)v.data[0]; }
+        else if (v.sid == "uniformTextureAmbient") { ret.textureAmbient = sibling(v.texture, data.filename); }
+        else if (v.sid == "uniformDiffuse") { ret.diffuse = (float3&)v.data[0]; }
+        else if (v.sid == "uniformTextureDiffuse") { ret.textureDiffuse = sibling(v.texture, data.filename); }
+        else if (v.sid == "uniformSpecular") { ret.specular = (float3&)v.data[0]; }
+        else if (v.sid == "uniformTextureSpecular") { ret.textureSpecular = sibling(v.texture, data.filename); }
+        else if (v.sid == "uniformEmissive") { ret.emissive = (float3&)v.data[0]; }
+        else if (v.sid == "uniformTextureEmissive") { ret.textureEmissive = sibling(v.texture, data.filename); }
+        else if (v.sid == "uniformTextureNormal") { ret.textureNormal = sibling(v.texture, data.filename); }
+    }
+    return ret;
+}
 
 bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
 {
@@ -234,60 +260,27 @@ bool MeshLoader::load(const std::string &filename, MeshFile &meshFile)
         meshFile.materials.push_back(MeshMaterial());
         for (const auto & libraryMaterial : data.materials)
         {
-            auto effect = std::find_if(data.effects.begin(), data.effects.end(), [libraryMaterial](const DAE::Effect & effect){ return effect.id == libraryMaterial.effect.url; });
-            if (effect != data.effects.end())
-            {
-                MeshMaterial material;
-                material.materialId = libraryMaterial.id;
-                for (const auto & value : (*effect).values)
-                {
-                    DAE::Effect::Value v = value;
-                    auto image = std::find_if(data.images.begin(), data.images.end(), [v](const DAE::Image & image){ return image.id == v.texture; });
-                    if (image != data.images.end()) { v.texture = (*image).initFrom; }
-
-                    if (v.sid == "uniformAmbient") { material.ambient = (float3&)v.data[0]; }
-                    else if (v.sid == "uniformTextureAmbient") { material.textureAmbient = sibling(v.texture, meshFile.filename); }
-                    else if (v.sid == "uniformDiffuse") { material.diffuse = (float3&)v.data[0]; }
-                    else if (v.sid == "uniformTextureDiffuse") { material.textureDiffuse = sibling(v.texture, meshFile.filename); }
-                    else if (v.sid == "uniformSpecular") { material.specular = (float3&)v.data[0]; }
-                    else if (v.sid == "uniformTextureSpecular") { material.textureSpecular = sibling(v.texture, meshFile.filename); }
-                    else if (v.sid == "uniformEmissive") { material.emissive = (float3&)v.data[0]; }
-                    else if (v.sid == "uniformTextureEmissive") { material.textureEmissive = sibling(v.texture, meshFile.filename); }
-                    else if (v.sid == "uniformTextureNormal") { material.textureNormal = sibling(v.texture, meshFile.filename); }
-                }
-                meshFile.materials.push_back(material);
-            }
+            meshFile.materials.push_back(makeMaterial(libraryMaterial, data));
         }
         for (const auto & libraryGeometry : data.geometries)
         {
-            MeshDefinition definition;
-            definition.definitionId = HashId(libraryGeometry.id, filename);
-            definition.doubleSided = libraryGeometry.doubleSided;
-            buildGeometry(definition, libraryGeometry.mesh);
-            meshFile.definitions.push_back(definition);
+            meshFile.definitions.push_back(makeGeometry(libraryGeometry, data));
         }
         for (const auto & libraryNode : data.nodes)
         {
             if (!libraryNode.geometry.name.empty())
             {
-                HashId definitionId(libraryNode.geometry.url, filename);
-                auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [definitionId](const MeshDefinition & definition){ return definition.definitionId == definitionId; });
-
                 MeshInstance instance;
                 instance.instanceId = libraryNode.id;
-                instance.definitionId = (*definition).definitionId;
+                instance.definitionId = HashId(libraryNode.geometry.url, filename);
                 if (!libraryNode.geometry.material.empty())
-                    instance.materialId = libraryNode.geometry.material;
+                    instance.materialId = HashId(libraryNode.geometry.material, filename);
                 else
                     instance.materialId = meshFile.materials[0].materialId;
                 instance.modelMatrix = libraryNode.transform;
                 meshFile.instances.push_back(instance);
             }
         }
-        /*
-        for (auto & material : meshFile.materials)
-            material.repeatTexcoords = true;
-        */
         return !meshFile.definitions.empty() && !meshFile.instances.empty();
     }
     return false;
@@ -298,37 +291,38 @@ void MeshLoader::cube(const std::string &name, MeshFile &meshFile)
     meshFile.filename = name;
     meshFile.materials.resize(1);
     meshFile.materials[0].materialId = name + "_cube_mat";
+
+    DAE::Geometry geometry;
+    geometry.id = name + "_cube_def";
+    geometry.mesh.vertices = {{-1.0, -1.0, -1.0},
+                              {-1.0, -1.0,  1.0},
+                              {-1.0,  1.0, -1.0},
+                              {-1.0,  1.0,  1.0},
+                              { 1.0, -1.0, -1.0},
+                              { 1.0, -1.0,  1.0},
+                              { 1.0,  1.0, -1.0},
+                              { 1.0,  1.0,  1.0}};
+    geometry.mesh.texcoords = {{1,0},
+                               {0,2},
+                               {0,0},
+                               {1,2}};
+    geometry.mesh.triangles = {{{2,3,1}, {1,2,3}, {0,0,0}},
+                               {{4,7,3}, {1,2,3}, {0,0,0}},
+                               {{8,5,7}, {1,2,3}, {0,0,0}},
+                               {{6,1,5}, {1,2,3}, {0,0,0}},
+                               {{7,1,3}, {1,2,3}, {0,0,0}},
+                               {{4,6,8}, {1,2,3}, {0,0,0}},
+                               {{2,4,3}, {1,4,2}, {0,0,0}},
+                               {{4,8,7}, {1,4,2}, {0,0,0}},
+                               {{8,6,5}, {1,4,2}, {0,0,0}},
+                               {{6,2,1}, {1,4,2}, {0,0,0}},
+                               {{7,5,1}, {1,4,2}, {0,0,0}},
+                               {{4,2,6}, {1,4,2}, {0,0,0}}};
     meshFile.definitions.resize(1);
-    meshFile.definitions[0].definitionId = name + "_cube_def";
+    meshFile.definitions[0] = makeGeometry(geometry, DAE::Data(), true);
+
     meshFile.instances.resize(1);
     meshFile.instances[0].definitionId = meshFile.definitions[0].definitionId;
     meshFile.instances[0].materialId = meshFile.materials[0].materialId;
     meshFile.instances[0].instanceId = name + "_cube_inst";
-
-    DAE::Mesh mesh;
-    mesh.vertices = {{-1.0, -1.0, -1.0},
-                     {-1.0, -1.0,  1.0},
-                     {-1.0,  1.0, -1.0},
-                     {-1.0,  1.0,  1.0},
-                     { 1.0, -1.0, -1.0},
-                     { 1.0, -1.0,  1.0},
-                     { 1.0,  1.0, -1.0},
-                     { 1.0,  1.0,  1.0}};
-    mesh.texcoords = {{1,0},
-                      {0,2},
-                      {0,0},
-                      {1,2}};
-    mesh.triangles = {{{2,3,1}, {1,2,3}, {0,0,0}},
-                      {{4,7,3}, {1,2,3}, {0,0,0}},
-                      {{8,5,7}, {1,2,3}, {0,0,0}},
-                      {{6,1,5}, {1,2,3}, {0,0,0}},
-                      {{7,1,3}, {1,2,3}, {0,0,0}},
-                      {{4,6,8}, {1,2,3}, {0,0,0}},
-                      {{2,4,3}, {1,4,2}, {0,0,0}},
-                      {{4,8,7}, {1,4,2}, {0,0,0}},
-                      {{8,6,5}, {1,4,2}, {0,0,0}},
-                      {{6,2,1}, {1,4,2}, {0,0,0}},
-                      {{7,5,1}, {1,4,2}, {0,0,0}},
-                      {{4,2,6}, {1,4,2}, {0,0,0}}};
-    buildGeometry(meshFile.definitions[0], mesh, true);
 }

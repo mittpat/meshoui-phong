@@ -23,6 +23,8 @@ add_library(meshouilib
     Mesh.h
     MeshLoader.cpp
     MeshLoader.h
+    Meshoui.cpp
+    Meshoui.h
     Program.h
     Renderer.cpp
     Renderer.h

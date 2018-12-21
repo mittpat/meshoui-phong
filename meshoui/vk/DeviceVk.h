@@ -46,13 +46,13 @@ namespace Meshoui
         void transferBuffer(const DeviceBufferVk &fromBuffer, ImageBufferVk &toBuffer, const VkExtent3D & extent, VkCommandBuffer commandBuffer);
         void deleteBuffer(const ImageBufferVk &deviceBuffer);
 
-        VkPhysicalDevice       physicalDevice;
-        VkDevice               device;
-        uint32_t               queueFamily;
-        VkQueue                queue;
-        VkDescriptorPool       descriptorPool;
-        VkAllocationCallbacks* allocator;
-        VkDeviceSize           memoryAlignment;
+        VkPhysicalDevice             physicalDevice;
+        VkDevice                     device;
+        uint32_t                     queueFamily;
+        VkQueue                      queue;
+        VkDescriptorPool             descriptorPool;
+        const VkAllocationCallbacks* allocator;
+        VkDeviceSize                 memoryAlignment;
 
     private:
         uint32_t memoryType(VkMemoryPropertyFlags properties, uint32_t type_bits);

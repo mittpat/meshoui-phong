@@ -679,11 +679,6 @@ void RendererPrivate::fill(const std::string &filename, const std::vector<Mesh *
         mesh->materialId = instance.materialId;
         mesh->filename = meshFile.filename;
         mesh->modelMatrix = instance.modelMatrix;
-        auto definition = std::find_if(meshFile.definitions.begin(), meshFile.definitions.end(), [instance](const auto & definition){ return definition.definitionId == instance.definitionId; });
-        if (definition->doubleSided)
-        {
-            mesh->renderFlags &= ~Render::BackFaceCulling;
-        }
     }
 }
 
