@@ -36,6 +36,13 @@ typedef struct MoFloat4 {
     float w;
 } MoFloat4;
 
+typedef struct MoFloat4x4 {
+    MoFloat4 x;
+    MoFloat4 y;
+    MoFloat4 z;
+    MoFloat4 w;
+} MoFloat4x4;
+
 typedef struct MoVertex {
     MoFloat3 position;
     MoFloat2 texcoord;
@@ -44,38 +51,55 @@ typedef struct MoVertex {
     MoFloat3 bitangent;
 } MoVertex;
 
+typedef enum MoVertexFlagBits {
+    MO_GENERATE_NORMALS = 0x00000001,
+    MO_GENERATE_TANGENTS = 0x00000002
+} MoVertexFlagBits;
+typedef VkFlags MoVertexFlags;
+
 typedef struct MoMeshCreateInfo {
     const uint32_t* pIndices;
     uint32_t        indexCount;
     const MoVertex* pVertices;
     uint32_t        vertexCount;
+    MoVertexFlags   flags;
 } MoMeshCreateInfo;
 
 typedef struct MoMaterialCreateInfo {
-    MoFloat3        colorAmbient;
-    MoFloat3        colorDiffuse;
-    MoFloat3        colorSpecular;
-    MoFloat3        colorEmissive;
-    const char*     textureAmbient;
-    const char*     textureDiffuse;
-    const char*     textureNormal;
-    const char*     textureSpecular;
-    const char*     textureEmissive;
-    VkCommandPool   commandPool;
-    VkCommandBuffer commandBuffer;
+    MoFloat3       colorAmbient;
+    MoFloat3       colorDiffuse;
+    MoFloat3       colorSpecular;
+    MoFloat3       colorEmissive;
+    // VK_FORMAT_R8G8B8A8_UNORM
+    const uint8_t* pTextureAmbient;
+    VkExtent2D     textureAmbientExtent;
+    const uint8_t* pTextureDiffuse;
+    VkExtent2D     textureDiffuseExtent;
+    const uint8_t* pTextureNormal;
+    VkExtent2D     textureNormalExtent;
+    const uint8_t* pTextureSpecular;
+    VkExtent2D     textureSpecularExtent;
+    const uint8_t* pTextureEmissive;
+    VkExtent2D     textureEmissiveExtent;
+    VkDescriptorSetLayout setLayout;
 } MoMaterialCreateInfo;
 
 typedef struct MoPipelineCreateInfo {
-    const char* pVertexShader;
-    uint32_t    vertexShaderSize;
-    const char* pFragmentShader;
-    uint32_t    fragmentShaderSize;
+    const uint32_t* pVertexShader;
+    uint32_t        vertexShaderSize;
+    const uint32_t* pFragmentShader;
+    uint32_t        fragmentShaderSize;
 } MoPipelineCreateInfo;
 
-bool moInit(MoInitInfo* info, VkRenderPass renderPass);
+void moInit(MoInitInfo* info, VkRenderPass renderPass);
 void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipeline);
 void moDestroyPipeline(MoPipeline pipeline);
 void moCreateMesh(const MoMeshCreateInfo* pCreateInfo, MoMesh* pMesh);
 void moDestroyMesh(MoMesh mesh);
 void moCreateMaterial(const MoMaterialCreateInfo* pCreateInfo, MoMaterial* pMaterial);
 void moDestroyMaterial(MoMaterial material);
+void moNewFrame(uint32_t frameIndex);
+void moSetPMV(const MoFloat4x4& projection, const MoFloat4x4& model, const MoFloat4x4& view);
+void moSetLight(const MoFloat3& light, const MoFloat3& camera);
+void moBindMesh(MoMesh mesh);
+void moBindMaterial(MoMaterial material);
