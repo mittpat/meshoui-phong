@@ -47,22 +47,13 @@ typedef struct MoVertex {
     MoFloat3 position;
     MoFloat2 texcoord;
     MoFloat3 normal;
-    MoFloat3 tangent;
-    MoFloat3 bitangent;
 } MoVertex;
-
-typedef enum MoVertexFlagBits {
-    MO_GENERATE_NORMALS = 0x00000001,
-    MO_GENERATE_TANGENTS = 0x00000002
-} MoVertexFlagBits;
-typedef VkFlags MoVertexFlags;
 
 typedef struct MoMeshCreateInfo {
     const uint32_t* pIndices;
     uint32_t        indexCount;
     const MoVertex* pVertices;
     uint32_t        vertexCount;
-    MoVertexFlags   flags;
 } MoMeshCreateInfo;
 
 typedef struct MoMaterialCreateInfo {

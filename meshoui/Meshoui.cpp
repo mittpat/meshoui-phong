@@ -367,174 +367,13 @@ static void generateTexture(ImageBufferVk & imageBuffer, const uint8_t* texture,
     g_Device.deleteBuffer(upload);
 }
 
-static void generateMesh(const MoMeshCreateInfo *pCreateInfo, std::vector<uint32_t>& indices, std::vector<MoVertex>& vertices)
-{
-    struct AABB final {
-        AABB() : lower({std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()}),
-                 upper({std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()}) {}
-        void extend(const MoFloat3& p) { lower = min(lower, p); upper = max(upper, p); }
-        MoFloat3 center() const { return (lower + upper) * 0.5f; }
-        MoFloat3 half() const { return (upper - lower) * 0.5f; }
-        MoFloat3 lower, upper;
-    } bbox;
-    for (const auto & vertex : vertices) { bbox.extend(vertex.position); }
-
-#define DOT_PRODUCT_THRESHOLD 0.9f
-    struct Node final {
-        Node(const MoVertex & v, unsigned int i) : vertex(v), index(i) {}
-        MoFloat3 position() const { return vertex.position; }
-        bool operator==(const MoVertex &rhs) const { return vertex.position == rhs.position && vertex.texcoord == rhs.texcoord && dot(vertex.normal, rhs.normal) > DOT_PRODUCT_THRESHOLD; }
-        MoVertex vertex;
-        unsigned int index;
-    };
-    std::vector<Node> nodes;
-
-    struct Octree final {
-        ~Octree() { for (auto * child : children) { delete child; } }
-        Octree(const MoFloat3 & origin, const MoFloat3 & halfDimension) : origin(origin), halfDimension(halfDimension), children({}), data() {}
-        Octree(const Octree & copy) : origin(copy.origin), halfDimension(copy.halfDimension), data(copy.data) {}
-        bool isLeafNode() const { return children[0] == nullptr; }
-        unsigned getOctantContainingPoint(const MoFloat3 & point) const {
-            unsigned oct = 0;
-            if (point.x >= origin.x) oct |= 4;
-            if (point.y >= origin.y) oct |= 2;
-            if (point.z >= origin.z) oct |= 1;
-            return oct;
-        }
-        void insert(const Node & point) {
-            if (isLeafNode())
-            {
-                if (data.empty() || point.position() == data.front().position())
-                {
-                    data.push_back(point);
-                    return;
-                }
-                else
-                {
-                    MoFloat3 nextHalfDimension = halfDimension*.5f;
-                    if (nextHalfDimension.x == 0.f || nextHalfDimension.y == 0.f || nextHalfDimension.z == 0.f)
-                    {
-                        data.push_back(point);
-                    }
-                    else
-                    {
-                        for (unsigned i = 0; i < 8; ++i)
-                        {
-                            MoFloat3 newOrigin = origin;
-                            newOrigin.x += halfDimension.x * (i&4 ? .5f : -.5f);
-                            newOrigin.y += halfDimension.y * (i&2 ? .5f : -.5f);
-                            newOrigin.z += halfDimension.z * (i&1 ? .5f : -.5f);
-                            children[i] = new Octree(newOrigin, nextHalfDimension);
-                        }
-                        for (const auto & oldPoint : data)
-                        {
-                            children[getOctantContainingPoint(oldPoint.position())]->insert(oldPoint);
-                        }
-                        data.clear();
-                        children[getOctantContainingPoint(point.position())]->insert(point);
-                    }
-                }
-            }
-            else
-            {
-                unsigned octant = getOctantContainingPoint(point.position());
-                children[octant]->insert(point);
-            }
-        }
-        void getPointsInsideBox(const MoFloat3 & bmin, const MoFloat3 & bmax, std::vector<Node> & results) {
-            if (isLeafNode())
-            {
-                if (!data.empty())
-                {
-                    for (const auto & point : data)
-                    {
-                        const MoFloat3 p = point.position();
-                        if (p.x > bmax.x || p.y > bmax.y || p.z > bmax.z) return;
-                        if (p.x < bmin.x || p.y < bmin.y || p.z < bmin.z) return;
-                        results.push_back(point);
-                    }
-                }
-            }
-            else
-            {
-                for (auto * child : children)
-                {
-                    const MoFloat3 cmax = child->origin + child->halfDimension;
-                    const MoFloat3 cmin = child->origin - child->halfDimension;
-                    if (cmax.x < bmin.x || cmax.y < bmin.y || cmax.z < bmin.z) continue;
-                    if (cmin.x > bmax.x || cmin.y > bmax.y || cmin.z > bmax.z) continue;
-                    child->getPointsInsideBox(bmin, bmax, results);
-                }
-            }
-        }
-        MoFloat3 origin, halfDimension;
-        std::array<Octree*, 8> children;
-        std::vector<Node> data;
-    } octree(bbox.center(), bbox.half());
-
-    for (uint32_t i = 0; i < pCreateInfo->indexCount; i+=3)
-    {
-        std::array<MoVertex, 3> avertex;
-
-        avertex[0] = pCreateInfo->pVertices[pCreateInfo->pIndices[i]+0];
-        avertex[1] = pCreateInfo->pVertices[pCreateInfo->pIndices[i]+1];
-        avertex[2] = pCreateInfo->pVertices[pCreateInfo->pIndices[i]+2];
-
-        if ((pCreateInfo->flags & MO_GENERATE_NORMALS) != 0)
-        {
-            MoFloat3 a = avertex[1].position - avertex[0].position;
-            MoFloat3 b = avertex[2].position - avertex[0].position;
-            MoFloat3 normal = normalize(cross(a, b));
-            avertex[0].normal = normal;
-            avertex[1].normal = normal;
-            avertex[2].normal = normal;
-        }
-
-        if ((pCreateInfo->flags & MO_GENERATE_TANGENTS) != 0)
-        {
-            // tangent + bitangent
-            MoFloat3 edge1 = avertex[1].position - avertex[0].position;
-            MoFloat3 edge2 = avertex[2].position - avertex[0].position;
-            MoFloat2 deltaUV1 = avertex[1].texcoord - avertex[0].texcoord;
-            MoFloat2 deltaUV2 = avertex[2].texcoord - avertex[0].texcoord;
-
-            float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-            if (f != 0.f)
-            {
-                f = 1.0f / f;
-
-                MoFloat3 tangent = {};
-                tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-                tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-                tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-                avertex[0].tangent = avertex[1].tangent = avertex[2].tangent = normalize(tangent);
-
-                MoFloat3 bitangent = {};
-                bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-                bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-                bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-                avertex[0].bitangent = avertex[1].bitangent = avertex[2].bitangent = normalize(bitangent);
-            }
-        }
-
-        for (auto & vertex : avertex)
-        {
-            nodes.clear();
-            octree.getPointsInsideBox(vertex.position, vertex.position, nodes);
-            auto found = std::find(nodes.begin(), nodes.end(), vertex);
-            if (found == nodes.end())
-            {
-                vertices.push_back(vertex);
-                indices.push_back(unsigned(vertices.size()) - 1);
-                octree.insert(Node(vertex, indices.back()));
-            }
-            else
-            {
-                indices.push_back((*found).index);
-            }
-        }
-    }
-}
+typedef struct MoVertexP {
+    MoFloat3 position;
+    MoFloat2 texcoord;
+    MoFloat3 normal;
+    MoFloat3 tangent;
+    MoFloat3 bitangent;
+} MoVertexP;
 
 struct MoMesh_T
 {
@@ -724,15 +563,15 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     stage[1].pName = "main";
 
     VkVertexInputBindingDescription binding_desc[1] = {};
-    binding_desc[0].stride = sizeof(MoVertex);
+    binding_desc[0].stride = sizeof(MoVertexP);
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, position)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct MoVertex, texcoord)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, normal)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, tangent)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, bitangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexP, position)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct MoVertexP, texcoord)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexP, normal)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexP, tangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexP, bitangent)});
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -832,32 +671,59 @@ void moDestroyPipeline(MoPipeline pipeline)
 void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
 {
     MoMesh mesh = *pMesh = new MoMesh_T();
-    if (pCreateInfo->flags == 0)
+
+    // tangent + bitangent
+    std::vector<MoVertexP> vertices; vertices.reserve(pCreateInfo->vertexCount);
+    for (uint32_t i = 0; i < pCreateInfo->indexCount; i+=3)
     {
-        mesh->indexBufferSize = pCreateInfo->indexCount;
-        VkDeviceSize vertex_size = pCreateInfo->vertexCount * sizeof(MoVertex);
-        VkDeviceSize index_size = pCreateInfo->indexCount * sizeof(uint32_t);
-        g_Device.createBuffer(mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-        g_Device.createBuffer(mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-        g_Device.uploadBuffer(mesh->vertexBuffer, vertex_size, pCreateInfo->pVertices);
-        g_Device.uploadBuffer(mesh->indexBuffer, index_size, pCreateInfo->pIndices);
+        // triangle
+        MoVertexP v1, v2, v3; v1 = v2 = v3 = {};
+        v1.position = pCreateInfo->pVertices[i+0].position;
+        v2.position = pCreateInfo->pVertices[i+1].position;
+        v3.position = pCreateInfo->pVertices[i+2].position;
+        v1.normal = pCreateInfo->pVertices[i+0].normal;
+        v2.normal = pCreateInfo->pVertices[i+1].normal;
+        v3.normal = pCreateInfo->pVertices[i+2].normal;
+        v1.texcoord = pCreateInfo->pVertices[i+0].texcoord;
+        v2.texcoord = pCreateInfo->pVertices[i+1].texcoord;
+        v3.texcoord = pCreateInfo->pVertices[i+2].texcoord;
+
+        const MoFloat3 edge1 = v2.position - v1.position;
+        const MoFloat3 edge2 = v3.position - v1.position;
+        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
+        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
+
+        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (f != 0.f)
+        {
+            f = 1.0f / f;
+
+            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
+            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
+        }
+        else
+        {
+            v1.tangent = v2.tangent = v3.tangent = {1.f, 0.f, 0.f};
+            v1.bitangent = v2.bitangent = v3.bitangent = {0.f, 0.f, 1.f};
+        }
+        vertices.push_back(v1);
+        vertices.push_back(v2);
+        vertices.push_back(v3);
     }
-    else
-    {
-        std::vector<uint32_t> indices;
-        std::vector<MoVertex> vertices;
 
-        generateMesh(pCreateInfo, indices, vertices);
-
-        mesh->indexBufferSize = indices.size();
-        VkDeviceSize vertex_size = vertices.size() * sizeof(MoVertex);
-        VkDeviceSize index_size = indices.size() * sizeof(uint32_t);
-        g_Device.createBuffer(mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-        g_Device.createBuffer(mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-        g_Device.uploadBuffer(mesh->vertexBuffer, vertex_size, vertices.data());
-        g_Device.uploadBuffer(mesh->indexBuffer, index_size, indices.data());
-
-    }
+    mesh->indexBufferSize = pCreateInfo->indexCount;
+    VkDeviceSize vertex_size = pCreateInfo->vertexCount * sizeof(MoVertexP);
+    VkDeviceSize index_size = pCreateInfo->indexCount * sizeof(uint32_t);
+    g_Device.createBuffer(mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    g_Device.createBuffer(mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    g_Device.uploadBuffer(mesh->vertexBuffer, vertex_size, vertices.data());
+    g_Device.uploadBuffer(mesh->indexBuffer, index_size, pCreateInfo->pIndices);
 }
 
 void moDestroyMesh(MoMesh mesh)
