@@ -292,7 +292,6 @@ using namespace Meshoui;
 static DeviceVk        g_Device;
 static VkInstance      g_Instance = VK_NULL_HANDLE;
 static VkPipelineCache g_PipelineCache = VK_NULL_HANDLE;
-static VkRenderPass    g_RenderPass = VK_NULL_HANDLE;
 static void          (*g_CheckVkResultFn)(VkResult err) = nullptr;
 static SwapChainVk     g_SwapChain;
 static MoPipeline      g_Pipeline = {};
@@ -408,16 +407,18 @@ struct MoPipeline_T
     DeviceBufferVk uniformBuffer[FrameCount];
 };
 
-void moInit(MoInitInfo *info, VkRenderPass renderPass)
+void moInit(MoInitInfo *info)
 {
     g_Instance = info->instance;
     g_Device.physicalDevice = info->physicalDevice;
     g_Device.device = info->device;
     g_Device.queueFamily = info->queueFamily;
     g_Device.queue = info->queue;
-    g_RenderPass = renderPass;
     g_PipelineCache = info->pipelineCache;
     g_Device.descriptorPool = info->descriptorPool;
+    g_SwapChain.swapChainKHR = info->swapChainKHR;
+    g_SwapChain.renderPass = info->renderPass;
+    g_SwapChain.extent = info->extent;
     g_Device.allocator = info->pAllocator;
     g_CheckVkResultFn = info->pCheckVkResultFn;
 
@@ -429,6 +430,26 @@ void moInit(MoInitInfo *info, VkRenderPass renderPass)
     pipelineCreateInfo.fragmentShaderSize = sizeof(glsl_shader_frag_spv);
 
     moCreatePipeline(&pipelineCreateInfo, &g_Pipeline);
+}
+
+void moShutdown()
+{
+    g_Instance = VK_NULL_HANDLE;
+    g_Device.physicalDevice = VK_NULL_HANDLE;
+    g_Device.device = VK_NULL_HANDLE;
+    g_Device.queueFamily = -1;
+    g_Device.queue = VK_NULL_HANDLE;
+    g_Device.memoryAlignment = 256;
+    g_SwapChain.swapChainKHR = VK_NULL_HANDLE;
+    g_SwapChain.renderPass = VK_NULL_HANDLE;
+    g_SwapChain.extent = {0, 0};
+    g_PipelineCache = VK_NULL_HANDLE;
+    g_Device.descriptorPool = VK_NULL_HANDLE;
+    g_Device.allocator = VK_NULL_HANDLE;
+    g_CheckVkResultFn = nullptr;
+
+    moDestroyPipeline(g_Pipeline);
+    g_Pipeline = VK_NULL_HANDLE;
 }
 
 typedef struct MoPushConstant
@@ -643,7 +664,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
     info.layout = pipeline->pipelineLayout;
-    info.renderPass = g_RenderPass;
+    info.renderPass = g_SwapChain.renderPass;
     err = vkCreateGraphicsPipelines(g_Device.device, g_PipelineCache, 1, &info, g_Device.allocator, &pipeline->pipeline);
     g_CheckVkResultFn(err);
 

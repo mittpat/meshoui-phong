@@ -6,6 +6,22 @@ typedef struct MoMesh_T* MoMesh;
 typedef struct MoMaterial_T* MoMaterial;
 typedef struct MoPipeline_T* MoPipeline;
 
+typedef struct MoImageBufferInfo
+{
+    VkImage       back;
+    VkImageView   view;
+    VkFramebuffer front;
+} MoImageBufferInfo;
+
+typedef struct MoCommandBufferInfo
+{
+    VkCommandPool   pool;
+    VkCommandBuffer buffer;
+    VkFence         fence;
+    VkSemaphore     acquired;
+    VkSemaphore     complete;
+} MoCommandBufferInfo;
+
 typedef struct MoInitInfo {
     VkInstance                   instance;
     VkPhysicalDevice             physicalDevice;
@@ -14,9 +30,28 @@ typedef struct MoInitInfo {
     VkQueue                      queue;
     VkPipelineCache              pipelineCache;
     VkDescriptorPool             descriptorPool;
+    const MoImageBufferInfo*     pSwapChainImageBuffers;
+    uint32_t                     swapChainImageBufferCount;
+    const MoCommandBufferInfo*   pSwapChainCommandBuffers;
+    uint32_t                     swapChainCommandBufferCount;
+    VkSwapchainKHR               swapChainKHR;
+    VkRenderPass                 renderPass;
+    VkExtent2D                   extent;
     const VkAllocationCallbacks* pAllocator;
     void                         (*pCheckVkResultFn)(VkResult err);
 } MoInitInfo;
+
+typedef struct MoUInt3 {
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+} MoUInt3;
+
+typedef struct MoUInt3x3 {
+    MoUInt3 x;
+    MoUInt3 y;
+    MoUInt3 z;
+} MoUInt3x3;
 
 typedef struct MoFloat2 {
     float x;
@@ -28,6 +63,12 @@ typedef struct MoFloat3 {
     float y;
     float z;
 } MoFloat3;
+
+typedef struct MoFloat3x3 {
+    MoFloat3 x;
+    MoFloat3 y;
+    MoFloat3 z;
+} MoFloat3x3;
 
 typedef struct MoFloat4 {
     float x;
@@ -82,7 +123,8 @@ typedef struct MoPipelineCreateInfo {
     uint32_t        fragmentShaderSize;
 } MoPipelineCreateInfo;
 
-void moInit(MoInitInfo* info, VkRenderPass renderPass);
+void moInit(MoInitInfo* info);
+void moShutdown();
 void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipeline);
 void moDestroyPipeline(MoPipeline pipeline);
 void moCreateMesh(const MoMeshCreateInfo* pCreateInfo, MoMesh* pMesh);
