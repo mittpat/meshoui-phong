@@ -419,6 +419,22 @@ void moInit(MoInitInfo *info)
     g_SwapChain.swapChainKHR = info->swapChainKHR;
     g_SwapChain.renderPass = info->renderPass;
     g_SwapChain.extent = info->extent;
+    g_SwapChain.frames.resize(info->swapChainCommandBufferCount);
+    for (uint32_t i = 0; i < info->swapChainCommandBufferCount; ++i)
+    {
+        g_SwapChain.frames[i].pool = info->pSwapChainCommandBuffers[i].pool;
+        g_SwapChain.frames[i].buffer = info->pSwapChainCommandBuffers[i].buffer;
+        g_SwapChain.frames[i].fence = info->pSwapChainCommandBuffers[i].fence;
+        g_SwapChain.frames[i].acquired = info->pSwapChainCommandBuffers[i].acquired;
+        g_SwapChain.frames[i].complete = info->pSwapChainCommandBuffers[i].complete;
+    }
+    g_SwapChain.images.resize(info->swapChainImageBufferCount);
+    for (uint32_t i = 0; i < info->swapChainImageBufferCount; ++i)
+    {
+        g_SwapChain.images[i].back = info->pSwapChainImageBuffers[i].back;
+        g_SwapChain.images[i].view = info->pSwapChainImageBuffers[i].view;
+        g_SwapChain.images[i].front = info->pSwapChainImageBuffers[i].front;
+    }
     g_Device.allocator = info->pAllocator;
     g_CheckVkResultFn = info->pCheckVkResultFn;
 
@@ -434,6 +450,9 @@ void moInit(MoInitInfo *info)
 
 void moShutdown()
 {
+    moDestroyPipeline(g_Pipeline);
+    g_Pipeline = VK_NULL_HANDLE;
+
     g_Instance = VK_NULL_HANDLE;
     g_Device.physicalDevice = VK_NULL_HANDLE;
     g_Device.device = VK_NULL_HANDLE;
@@ -443,13 +462,12 @@ void moShutdown()
     g_SwapChain.swapChainKHR = VK_NULL_HANDLE;
     g_SwapChain.renderPass = VK_NULL_HANDLE;
     g_SwapChain.extent = {0, 0};
+    g_SwapChain.frames = {};
+    g_SwapChain.images = {};
     g_PipelineCache = VK_NULL_HANDLE;
     g_Device.descriptorPool = VK_NULL_HANDLE;
     g_Device.allocator = VK_NULL_HANDLE;
     g_CheckVkResultFn = nullptr;
-
-    moDestroyPipeline(g_Pipeline);
-    g_Pipeline = VK_NULL_HANDLE;
 }
 
 typedef struct MoPushConstant

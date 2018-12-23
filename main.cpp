@@ -139,6 +139,26 @@ int main(int, char**)
         initInfo.descriptorPool = device.descriptorPool;
         initInfo.swapChainKHR = swapChain.swapChainKHR;
         initInfo.renderPass = swapChain.renderPass;
+        MoImageBufferInfo swapChainImageBufferInfo[FrameCount];
+        for (uint32_t i = 0; i < FrameCount; ++i)
+        {
+            swapChainImageBufferInfo[i].back  = swapChain.images[i].back;
+            swapChainImageBufferInfo[i].view  = swapChain.images[i].view;
+            swapChainImageBufferInfo[i].front = swapChain.images[i].front;
+        }
+        initInfo.pSwapChainImageBuffers = swapChainImageBufferInfo;
+        initInfo.swapChainImageBufferCount = FrameCount;
+        MoCommandBufferInfo swapChainCommandBufferInfo[FrameCount];
+        for (uint32_t i = 0; i < FrameCount; ++i)
+        {
+            swapChainCommandBufferInfo[i].pool     = swapChain.frames[i].pool;
+            swapChainCommandBufferInfo[i].buffer   = swapChain.frames[i].buffer;
+            swapChainCommandBufferInfo[i].fence    = swapChain.frames[i].fence;
+            swapChainCommandBufferInfo[i].acquired = swapChain.frames[i].acquired;
+            swapChainCommandBufferInfo[i].complete = swapChain.frames[i].complete;
+        }
+        initInfo.pSwapChainCommandBuffers = swapChainCommandBufferInfo;
+        initInfo.swapChainCommandBufferCount = FrameCount;
         initInfo.extent = swapChain.extent;
         initInfo.pAllocator = device.allocator;
         initInfo.pCheckVkResultFn = &check_vk_result;
@@ -161,7 +181,7 @@ int main(int, char**)
         moCreateMesh(&meshInfo, &cube);
 
         MoMaterialCreateInfo materialInfo = {};
-        materialInfo.colorAmbient = {0.0f, 0.0f, 0.0f};
+        materialInfo.colorAmbient = {0.5f, 0.5f, 0.5f};
         materialInfo.colorDiffuse = {0.64f, 0.64f, 0.64f};
         materialInfo.colorSpecular = {0.5f, 0.5f, 0.5f};
         materialInfo.colorEmissive = {0.0f, 0.0f, 0.0f};
@@ -182,6 +202,10 @@ int main(int, char**)
         moSetPMV((MoFloat4x4&)linalg_proj_matrix, (MoFloat4x4&)linalg_model_matrix, (MoFloat4x4&)linalg_view_matrix);
         moSetLight((MoFloat3&)linalg_light_position, {linalg_camera_matrix.w.x, linalg_camera_matrix.w.y, linalg_camera_matrix.w.z});
         auto & frame = swapChain.frames[frameIndex];
+        VkViewport viewport{0, 0, float(swapChain.extent.width), float(swapChain.extent.height), 0.f, 1.f};
+        vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
+        VkRect2D scissor{{0, 0}, {swapChain.extent.width, swapChain.extent.height}};
+        vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
         vkCmdDrawIndexed(frame.buffer, indicesCount, 1, 0, 0, 0);
 
         // Frame end
