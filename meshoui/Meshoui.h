@@ -95,6 +95,8 @@ typedef struct MoMeshCreateInfo {
     uint32_t        indexCount;
     const MoVertex* pVertices;
     uint32_t        vertexCount;
+    VkBool32        discardNormals;
+    VkBool32        indicesCountFromOne;
 } MoMeshCreateInfo;
 
 typedef struct MoMaterialCreateInfo {

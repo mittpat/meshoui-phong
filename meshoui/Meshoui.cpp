@@ -713,19 +713,35 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
 
     // tangent + bitangent
     std::vector<MoVertexP> vertices; vertices.reserve(pCreateInfo->vertexCount);
-    for (uint32_t i = 0; i < pCreateInfo->indexCount; i+=3)
+    std::vector<uint32_t> indices; indices.reserve(pCreateInfo->indexCount);
+    if (pCreateInfo->indicesCountFromOne == VK_TRUE)
     {
+        for (uint32_t i = 0; i < pCreateInfo->indexCount; i++) { indices.push_back(pCreateInfo->pIndices[i] - 1); }
+    }
+    for (uint32_t i = 0; i < indices.size(); i+=3)
+    {
+        uint32_t j1 = indices[i+0];
+        uint32_t j2 = indices[i+1];
+        uint32_t j3 = indices[i+2];
+
         // triangle
         MoVertexP v1, v2, v3; v1 = v2 = v3 = {};
-        v1.position = pCreateInfo->pVertices[i+0].position;
-        v2.position = pCreateInfo->pVertices[i+1].position;
-        v3.position = pCreateInfo->pVertices[i+2].position;
-        v1.normal = pCreateInfo->pVertices[i+0].normal;
-        v2.normal = pCreateInfo->pVertices[i+1].normal;
-        v3.normal = pCreateInfo->pVertices[i+2].normal;
-        v1.texcoord = pCreateInfo->pVertices[i+0].texcoord;
-        v2.texcoord = pCreateInfo->pVertices[i+1].texcoord;
-        v3.texcoord = pCreateInfo->pVertices[i+2].texcoord;
+        v1.position = pCreateInfo->pVertices[j1].position;
+        v2.position = pCreateInfo->pVertices[j2].position;
+        v3.position = pCreateInfo->pVertices[j3].position;
+        v1.normal   = pCreateInfo->pVertices[j1].normal;
+        v2.normal   = pCreateInfo->pVertices[j2].normal;
+        v3.normal   = pCreateInfo->pVertices[j3].normal;
+        v1.texcoord = pCreateInfo->pVertices[j1].texcoord;
+        v2.texcoord = pCreateInfo->pVertices[j2].texcoord;
+        v3.texcoord = pCreateInfo->pVertices[j3].texcoord;
+
+        if (pCreateInfo->discardNormals == VK_TRUE)
+        {
+            const MoFloat3 a = v2.position - v1.position;
+            const MoFloat3 b = v3.position - v1.position;
+            v1.normal = v2.normal = v3.normal = normalize(cross(a, b));
+        }
 
         const MoFloat3 edge1 = v2.position - v1.position;
         const MoFloat3 edge2 = v3.position - v1.position;
@@ -756,13 +772,13 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         vertices.push_back(v3);
     }
 
-    mesh->indexBufferSize = pCreateInfo->indexCount;
-    VkDeviceSize vertex_size = pCreateInfo->vertexCount * sizeof(MoVertexP);
-    VkDeviceSize index_size = pCreateInfo->indexCount * sizeof(uint32_t);
+    mesh->indexBufferSize = indices.size();
+    const VkDeviceSize vertex_size = vertices.size() * sizeof(MoVertexP);
+    const VkDeviceSize index_size = indices.size() * sizeof(uint32_t);
     g_Device.createBuffer(mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     g_Device.createBuffer(mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     g_Device.uploadBuffer(mesh->vertexBuffer, vertex_size, vertices.data());
-    g_Device.uploadBuffer(mesh->indexBuffer, index_size, pCreateInfo->pIndices);
+    g_Device.uploadBuffer(mesh->indexBuffer, index_size, indices.data());
 }
 
 void moDestroyMesh(MoMesh mesh)

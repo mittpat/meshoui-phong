@@ -49,27 +49,27 @@ static MoFloat2 cube_texcoords[] = {{1,0},
                                     {0,0},
                                     {1,1}};
 static MoFloat3 cube_normals[] = {{0.0f,1.0f,0.0f}};
-static MoUInt3x3 cube_triangles[] = {{{2,3,1}, {1,2,3}, {0,0,0}},
-                                     {{4,7,3}, {1,2,3}, {0,0,0}},
-                                     {{8,5,7}, {1,2,3}, {0,0,0}},
-                                     {{6,1,5}, {1,2,3}, {0,0,0}},
-                                     {{7,1,3}, {1,2,3}, {0,0,0}},
-                                     {{4,6,8}, {1,2,3}, {0,0,0}},
-                                     {{2,4,3}, {1,4,2}, {0,0,0}},
-                                     {{4,8,7}, {1,4,2}, {0,0,0}},
-                                     {{8,6,5}, {1,4,2}, {0,0,0}},
-                                     {{6,2,1}, {1,4,2}, {0,0,0}},
-                                     {{7,5,1}, {1,4,2}, {0,0,0}},
-                                     {{4,2,6}, {1,4,2}, {0,0,0}}};
+static MoUInt3x3 cube_triangles[] = {{{2,3,1}, {1,2,3}, {1,1,1}},
+                                     {{4,7,3}, {1,2,3}, {1,1,1}},
+                                     {{8,5,7}, {1,2,3}, {1,1,1}},
+                                     {{6,1,5}, {1,2,3}, {1,1,1}},
+                                     {{7,1,3}, {1,2,3}, {1,1,1}},
+                                     {{4,6,8}, {1,2,3}, {1,1,1}},
+                                     {{2,4,3}, {1,4,2}, {1,1,1}},
+                                     {{4,8,7}, {1,4,2}, {1,1,1}},
+                                     {{8,6,5}, {1,4,2}, {1,1,1}},
+                                     {{6,2,1}, {1,4,2}, {1,1,1}},
+                                     {{7,5,1}, {1,4,2}, {1,1,1}},
+                                     {{4,2,6}, {1,4,2}, {1,1,1}}};
 const MoFloat4x4 corr_matrix = {{1.0f, 0.0f, 0.0f, 0.0f},
                                 {0.0f,-1.0f, 0.0f, 0.0f},
                                 {0.0f, 0.0f, 0.5f, 0.0f},
                                 {0.0f, 0.0f, 0.5f, 1.0f}};
 static float4x4 linalg_proj_matrix   = mul((const float4x4&)corr_matrix, perspective_matrix(degreesToRadians(100.f), 1920/1080.f, 0.1f, 1000.f));
-static float4x4 linalg_camera_matrix = translation_matrix(float3{0.0f, 0.0f, 5.0f});
+static float4x4 linalg_camera_matrix = translation_matrix(float3{3.0f, 0.0f, 5.0f});
 static float4x4 linalg_view_matrix   = inverse(linalg_camera_matrix);
 static float4x4 linalg_model_matrix  = identity;
-static float3   linalg_light_position = {0.0f, 1000.0f, 0.0f};
+static float3   linalg_light_position = {500.0f, 1000.0f, 500.0f};
 
 using namespace Meshoui;
 
@@ -168,9 +168,9 @@ int main(int, char**)
         std::vector<MoVertex> vertices;
         for (const auto & triangle : cube_triangles)
         {
-            vertices.emplace_back(MoVertex{cube_positions[triangle.x.x], cube_texcoords[triangle.x.y], cube_normals[triangle.x.z]}); indices.push_back((uint8_t)vertices.size());
-            vertices.emplace_back(MoVertex{cube_positions[triangle.y.x], cube_texcoords[triangle.y.y], cube_normals[triangle.y.z]}); indices.push_back((uint8_t)vertices.size());
-            vertices.emplace_back(MoVertex{cube_positions[triangle.z.x], cube_texcoords[triangle.z.y], cube_normals[triangle.z.z]}); indices.push_back((uint8_t)vertices.size());
+            vertices.emplace_back(MoVertex{cube_positions[triangle.x.x-1], cube_texcoords[triangle.y.x-1], cube_normals[triangle.z.x-1]}); indices.push_back((uint8_t)vertices.size());
+            vertices.emplace_back(MoVertex{cube_positions[triangle.x.y-1], cube_texcoords[triangle.y.y-1], cube_normals[triangle.z.y-1]}); indices.push_back((uint8_t)vertices.size());
+            vertices.emplace_back(MoVertex{cube_positions[triangle.x.z-1], cube_texcoords[triangle.y.z-1], cube_normals[triangle.z.z-1]}); indices.push_back((uint8_t)vertices.size());
         }
 
         MoMeshCreateInfo meshInfo = {};
@@ -178,10 +178,12 @@ int main(int, char**)
         meshInfo.pIndices = indices.data();
         meshInfo.vertexCount = (uint8_t)vertices.size();
         meshInfo.pVertices = vertices.data();
+        meshInfo.discardNormals = VK_TRUE;
+        meshInfo.indicesCountFromOne = VK_TRUE;
         moCreateMesh(&meshInfo, &cube);
 
         MoMaterialCreateInfo materialInfo = {};
-        materialInfo.colorAmbient = {0.5f, 0.5f, 0.5f};
+        materialInfo.colorAmbient = {0.1f, 0.1f, 0.1f};
         materialInfo.colorDiffuse = {0.64f, 0.64f, 0.64f};
         materialInfo.colorSpecular = {0.5f, 0.5f, 0.5f};
         materialInfo.colorEmissive = {0.0f, 0.0f, 0.0f};
