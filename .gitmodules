@@ -3,7 +3,7 @@
 	url = https://github.com/glfw/glfw.git
 [submodule "3rdparty/linalg"]
 	path = 3rdparty/linalg
-	url = https://github.com/mittpat/linalg.git
+	url = https://github.com/sgorsten/linalg.git
 [submodule "3rdparty/lodepng"]
 	path = 3rdparty/lodepng
 	url = https://github.com/lvandeve/lodepng.git
