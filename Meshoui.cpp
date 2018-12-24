@@ -323,10 +323,10 @@ static void generateTexture(ImageBufferVk & imageBuffer, const uint8_t* texture,
         // use fallback
         width = height = 1;
         data.resize(4);
-        data[0] = (uint8_t)fallbackColor.x * 0xFF;
-        data[1] = (uint8_t)fallbackColor.y * 0xFF;
-        data[2] = (uint8_t)fallbackColor.z * 0xFF;
-        data[3] = (uint8_t)            1.0 * 0xFF;
+        data[0] = (uint8_t)(fallbackColor.x * 0xFF);
+        data[1] = (uint8_t)(fallbackColor.y * 0xFF);
+        data[2] = (uint8_t)(fallbackColor.z * 0xFF);
+        data[3] = (uint8_t)(            1.0 * 0xFF);
         dataPtr = data.data();
         size = data.size();
     }
