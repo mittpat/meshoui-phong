@@ -1,4 +1,4 @@
-#include "Meshoui.h"
+#include "phong.h"
 #include "DeviceVk.h"
 #include "SwapChainVk.h"
 
@@ -407,36 +407,36 @@ struct MoPipeline_T
     DeviceBufferVk uniformBuffer[FrameCount];
 };
 
-void moInit(MoInitInfo *info)
+void moInit(MoInitInfo *pInfo)
 {
-    g_Instance = info->instance;
-    g_Device.physicalDevice = info->physicalDevice;
-    g_Device.device = info->device;
-    g_Device.queueFamily = info->queueFamily;
-    g_Device.queue = info->queue;
-    g_PipelineCache = info->pipelineCache;
-    g_Device.descriptorPool = info->descriptorPool;
-    g_SwapChain.swapChainKHR = info->swapChainKHR;
-    g_SwapChain.renderPass = info->renderPass;
-    g_SwapChain.extent = info->extent;
-    g_SwapChain.frames.resize(info->swapChainCommandBufferCount);
-    for (uint32_t i = 0; i < info->swapChainCommandBufferCount; ++i)
+    g_Instance = pInfo->instance;
+    g_Device.physicalDevice = pInfo->physicalDevice;
+    g_Device.device = pInfo->device;
+    g_Device.queueFamily = pInfo->queueFamily;
+    g_Device.queue = pInfo->queue;
+    g_PipelineCache = pInfo->pipelineCache;
+    g_Device.descriptorPool = pInfo->descriptorPool;
+    g_SwapChain.swapChainKHR = pInfo->swapChainKHR;
+    g_SwapChain.renderPass = pInfo->renderPass;
+    g_SwapChain.extent = pInfo->extent;
+    g_SwapChain.frames.resize(pInfo->swapChainCommandBufferCount);
+    for (uint32_t i = 0; i < pInfo->swapChainCommandBufferCount; ++i)
     {
-        g_SwapChain.frames[i].pool = info->pSwapChainCommandBuffers[i].pool;
-        g_SwapChain.frames[i].buffer = info->pSwapChainCommandBuffers[i].buffer;
-        g_SwapChain.frames[i].fence = info->pSwapChainCommandBuffers[i].fence;
-        g_SwapChain.frames[i].acquired = info->pSwapChainCommandBuffers[i].acquired;
-        g_SwapChain.frames[i].complete = info->pSwapChainCommandBuffers[i].complete;
+        g_SwapChain.frames[i].pool = pInfo->pSwapChainCommandBuffers[i].pool;
+        g_SwapChain.frames[i].buffer = pInfo->pSwapChainCommandBuffers[i].buffer;
+        g_SwapChain.frames[i].fence = pInfo->pSwapChainCommandBuffers[i].fence;
+        g_SwapChain.frames[i].acquired = pInfo->pSwapChainCommandBuffers[i].acquired;
+        g_SwapChain.frames[i].complete = pInfo->pSwapChainCommandBuffers[i].complete;
     }
-    g_SwapChain.images.resize(info->swapChainImageBufferCount);
-    for (uint32_t i = 0; i < info->swapChainImageBufferCount; ++i)
+    g_SwapChain.images.resize(pInfo->swapChainImageBufferCount);
+    for (uint32_t i = 0; i < pInfo->swapChainImageBufferCount; ++i)
     {
-        g_SwapChain.images[i].back = info->pSwapChainImageBuffers[i].back;
-        g_SwapChain.images[i].view = info->pSwapChainImageBuffers[i].view;
-        g_SwapChain.images[i].front = info->pSwapChainImageBuffers[i].front;
+        g_SwapChain.images[i].back = pInfo->pSwapChainImageBuffers[i].back;
+        g_SwapChain.images[i].view = pInfo->pSwapChainImageBuffers[i].view;
+        g_SwapChain.images[i].front = pInfo->pSwapChainImageBuffers[i].front;
     }
-    g_Device.allocator = info->pAllocator;
-    g_CheckVkResultFn = info->pCheckVkResultFn;
+    g_Device.allocator = pInfo->pAllocator;
+    g_CheckVkResultFn = pInfo->pCheckVkResultFn;
 
     MoPipelineCreateInfo pipelineCreateInfo = {};
 
