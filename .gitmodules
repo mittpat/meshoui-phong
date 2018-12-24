@@ -1,12 +1,6 @@
 [submodule "3rdparty/glfw"]
 	path = 3rdparty/glfw
 	url = https://github.com/glfw/glfw.git
-[submodule "3rdparty/glslang"]
-	path = 3rdparty/glslang
-	url = https://github.com/KhronosGroup/glslang.git
-[submodule "3rdparty/imgui"]
-	path = 3rdparty/imgui
-	url = https://github.com/ocornut/imgui.git
 [submodule "3rdparty/linalg"]
 	path = 3rdparty/linalg
 	url = https://github.com/mittpat/linalg.git
@@ -19,6 +13,3 @@
 [submodule "3rdparty/pugixml"]
 	path = 3rdparty/pugixml
 	url = https://github.com/zeux/pugixml.git
-[submodule "3rdparty/qu3e"]
-	path = 3rdparty/qu3e
-	url = https://github.com/RandyGaul/qu3e

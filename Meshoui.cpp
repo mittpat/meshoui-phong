@@ -323,10 +323,10 @@ static void generateTexture(ImageBufferVk & imageBuffer, const uint8_t* texture,
         // use fallback
         width = height = 1;
         data.resize(4);
-        data[0] = fallbackColor.x * 0xFF;
-        data[1] = fallbackColor.y * 0xFF;
-        data[2] = fallbackColor.z * 0xFF;
-        data[3] =             1.0 * 0xFF;
+        data[0] = (uint8_t)fallbackColor.x * 0xFF;
+        data[1] = (uint8_t)fallbackColor.y * 0xFF;
+        data[2] = (uint8_t)fallbackColor.z * 0xFF;
+        data[3] = (uint8_t)            1.0 * 0xFF;
         dataPtr = data.data();
         size = data.size();
     }
@@ -519,7 +519,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
 
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.bindingCount = countof(binding);
+        info.bindingCount = (uint32_t)countof(binding);
         info.pBindings = binding;
         err = vkCreateDescriptorSetLayout(g_Device.device, &info, g_Device.allocator, &pipeline->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT]);
         g_CheckVkResultFn(err);
@@ -537,7 +537,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         }
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.bindingCount = countof(binding);
+        info.bindingCount = (uint32_t)countof(binding);
         info.pBindings = binding;
         err = vkCreateDescriptorSetLayout(g_Device.device, &info, g_Device.allocator, &pipeline->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT]);
         g_CheckVkResultFn(err);
@@ -583,9 +583,9 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MoPushConstant)});
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.setLayoutCount = countof(pipeline->descriptorSetLayout);
+        layout_info.setLayoutCount = (uint32_t)countof(pipeline->descriptorSetLayout);
         layout_info.pSetLayouts = pipeline->descriptorSetLayout;
-        layout_info.pushConstantRangeCount = push_constants.size();
+        layout_info.pushConstantRangeCount = (uint32_t)push_constants.size();
         layout_info.pPushConstantRanges = push_constants.data();
         err = vkCreatePipelineLayout(g_Device.device, &layout_info, g_Device.allocator, &pipeline->pipelineLayout);
         g_CheckVkResultFn(err);
@@ -616,7 +616,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_info.vertexBindingDescriptionCount = 1;
     vertex_info.pVertexBindingDescriptions = binding_desc;
-    vertex_info.vertexAttributeDescriptionCount = attribute_desc.size();
+    vertex_info.vertexAttributeDescriptionCount = (uint32_t)attribute_desc.size();
     vertex_info.pVertexAttributeDescriptions = attribute_desc.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -665,7 +665,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     VkDynamicState dynamic_states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     VkPipelineDynamicStateCreateInfo dynamic_state = {};
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount = countof(dynamic_states);
+    dynamic_state.dynamicStateCount = (uint32_t)countof(dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
 
     VkGraphicsPipelineCreateInfo info = {};
@@ -925,3 +925,45 @@ void moBindMaterial(MoMaterial material)
     auto & frame = g_SwapChain.frames[g_FrameIndex];
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 1, 1, &material->descriptorSet, 0, nullptr);
 }
+
+/*
+------------------------------------------------------------------------------
+This software is available under 2 licenses -- choose whichever you prefer.
+------------------------------------------------------------------------------
+ALTERNATIVE A - MIT License
+Copyright (c) 2018 Patrick Pelletier
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+------------------------------------------------------------------------------
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+------------------------------------------------------------------------------
+*/
