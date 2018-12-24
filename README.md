@@ -2,6 +2,12 @@
 
 ![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.png)
 
+Compiling
+-------
+* git submodule update --init --recursive
+* mkdir BUILD & cd BUILD
+** cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
+** cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 14 2015 Win64" ..
 
 Notes
 -------
@@ -12,20 +18,6 @@ Master targets Vulkan 1.1.70.
 Compiled and tested on
 * g++  (Ubuntu 7.3.0-27ubuntu1~18.04)
 * MSVC (Windows 10 x64, MSVC++ 14.0)
-
-
-Todo
--------
-
-* Improve Cameras and Lights
-* Nvidia RTX realtime shadows
-
-
-qu3e
--------
-
-![animation](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/qu3e.gif)
-
 
 License
 -------
