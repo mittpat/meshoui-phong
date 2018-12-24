@@ -127,7 +127,7 @@ int main(int, char**)
     }
 
     // Meshoui initialization
-    uint8_t indicesCount = 0;
+    uint32_t indicesCount = 0;
     MoMesh cube;
     MoMaterial material;
     {

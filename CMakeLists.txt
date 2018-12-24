@@ -20,13 +20,14 @@ include(CMake/modules/3p_linalg.cmake)
 include(CMake/modules/3p_pugixml.cmake)
 
 use_linalg()
+use_pugixml()
 
 add_executable(meshouiview
     collada.cpp   DeviceVk.h      main.cpp     SwapChainVk.cpp
     collada.h     InstanceVk.cpp  Meshoui.cpp  SwapChainVk.h
     DeviceVk.cpp  InstanceVk.h    Meshoui.h)
 
-target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw lodepng nv_dds)
+target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds)
 if(NOT MSVC)
     target_link_libraries(meshouiview stdc++fs)
 endif()
