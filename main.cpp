@@ -7,7 +7,6 @@
 #include <GLFW/glfw3.h>
 
 #include "DeviceVk.h"
-#include "InstanceVk.h"
 #include "SwapChainVk.h"
 #include "phong.h"
 
@@ -21,12 +20,19 @@ static void glfw_error_callback(int, const char* description)
     printf("Error: %s\n", description);
 }
 
-static void check_vk_result(VkResult err)
+static void vk_check_result(VkResult err)
 {
     if (err == 0) return;
     printf("VkResult %d\n", err);
     if (err < 0)
         abort();
+}
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_report(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* pLayerPrefix, const char* pMessage, void* pUserData)
+{
+    (void)flags; (void)object; (void)location; (void)messageCode; (void)pUserData; (void)pLayerPrefix; // Unused arguments
+    fprintf(stderr, "[vulkan] ObjectType: %i\nMessage: %s\n\n", objectType, pMessage);
+    return VK_FALSE;
 }
 
 static constexpr float degreesToRadians(float angle)
@@ -77,7 +83,7 @@ using namespace Meshoui;
 int main(int, char**)
 {
     GLFWwindow*        window;
-    InstanceVk         instance;
+    VkInstance         instance;
     DeviceVk           device;
     SwapChainVk        swapChain;
     ImageBufferVk      depthBuffer;
@@ -93,14 +99,21 @@ int main(int, char**)
         window = glfwCreateWindow(1920 / 2, 1080 / 2, "Graphics Previewer", nullptr, nullptr);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
 
-        uint32_t extensionsCount = 0;
-        const char** extensions = glfwGetRequiredInstanceExtensions(&extensionsCount);
-        instance.create(extensions, extensionsCount);
+        {
+            MoInstanceCreateInfo createInfo = {};
+            createInfo.pExtensions = glfwGetRequiredInstanceExtensions(&createInfo.extensionsCount);
+#ifdef _DEBUG
+            createInfo.debugReport = VK_TRUE;
+            createInfo.pDebugReportCallback = vk_debug_report;
+#endif
+            createInfo.pCheckVkResultFn = vk_check_result;
+            moCreateInstance(&createInfo, &instance);
+        }
         device.create(instance);
 
         // Create Window Surface
-        VkResult err = glfwCreateWindowSurface(instance.instance, window, device.allocator, &surface);
-        check_vk_result(err);
+        VkResult err = glfwCreateWindowSurface(instance, window, device.allocator, &surface);
+        vk_check_result(err);
 
         // Create Framebuffers
         int width = 0, height = 0;
@@ -132,7 +145,7 @@ int main(int, char**)
     MoMaterial material;
     {
         MoInitInfo initInfo = {};
-        initInfo.instance = instance.instance;
+        initInfo.instance = instance;
         initInfo.physicalDevice = device.physicalDevice;
         initInfo.device = device.device;
         initInfo.queueFamily = device.queueFamily;
@@ -162,7 +175,7 @@ int main(int, char**)
         initInfo.swapChainCommandBufferCount = FrameCount;
         initInfo.extent = swapChain.extent;
         initInfo.pAllocator = device.allocator;
-        initInfo.pCheckVkResultFn = &check_vk_result;
+        initInfo.pCheckVkResultFn = vk_check_result;
         moInit(&initInfo);
 
         std::vector<uint32_t> indices;
@@ -227,7 +240,7 @@ int main(int, char**)
             swapChain.createImageBuffers(device, depthBuffer, surface, surfaceFormat, width, height, true);
             err = VK_SUCCESS;
         }
-        check_vk_result(err);
+        vk_check_result(err);
     }
 
     // Meshoui cleanup
@@ -240,13 +253,13 @@ int main(int, char**)
     // Cleanup
     {
         VkResult err = vkDeviceWaitIdle(device.device);
-        check_vk_result(err);
+        vk_check_result(err);
 
         swapChain.destroyImageBuffers(device, depthBuffer);
         swapChain.destroyCommandBuffers(device);
-        vkDestroySurfaceKHR(instance.instance, surface, instance.allocator);
+        vkDestroySurfaceKHR(instance, surface, device.allocator);
         device.destroy();
-        instance.destroy();
+        moDestroyInstance(instance);
 
         glfwDestroyWindow(window);
         glfwTerminate();

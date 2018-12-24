@@ -24,8 +24,8 @@ use_pugixml()
 
 add_executable(meshouiview
     collada.cpp   DeviceVk.h      main.cpp     SwapChainVk.cpp
-    collada.h     InstanceVk.cpp  phong.cpp    SwapChainVk.h
-    DeviceVk.cpp  InstanceVk.h    phong.h)
+    collada.h                     phong.cpp    SwapChainVk.h
+    DeviceVk.cpp                  phong.h)
 
 target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds)
 if(NOT MSVC)

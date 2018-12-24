@@ -11,6 +11,38 @@
 
 // glsl_shader.vert, compiled with:
 // # glslangValidator -V -x -o glsl_shader.vert.u32 glsl_shader.vert
+/*#version 450 core
+ *layout(location=0) out VertexData
+ *{
+ *    vec3 vertex;
+ *    vec3 normal;
+ *    vec2 texcoord;
+ *    mat3 TBN;
+ *} outData;
+ *layout(location = 0) in vec3 vertexPosition;
+ *layout(location = 1) in vec2 vertexTexcoord;
+ *layout(location = 2) in vec3 vertexNormal;
+ *layout(location = 3) in vec3 vertexTangent;
+ *layout(location = 4) in vec3 vertexBitangent;
+ *layout(push_constant) uniform uPushConstant
+ *{
+ *    mat4 uniformModel;
+ *    mat4 uniformView;
+ *    mat4 uniformProjection;
+ *} pc;
+ *
+ *void main()
+ *{
+ *    outData.vertex = vec3(pc.uniformModel * vec4(vertexPosition, 1.0));
+ *    outData.normal = normalize(mat3(transpose(inverse(pc.uniformModel))) * vertexNormal);
+ *    outData.texcoord = vertexTexcoord;
+ *    vec3 T = normalize(vec3(mat3(pc.uniformModel) * vertexTangent));
+ *    vec3 B = normalize(vec3(mat3(pc.uniformModel) * vertexBitangent));
+ *    vec3 N = normalize(vec3(mat3(pc.uniformModel) * vertexNormal));
+ *    outData.TBN = mat3(T, B, N);
+ *    gl_Position = pc.uniformProjection * pc.uniformView * pc.uniformModel * vec4(vertexPosition, 1.0);
+ *}
+ */
 static uint32_t glsl_shader_vert_spv[] =
 {
     // 7.11.3009
@@ -151,6 +183,49 @@ static uint32_t glsl_shader_vert_spv[] =
 
 // glsl_shader.frag, compiled with:
 // # glslangValidator -V -x -o glsl_shader.frag.u32 glsl_shader.frag
+/*#version 450 core
+ *layout(location = 0) out vec4 fragment;
+ *layout(location = 0) in VertexData
+ *{
+ *    vec3 vertex;
+ *    vec3 normal;
+ *    vec2 texcoord;
+ *    mat3 TBN;
+ *} inData;
+ *layout(std140, binding = 0) uniform Block
+ *{
+ *    uniform vec3 viewPosition;
+ *    uniform vec3 lightPosition;
+ *} uniformData;
+ *layout(set = 1, binding = 0) uniform sampler2D uniformTextureAmbient;
+ *layout(set = 1, binding = 1) uniform sampler2D uniformTextureDiffuse;
+ *layout(set = 1, binding = 2) uniform sampler2D uniformTextureNormal;
+ *layout(set = 1, binding = 3) uniform sampler2D uniformTextureSpecular;
+ *layout(set = 1, binding = 4) uniform sampler2D uniformTextureEmissive;
+ *
+ *void main()
+ *{
+ *    vec2 texcoord = vec2(inData.texcoord.s, 1.0 - inData.texcoord.t);
+ *    vec4 textureAmbient = texture(uniformTextureAmbient, texcoord);
+ *    vec4 textureDiffuse = texture(uniformTextureDiffuse, texcoord);
+ *    fragment = vec4(textureAmbient.rgb * textureDiffuse.rgb, textureDiffuse.a);
+ *
+ *    vec4 textureNormal = texture(uniformTextureNormal, texcoord);
+ *    // discard textureNormal when ~= (0,0,0)
+ *    vec3 textureNormal_worldspace = length(textureNormal) > 0.1 ? normalize(inData.TBN * (2.0 * textureNormal.rgb - 1.0)) : inData.normal;
+ *    vec3 lightDirection_worldspace = normalize(uniformData.lightPosition - inData.vertex);
+ *    float diffuseFactor = dot(textureNormal_worldspace, lightDirection_worldspace);
+ *    if (diffuseFactor > 0.0)
+ *    {
+ *        vec3 eyeDirection_worldspace = normalize(uniformData.viewPosition - inData.vertex);
+ *        vec3 reflectDirection_worldspace = reflect(-lightDirection_worldspace, textureNormal_worldspace);
+ *
+ *        float specularFactor = pow(max(dot(eyeDirection_worldspace, reflectDirection_worldspace), 0.0), 8.0);
+ *        vec4 textureSpecular = texture(uniformTextureSpecular, texcoord);
+ *        fragment += vec4(diffuseFactor * textureDiffuse.rgb + specularFactor * textureSpecular.rgb, 0.0);
+ *    }
+ *}
+ */
 static uint32_t glsl_shader_frag_spv[] =
 {
     // 7.11.3009
@@ -289,24 +364,25 @@ static uint32_t glsl_shader_frag_spv[] =
 
 using namespace Meshoui;
 
-static DeviceVk        g_Device;
-static VkInstance      g_Instance = VK_NULL_HANDLE;
-static VkPipelineCache g_PipelineCache = VK_NULL_HANDLE;
-static void          (*g_CheckVkResultFn)(VkResult err) = nullptr;
-static SwapChainVk     g_SwapChain;
-static MoPipeline      g_Pipeline = {};
-static uint32_t        g_FrameIndex = 0;
+static VkDebugReportCallbackEXT g_DebugReport   = VK_NULL_HANDLE;
+static DeviceVk                 g_Device;
+static VkInstance               g_Instance      = VK_NULL_HANDLE;
+static VkPipelineCache          g_PipelineCache = VK_NULL_HANDLE;
+static void                   (*g_CheckVkResultFn)(VkResult err) = nullptr;
+static SwapChainVk              g_SwapChain;
+static MoPipeline               g_Pipeline = {};
+static uint32_t                 g_FrameIndex = 0;
 
 template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
 
 static constexpr MoFloat3 operator * (const MoFloat3 & a, float b) { return {a.x*b,a.y*b,a.z*b}; }
-static constexpr MoFloat3 operator + (const MoFloat3 & a, const MoFloat3 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
+//static constexpr MoFloat3 operator + (const MoFloat3 & a, const MoFloat3 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 static constexpr MoFloat2 operator - (const MoFloat2 & a, const MoFloat2 & b) { return {a.x-b.x,a.y-b.y}; }
 static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
-static constexpr bool     operator ==(const MoFloat2 & a, const MoFloat2 & b) { return a.x==b.x&&a.y==b.y; }
-static constexpr bool     operator ==(const MoFloat3 & a, const MoFloat3 & b) { return a.x==b.x&&a.y==b.y&&a.z==b.z; }
-static constexpr MoFloat3         min(const MoFloat3 & a, const MoFloat3 & b) { return { std::min(a.x,b.x),std::min(a.y,b.y),std::min(a.z,b.z)}; }
-static constexpr MoFloat3         max(const MoFloat3 & a, const MoFloat3 & b) { return { std::max(a.x,b.x),std::max(a.y,b.y),std::max(a.z,b.z)}; }
+//static constexpr bool     operator ==(const MoFloat2 & a, const MoFloat2 & b) { return a.x==b.x&&a.y==b.y; }
+//static constexpr bool     operator ==(const MoFloat3 & a, const MoFloat3 & b) { return a.x==b.x&&a.y==b.y&&a.z==b.z; }
+//static constexpr MoFloat3         min(const MoFloat3 & a, const MoFloat3 & b) { return { std::min(a.x,b.x),std::min(a.y,b.y),std::min(a.z,b.z)}; }
+//static constexpr MoFloat3         max(const MoFloat3 & a, const MoFloat3 & b) { return { std::max(a.x,b.x),std::max(a.y,b.y),std::max(a.z,b.z)}; }
 static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
 static constexpr MoFloat3       cross(const MoFloat3 & a, const MoFloat3 & b) { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
 static           MoFloat3   normalize(const MoFloat3 & a)                     { return a * (1.0f / std::sqrt(dot(a, a))); }
@@ -406,6 +482,67 @@ struct MoPipeline_T
     VkDescriptorSet descriptorSet[FrameCount];
     DeviceBufferVk uniformBuffer[FrameCount];
 };
+
+void moCreateInstance(MoInstanceCreateInfo *pCreateInfo, VkInstance *instance)
+{
+    VkResult err;
+
+    {
+        VkInstanceCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        create_info.enabledExtensionCount = pCreateInfo->extensionsCount;
+        create_info.ppEnabledExtensionNames = pCreateInfo->pExtensions;
+        if (pCreateInfo->debugReport)
+        {
+            // Enabling multiple validation layers grouped as LunarG standard validation
+            const char* layers[] = { "VK_LAYER_LUNARG_standard_validation" };
+            create_info.enabledLayerCount = 1;
+            create_info.ppEnabledLayerNames = layers;
+
+            // Enable debug report extension (we need additional storage, so we duplicate the user array to add our new extension to it)
+            const char** extensions_ext = (const char**)malloc(sizeof(const char*) * (pCreateInfo->extensionsCount + 1));
+            memcpy(extensions_ext, pCreateInfo->pExtensions, pCreateInfo->extensionsCount * sizeof(const char*));
+            extensions_ext[pCreateInfo->extensionsCount] = "VK_EXT_debug_report";
+            create_info.enabledExtensionCount = pCreateInfo->extensionsCount + 1;
+            create_info.ppEnabledExtensionNames = extensions_ext;
+
+            // Create Vulkan Instance
+            err = vkCreateInstance(&create_info, pCreateInfo->pAllocator, instance);
+            pCreateInfo->pCheckVkResultFn(err);
+            free(extensions_ext);
+
+            // Get the function pointer (required for any extensions)
+            auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(*instance, "vkCreateDebugReportCallbackEXT");
+
+            // Setup the debug report callback
+            VkDebugReportCallbackCreateInfoEXT debug_report_ci = {};
+            debug_report_ci.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+            debug_report_ci.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
+            debug_report_ci.pfnCallback = pCreateInfo->pDebugReportCallback;
+            debug_report_ci.pUserData = nullptr;
+            err = vkCreateDebugReportCallbackEXT(*instance, &debug_report_ci, pCreateInfo->pAllocator, &g_DebugReport);
+            pCreateInfo->pCheckVkResultFn(err);
+        }
+        else
+        {
+            err = vkCreateInstance(&create_info, pCreateInfo->pAllocator, instance);
+            pCreateInfo->pCheckVkResultFn(err);
+        }
+    }
+}
+
+void moDestroyInstance(VkInstance instance)
+{
+    if (g_DebugReport)
+    {
+        auto vkDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+        vkDestroyDebugReportCallbackEXT(instance, g_DebugReport, g_Device.allocator);
+    }
+    else
+    {
+        vkDestroyInstance(instance, g_Device.allocator);
+    }
+}
 
 void moInit(MoInitInfo *pInfo)
 {

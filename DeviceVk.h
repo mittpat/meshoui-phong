@@ -35,7 +35,7 @@ namespace Meshoui
         ~DeviceVk();
         DeviceVk();
 
-        void create(InstanceVk &instance);
+        void create(VkInstance instance);
         void destroy();
         void selectSurfaceFormat(VkSurfaceKHR &surface, VkSurfaceFormatKHR &surfaceFormat, const std::vector<VkFormat> &request_formats, VkColorSpaceKHR request_color_space);
         void createBuffer(DeviceBufferVk &deviceBuffer, VkDeviceSize size, VkBufferUsageFlags usage);

@@ -1,5 +1,4 @@
 #include "DeviceVk.h"
-#include "InstanceVk.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -20,16 +19,16 @@ namespace
 
 using namespace Meshoui;
 
-void DeviceVk::create(InstanceVk &instance)
+void DeviceVk::create(VkInstance instance)
 {
     VkResult err;
 
     {
         uint32_t count;
-        err = vkEnumeratePhysicalDevices(instance.instance, &count, VK_NULL_HANDLE);
+        err = vkEnumeratePhysicalDevices(instance, &count, VK_NULL_HANDLE);
         check_vk_result(err);
         std::vector<VkPhysicalDevice> gpus(count);
-        err = vkEnumeratePhysicalDevices(instance.instance, &count, gpus.data());
+        err = vkEnumeratePhysicalDevices(instance, &count, gpus.data());
         check_vk_result(err);
         physicalDevice = gpus[0];
     }

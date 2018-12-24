@@ -8,6 +8,12 @@ typedef struct MoPipeline_T* MoPipeline;
 
 typedef struct MoInstanceCreateInfo
 {
+    const char* const*           pExtensions;
+    uint32_t                     extensionsCount;
+    VkBool32                     debugReport;
+    PFN_vkDebugReportCallbackEXT pDebugReportCallback;
+    const VkAllocationCallbacks* pAllocator;
+    void                       (*pCheckVkResultFn)(VkResult err);
 } MoInstanceCreateInfo;
 
 typedef struct MoDeviceCreateInfo
@@ -147,8 +153,8 @@ typedef struct MoPipelineCreateInfo {
 
 // you can create a VkInstance using moCreateInstance(MoInstanceCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing instance
-void moCreateInstance(MoInstanceCreateInfo* pCreateInfo);
-void moDestroyInstance();
+void moCreateInstance(MoInstanceCreateInfo* pCreateInfo, VkInstance* instance);
+void moDestroyInstance(VkInstance instance);
 
 // you can create a VkDevice using moCreateDevice(MoDeviceCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing device
