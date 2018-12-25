@@ -41,14 +41,14 @@ static constexpr float degreesToRadians(float angle)
 using namespace linalg;
 using namespace linalg::aliases;
 
-static MoFloat3 cube_positions[] = { { -2.0f, -2.0f, -2.0f },
-                                     { -2.0f, -2.0f,  2.0f },
-                                     { -2.0f,  2.0f, -2.0f },
-                                     { -2.0f,  2.0f,  2.0f },
-                                     { 2.0f, -2.0f, -2.0f },
-                                     { 2.0f, -2.0f,  2.0f },
-                                     { 2.0f,  2.0f, -2.0f },
-                                     { 2.0f,  2.0f,  2.0f } };
+static MoFloat3 cube_positions[] = { { -1.0f, -1.0f, -1.0f },
+                                     { -1.0f, -1.0f,  1.0f },
+                                     { -1.0f,  1.0f, -1.0f },
+                                     { -1.0f,  1.0f,  1.0f },
+                                     { 1.0f, -1.0f, -1.0f },
+                                     { 1.0f, -1.0f,  1.0f },
+                                     { 1.0f,  1.0f, -1.0f },
+                                     { 1.0f,  1.0f,  1.0f } };
 static MoFloat2 cube_texcoords[] = { { 1, 0 },
                                      { 0, 1 },
                                      { 0, 0 },
@@ -78,12 +78,12 @@ static float3   linalg_light_position = { 500.0f, 1000.0f, 500.0f };
 
 int main(int, char**)
 {
-    GLFWwindow*                  window;
+    GLFWwindow*                  window = nullptr;
     VkInstance                   instance = VK_NULL_HANDLE;
-    MoDevice                     device;
-    MoSwapChain                  swapChain;
-    VkSurfaceKHR                 surface;
-    VkSurfaceFormatKHR           surfaceFormat;
+    MoDevice                     device = VK_NULL_HANDLE;
+    MoSwapChain                  swapChain = VK_NULL_HANDLE;
+    VkSurfaceKHR                 surface = VK_NULL_HANDLE;
+    VkSurfaceFormatKHR           surfaceFormat = {};
     uint32_t                     frameIndex = 0;
     const VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 

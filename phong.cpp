@@ -1245,7 +1245,7 @@ void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore 
         info.framebuffer = swapChain->images[*pFrameIndex].front;
         info.renderArea.extent = swapChain->extent;
         VkClearValue clearValue[2] = {};
-        clearValue[0].color = {{0.1f, 0.1f, 0.2f, 1.0f}};
+        clearValue[0].color = {{1.0f, 1.0f, 1.0f, 1.0f}};
         clearValue[1].depthStencil = {1.0f, 0};
         info.pClearValues = clearValue;
         info.clearValueCount = 2;
