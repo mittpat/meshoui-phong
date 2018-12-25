@@ -1289,29 +1289,29 @@ VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphor
     return vkQueuePresentKHR(g_Device->queue, &info);
 }
 
-void moDestroySwapChain(MoSwapChain pSwapChain)
+void moDestroySwapChain(MoDevice device, MoSwapChain pSwapChain)
 {
     VkResult err;
-    err = vkDeviceWaitIdle(g_Device->device);
-    g_Device->pCheckVkResultFn(err);
-    vkQueueWaitIdle(g_Device->queue);
+    err = vkDeviceWaitIdle(device->device);
+    device->pCheckVkResultFn(err);
+    vkQueueWaitIdle(device->queue);
     for (uint32_t i = 0; i < countof(pSwapChain->frames); ++i)
     {
-        vkDestroyFence(g_Device->device, pSwapChain->frames[i].fence, g_Allocator);
-        vkFreeCommandBuffers(g_Device->device, pSwapChain->frames[i].pool, 1, &pSwapChain->frames[i].buffer);
-        vkDestroyCommandPool(g_Device->device, pSwapChain->frames[i].pool, g_Allocator);
-        vkDestroySemaphore(g_Device->device, pSwapChain->frames[i].acquired, g_Allocator);
-        vkDestroySemaphore(g_Device->device, pSwapChain->frames[i].complete, g_Allocator);
+        vkDestroyFence(device->device, pSwapChain->frames[i].fence, g_Allocator);
+        vkFreeCommandBuffers(device->device, pSwapChain->frames[i].pool, 1, &pSwapChain->frames[i].buffer);
+        vkDestroyCommandPool(device->device, pSwapChain->frames[i].pool, g_Allocator);
+        vkDestroySemaphore(device->device, pSwapChain->frames[i].acquired, g_Allocator);
+        vkDestroySemaphore(device->device, pSwapChain->frames[i].complete, g_Allocator);
     }
 
-    deleteBuffer(g_Device, pSwapChain->depthBuffer);
+    deleteBuffer(device, pSwapChain->depthBuffer);
     for (uint32_t i = 0; i < countof(pSwapChain->images); ++i)
     {
-        vkDestroyImageView(g_Device->device, pSwapChain->images[i].view, g_Allocator);
-        vkDestroyFramebuffer(g_Device->device, pSwapChain->images[i].front, g_Allocator);
+        vkDestroyImageView(device->device, pSwapChain->images[i].view, g_Allocator);
+        vkDestroyFramebuffer(device->device, pSwapChain->images[i].front, g_Allocator);
     }
-    vkDestroyRenderPass(g_Device->device, pSwapChain->renderPass, g_Allocator);
-    vkDestroySwapchainKHR(g_Device->device, pSwapChain->swapChainKHR, g_Allocator);
+    vkDestroyRenderPass(device->device, pSwapChain->renderPass, g_Allocator);
+    vkDestroySwapchainKHR(device->device, pSwapChain->swapChainKHR, g_Allocator);
 }
 
 void moInit(MoInitInfo *pInfo)

@@ -228,11 +228,11 @@ int main(int, char**)
 
     // Cleanup
     {
-        moDestroySwapChain(swapChain);
+        moShutdown();
+        moDestroySwapChain(device, swapChain);
         vkDestroySurfaceKHR(instance, surface, allocator);
         moDestroyDevice(device);
         moDestroyInstance(instance);
-        moShutdown();
 
         glfwDestroyWindow(window);
         glfwTerminate();

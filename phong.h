@@ -210,7 +210,7 @@ void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore 
 VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore);
 
 // free swap chain, command and swap buffers
-void moDestroySwapChain(MoSwapChain pSwapChain);
+void moDestroySwapChain(MoDevice device, MoSwapChain pSwapChain);
 
 // set global handles and create default phong pipeline
 void moInit(MoInitInfo* pInfo);
