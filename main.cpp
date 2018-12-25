@@ -6,32 +6,30 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "DeviceVk.h"
-#include "SwapChainVk.h"
 #include "phong.h"
 
 #include <linalg.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 static void glfw_error_callback(int, const char* description)
 {
-    printf("Error: %s\n", description);
+    printf("GLFW Error: %s\n", description);
 }
 
 static void vk_check_result(VkResult err)
 {
     if (err == 0) return;
-    printf("VkResult %d\n", err);
+    printf("[vulkan] Result: %d\n", err);
     if (err < 0)
         abort();
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_report(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* pLayerPrefix, const char* pMessage, void* pUserData)
+static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_report(VkDebugReportFlagsEXT, VkDebugReportObjectTypeEXT objectType, uint64_t, size_t, int32_t, const char*, const char* pMessage, void*)
 {
-    (void)flags; (void)object; (void)location; (void)messageCode; (void)pUserData; (void)pLayerPrefix; // Unused arguments
-    fprintf(stderr, "[vulkan] ObjectType: %i\nMessage: %s\n\n", objectType, pMessage);
+    printf("[vulkan] ObjectType: %i\nMessage: %s\n\n", objectType, pMessage);
     return VK_FALSE;
 }
 
@@ -78,18 +76,16 @@ static float4x4 linalg_view_matrix = inverse(linalg_camera_matrix);
 static float4x4 linalg_model_matrix = identity;
 static float3   linalg_light_position = { 500.0f, 1000.0f, 500.0f };
 
-using namespace Meshoui;
-
 int main(int, char**)
 {
-    GLFWwindow*        window;
-    VkInstance         instance;
-    DeviceVk           device;
-    SwapChainVk        swapChain;
-    ImageBufferVk      depthBuffer;
-    VkSurfaceKHR       surface;
-    VkSurfaceFormatKHR surfaceFormat;
-    uint32_t           frameIndex = 0;
+    GLFWwindow*                  window;
+    VkInstance                   instance = VK_NULL_HANDLE;
+    MoDevice                     device;
+    MoSwapChain                  swapChain;
+    VkSurfaceKHR                 surface;
+    VkSurfaceFormatKHR           surfaceFormat;
+    uint32_t                     frameIndex = 0;
+    const VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 
     // Initialization
     {
@@ -109,10 +105,9 @@ int main(int, char**)
             createInfo.pCheckVkResultFn = vk_check_result;
             moCreateInstance(&createInfo, &instance);
         }
-        device.create(instance);
 
         // Create Window Surface
-        VkResult err = glfwCreateWindowSurface(instance, window, device.allocator, &surface);
+        VkResult err = glfwCreateWindowSurface(instance, window, allocator, &surface);
         vk_check_result(err);
 
         // Create Framebuffers
@@ -124,19 +119,31 @@ int main(int, char**)
             glfwWaitEvents();
         }
 
-        // Check for WSI support
-        VkBool32 res;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device.physicalDevice, device.queueFamily, surface, &res);
-        if (res != VK_TRUE)
         {
-            fprintf(stderr, "Error no WSI support on physical device 0\n");
-            abort();
+            VkFormat requestFormats[4] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+            MoDeviceCreateInfo createInfo = {};
+            createInfo.instance = instance;
+            createInfo.surface = surface;
+            createInfo.pRequestFormats = requestFormats;
+            createInfo.requestFormatsCount = 4;
+            createInfo.requestColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+            createInfo.pSurfaceFormat = &surfaceFormat;
+            createInfo.pCheckVkResultFn = vk_check_result;
+            moCreateDevice(&createInfo, &device);
         }
-        device.selectSurfaceFormat(surface, surfaceFormat, { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM }, VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
         // Create SwapChain, RenderPass, Framebuffer, etc.
-        swapChain.createCommandBuffers(device);
-        swapChain.createImageBuffers(device, depthBuffer, surface, surfaceFormat, width, height, true);
+        {
+            MoSwapChainCreateInfo createInfo = {};
+            createInfo.device = device;
+            createInfo.surface = surface;
+            createInfo.surfaceFormat = surfaceFormat;
+            createInfo.extent = {(uint32_t)width, (uint32_t)height};
+            createInfo.vsync = VK_TRUE;
+            createInfo.pAllocator = allocator;
+            createInfo.pCheckVkResultFn = vk_check_result;
+            moCreateSwapChain(&createInfo, &swapChain);
+        }
     }
 
     // Meshoui initialization
@@ -144,38 +151,10 @@ int main(int, char**)
     MoMesh cube;
     MoMaterial material;
     {
-        MoInitInfo initInfo = {};
+        MoInitInfo2 initInfo = {};
         initInfo.instance = instance;
-        initInfo.physicalDevice = device.physicalDevice;
-        initInfo.device = device.device;
-        initInfo.queueFamily = device.queueFamily;
-        initInfo.queue = device.queue;
-        initInfo.descriptorPool = device.descriptorPool;
-        initInfo.swapChainKHR = swapChain.swapChainKHR;
-        initInfo.renderPass = swapChain.renderPass;
-        MoImageBufferInfo swapChainImageBufferInfo[FrameCount];
-        for (uint32_t i = 0; i < FrameCount; ++i)
-        {
-            swapChainImageBufferInfo[i].back = swapChain.images[i].back;
-            swapChainImageBufferInfo[i].view = swapChain.images[i].view;
-            swapChainImageBufferInfo[i].front = swapChain.images[i].front;
-        }
-        initInfo.pSwapChainImageBuffers = swapChainImageBufferInfo;
-        initInfo.swapChainImageBufferCount = FrameCount;
-        MoCommandBufferInfo swapChainCommandBufferInfo[FrameCount];
-        for (uint32_t i = 0; i < FrameCount; ++i)
-        {
-            swapChainCommandBufferInfo[i].pool = swapChain.frames[i].pool;
-            swapChainCommandBufferInfo[i].buffer = swapChain.frames[i].buffer;
-            swapChainCommandBufferInfo[i].fence = swapChain.frames[i].fence;
-            swapChainCommandBufferInfo[i].acquired = swapChain.frames[i].acquired;
-            swapChainCommandBufferInfo[i].complete = swapChain.frames[i].complete;
-        }
-        initInfo.pSwapChainCommandBuffers = swapChainCommandBufferInfo;
-        initInfo.swapChainCommandBufferCount = FrameCount;
-        initInfo.extent = swapChain.extent;
-        initInfo.pAllocator = device.allocator;
-        initInfo.pCheckVkResultFn = vk_check_result;
+        initInfo.device = device;
+        initInfo.swapChain = swapChain;
         moInit(&initInfo);
 
         std::vector<uint32_t> indices;
@@ -210,22 +189,16 @@ int main(int, char**)
         glfwPollEvents();
 
         // Frame begin
-        VkSemaphore& imageAcquiredSemaphore = swapChain.beginRender(device, frameIndex);
-
+        VkSemaphore imageAcquiredSemaphore;
+        moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         moNewFrame(frameIndex);
         moBindMaterial(material);
-        moBindMesh(cube);
         moSetPMV((MoFloat4x4&)linalg_proj_matrix, (MoFloat4x4&)linalg_model_matrix, (MoFloat4x4&)linalg_view_matrix);
         moSetLight((MoFloat3&)linalg_light_position, { linalg_camera_matrix.w.x, linalg_camera_matrix.w.y, linalg_camera_matrix.w.z });
-        auto & frame = swapChain.frames[frameIndex];
-        VkViewport viewport{ 0, 0, float(swapChain.extent.width), float(swapChain.extent.height), 0.f, 1.f };
-        vkCmdSetViewport(frame.buffer, 0, 1, &viewport);
-        VkRect2D scissor{ { 0, 0 },{ swapChain.extent.width, swapChain.extent.height } };
-        vkCmdSetScissor(frame.buffer, 0, 1, &scissor);
-        vkCmdDrawIndexed(frame.buffer, indicesCount, 1, 0, 0, 0);
+        moDrawMesh(cube);
 
         // Frame end
-        VkResult err = swapChain.endRender(imageAcquiredSemaphore, device.queue, frameIndex);
+        VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
         {
             int width = 0, height = 0;
@@ -236,8 +209,12 @@ int main(int, char**)
                 glfwWaitEvents();
             }
 
-            vkDeviceWaitIdle(device.device);
-            swapChain.createImageBuffers(device, depthBuffer, surface, surfaceFormat, width, height, true);
+            MoSwapChainRecreateInfo recreateInfo = {};
+            recreateInfo.surface = surface;
+            recreateInfo.surfaceFormat = surfaceFormat;
+            recreateInfo.extent = {(uint32_t)width, (uint32_t)height};
+            recreateInfo.vsync = VK_TRUE;
+            moRecreateSwapChain(&recreateInfo, swapChain);
             err = VK_SUCCESS;
         }
         vk_check_result(err);
@@ -247,19 +224,15 @@ int main(int, char**)
     {
         moDestroyMaterial(material);
         moDestroyMesh(cube);
-        moShutdown();
     }
 
     // Cleanup
     {
-        VkResult err = vkDeviceWaitIdle(device.device);
-        vk_check_result(err);
-
-        swapChain.destroyImageBuffers(device, depthBuffer);
-        swapChain.destroyCommandBuffers(device);
-        vkDestroySurfaceKHR(instance, surface, device.allocator);
-        device.destroy();
+        moDestroySwapChain(swapChain);
+        vkDestroySurfaceKHR(instance, surface, allocator);
+        moDestroyDevice(device);
         moDestroyInstance(instance);
+        moShutdown();
 
         glfwDestroyWindow(window);
         glfwTerminate();

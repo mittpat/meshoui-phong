@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan.h>
 
+typedef struct MoDevice_T* MoDevice;
+typedef struct MoSwapChain_T* MoSwapChain;
 typedef struct MoMesh_T* MoMesh;
 typedef struct MoMaterial_T* MoMaterial;
 typedef struct MoPipeline_T* MoPipeline;
@@ -18,28 +20,51 @@ typedef struct MoInstanceCreateInfo
 
 typedef struct MoDeviceCreateInfo
 {
+    VkInstance          instance;
+    VkSurfaceKHR        surface;
+    const VkFormat*     pRequestFormats;
+    uint32_t            requestFormatsCount;
+    VkColorSpaceKHR     requestColorSpace;
+    VkSurfaceFormatKHR* pSurfaceFormat;
+    void              (*pCheckVkResultFn)(VkResult err);
 } MoDeviceCreateInfo;
 
 typedef struct MoSwapChainCreateInfo
 {
+    MoDevice                     device;
+    VkSurfaceKHR                 surface;
+    VkSurfaceFormatKHR           surfaceFormat;
+    VkExtent2D                   extent;
+    VkBool32                     vsync;
+    const VkAllocationCallbacks* pAllocator;
+    void                       (*pCheckVkResultFn)(VkResult err);
 } MoSwapChainCreateInfo;
 
-typedef struct MoImageBufferInfo
+typedef struct MoSwapChainRecreateInfo
+{
+    VkSurfaceKHR       surface;
+    VkSurfaceFormatKHR surfaceFormat;
+    VkExtent2D         extent;
+    VkBool32           vsync;
+} MoSwapChainRecreateInfo;
+
+typedef struct MoSwapBuffer
 {
     VkImage       back;
     VkImageView   view;
     VkFramebuffer front;
-} MoImageBufferInfo;
+} MoSwapBuffer;
 
-typedef struct MoCommandBufferInfo
+typedef struct MoCommandBuffer
 {
     VkCommandPool   pool;
     VkCommandBuffer buffer;
     VkFence         fence;
     VkSemaphore     acquired;
     VkSemaphore     complete;
-} MoCommandBufferInfo;
+} MoCommandBuffer;
 
+// version using only Vulkan API objects
 // you must call moInit(MoInitInfo) before creating a mesh or material, typically when starting your application
 // call moShutdown() when closing your application
 typedef struct MoInitInfo {
@@ -50,9 +75,9 @@ typedef struct MoInitInfo {
     VkQueue                      queue;
     VkPipelineCache              pipelineCache;
     VkDescriptorPool             descriptorPool;
-    const MoImageBufferInfo*     pSwapChainImageBuffers;
-    uint32_t                     swapChainImageBufferCount;
-    const MoCommandBufferInfo*   pSwapChainCommandBuffers;
+    const MoSwapBuffer*          pSwapChainSwapBuffers;
+    uint32_t                     swapChainSwapBufferCount;
+    const MoCommandBuffer*       pSwapChainCommandBuffers;
     uint32_t                     swapChainCommandBufferCount;
     VkSwapchainKHR               swapChainKHR;
     VkRenderPass                 renderPass;
@@ -60,6 +85,18 @@ typedef struct MoInitInfo {
     const VkAllocationCallbacks* pAllocator;
     void                         (*pCheckVkResultFn)(VkResult err);
 } MoInitInfo;
+
+// version using mixed Mo objects and Vulkan API objects
+// you must call moInit(MoInitInfo2) before creating a mesh or material, typically when starting your application
+// use moCreateDevice(MoDeviceCreateInfo) and moCreateSwapChain(MoSwapChainCreateInfo) to create device and swapchain
+// call moShutdown() when closing your application
+typedef struct MoInitInfo2 {
+    VkInstance                   instance;
+    MoDevice                     device;
+    MoSwapChain                  swapChain;
+    VkPipelineCache              pipelineCache;
+    const VkAllocationCallbacks* pAllocator;
+} MoInitInfo2;
 
 // vector types, can be declared as your own so long as memory alignment is respected
 #ifndef MOSKIPVECTYPES
@@ -153,21 +190,31 @@ typedef struct MoPipelineCreateInfo {
 
 // you can create a VkInstance using moCreateInstance(MoInstanceCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing instance
-void moCreateInstance(MoInstanceCreateInfo* pCreateInfo, VkInstance* instance);
+void moCreateInstance(MoInstanceCreateInfo* pCreateInfo, VkInstance* pInstance);
+
+// free instance
 void moDestroyInstance(VkInstance instance);
 
 // you can create a VkDevice using moCreateDevice(MoDeviceCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing device
-void moCreateDevice(MoDeviceCreateInfo* pCreateInfo);
-void moDestroyDevice();
+void moCreateDevice(MoDeviceCreateInfo* pCreateInfo, MoDevice* pDevice);
+
+// free device
+void moDestroyDevice(MoDevice device);
 
 // you can create a VkSwapchain using moCreateSwapChain(MoSwapChainCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing swap chain
-void moCreateSwapChain(MoSwapChainCreateInfo* pCreateInfo);
-void moDestroySwapChain();
+void moCreateSwapChain(MoSwapChainCreateInfo* pCreateInfo, MoSwapChain* pSwapChain);
+void moRecreateSwapChain(MoSwapChainRecreateInfo* pCreateInfo, MoSwapChain swapChain);
+void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore);
+VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore);
+
+// free swap chain, command and swap buffers
+void moDestroySwapChain(MoSwapChain pSwapChain);
 
 // set global handles and create default phong pipeline
 void moInit(MoInitInfo* pInfo);
+void moInit(MoInitInfo2* pInfo);
 
 // free default phong pipeline and clear global handles
 void moShutdown();
@@ -199,11 +246,11 @@ void moSetPMV(const MoFloat4x4& projection, const MoFloat4x4& model, const MoFlo
 // set the camera's position and light position (as a UBO)
 void moSetLight(const MoFloat3& light, const MoFloat3& camera);
 
-// bind a mesh
-void moBindMesh(MoMesh mesh);
-
 // bind a material
 void moBindMaterial(MoMaterial material);
+
+// draw a mesh
+void moDrawMesh(MoMesh mesh);
 
 /*
 ------------------------------------------------------------------------------
