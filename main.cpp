@@ -238,13 +238,13 @@ int main(int, char**)
         {
             model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f,1.0f,0.0f}, 0.01f)));
 
-            static MoPushConstant pmv = {};
+            MoPushConstant pmv = {};
             (float4x4&)pmv.projection = proj_matrix;
             (float4x4&)pmv.model = model_matrix;
             (float4x4&)pmv.view = view_matrix;
             moSetPMV(&pmv);
 
-            static MoUniform uni = {};
+            MoUniform uni = {};
             (float3&)uni.light = light_position;
             (float3&)uni.camera = camera_matrix.w.xyz();
             moSetLight(&uni);
