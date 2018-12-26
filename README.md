@@ -6,8 +6,8 @@ Compiling
 -------
 * git submodule update --init --recursive
 * mkdir BUILD & cd BUILD
-** cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
-** cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 14 2015 Win64" ..
+* cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
+* cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 14 2015 Win64" ..
 
 Notes
 -------
