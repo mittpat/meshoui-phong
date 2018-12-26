@@ -374,18 +374,12 @@ static const VkAllocationCallbacks* g_Allocator     = VK_NULL_HANDLE;
 template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
 
 static constexpr MoFloat3 operator * (const MoFloat3 & a, float b) { return {a.x*b,a.y*b,a.z*b}; }
-//static constexpr MoFloat3 operator + (const MoFloat3 & a, const MoFloat3 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 static constexpr MoFloat2 operator - (const MoFloat2 & a, const MoFloat2 & b) { return {a.x-b.x,a.y-b.y}; }
 static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
-//static constexpr bool     operator ==(const MoFloat2 & a, const MoFloat2 & b) { return a.x==b.x&&a.y==b.y; }
-//static constexpr bool     operator ==(const MoFloat3 & a, const MoFloat3 & b) { return a.x==b.x&&a.y==b.y&&a.z==b.z; }
-//static constexpr MoFloat3         min(const MoFloat3 & a, const MoFloat3 & b) { return { std::min(a.x,b.x),std::min(a.y,b.y),std::min(a.z,b.z)}; }
-//static constexpr MoFloat3         max(const MoFloat3 & a, const MoFloat3 & b) { return { std::max(a.x,b.x),std::max(a.y,b.y),std::max(a.z,b.z)}; }
 static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
 static constexpr MoFloat3       cross(const MoFloat3 & a, const MoFloat3 & b) { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
 static           MoFloat3   normalize(const MoFloat3 & a)                     { return a * (1.0f / std::sqrt(dot(a, a))); }
 
-typedef struct MoDeviceBuffer_T* MoDeviceBuffer;
 typedef struct MoDeviceBuffer_T
 {
     VkBuffer buffer;
@@ -393,7 +387,6 @@ typedef struct MoDeviceBuffer_T
     VkDeviceSize size;
 } MoDeviceBuffer_T;
 
-typedef struct MoImageBuffer_T* MoImageBuffer;
 typedef struct MoImageBuffer_T
 {
     VkImage image;
@@ -595,7 +588,7 @@ static void deleteBuffer(MoDevice device, MoImageBuffer imageBuffer)
     delete imageBuffer;
 }
 
-static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture, const VkExtent2D & textureExtent, MoFloat3 fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
+static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture, const VkExtent2D & textureExtent, MoFloat4 fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
 {
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
     unsigned width = 0, height = 0;
@@ -610,7 +603,7 @@ static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture,
         data[0] = (uint8_t)(fallbackColor.x * 0xFF);
         data[1] = (uint8_t)(fallbackColor.y * 0xFF);
         data[2] = (uint8_t)(fallbackColor.z * 0xFF);
-        data[3] = (uint8_t)(            1.0 * 0xFF);
+        data[3] = (uint8_t)(fallbackColor.w * 0xFF);
         dataPtr = data.data();
         size = data.size();
     }
@@ -656,19 +649,11 @@ static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture,
     deleteBuffer(g_Device, upload);
 }
 
-typedef struct MoVertexAttributes {
-    MoFloat3 position;
-    MoFloat2 texcoord;
-    MoFloat3 normal;
-    MoFloat3 tangent;
-    MoFloat3 bitangent;
-} MoVertexAttributes;
-
 struct MoMesh_T
 {
     MoDeviceBuffer vertexBuffer;
     MoDeviceBuffer indexBuffer;
-    size_t indexBufferSize;
+    uint32_t indexBufferSize;
 };
 
 struct MoMaterial_T
@@ -1193,7 +1178,7 @@ void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapC
     }
 
     // depth buffer
-    createBuffer(g_Device, &swapChain->depthBuffer, {pCreateInfo->extent.width, swapChain->extent.height, 1}, VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    createBuffer(g_Device, &swapChain->depthBuffer, { swapChain->extent.width, swapChain->extent.height, 1}, VK_FORMAT_D16_UNORM, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     {
         VkImageView attachment[2] = {0, swapChain->depthBuffer->view};
@@ -1334,6 +1319,7 @@ void moInit(MoInitInfo *pInfo)
     g_Device->descriptorPool = pInfo->descriptorPool;
     g_SwapChain = new MoSwapChain_T;
     *g_SwapChain = {};
+    g_SwapChain->depthBuffer = pInfo->depthBuffer;
     g_SwapChain->swapChainKHR = pInfo->swapChainKHR;
     g_SwapChain->renderPass = pInfo->renderPass;
     g_SwapChain->extent = pInfo->extent;
@@ -1379,6 +1365,7 @@ void moInit(MoInitInfo2 *pInfo)
     initInfo.swapChainSwapBufferCount = (uint32_t)countof(pInfo->swapChain->images);
     initInfo.pSwapChainCommandBuffers = pInfo->swapChain->frames;
     initInfo.swapChainCommandBufferCount = (uint32_t)countof(pInfo->swapChain->frames);
+    initInfo.depthBuffer = pInfo->swapChain->depthBuffer;
     initInfo.swapChainKHR = pInfo->swapChain->swapChainKHR;
     initInfo.renderPass = pInfo->swapChain->renderPass;
     initInfo.extent = pInfo->swapChain->extent;
@@ -1409,19 +1396,6 @@ void moShutdown()
     delete g_SwapChain;
     g_Allocator = VK_NULL_HANDLE;
 }
-
-typedef struct MoPushConstant
-{
-    MoFloat4x4 model;
-    MoFloat4x4 view;
-    MoFloat4x4 projection;
-} MoPushConstant;
-
-typedef struct MoUniform
-{
-    alignas(16) MoFloat3 camera;
-    alignas(16) MoFloat3 light;
-} MoUniform;
 
 void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipeline)
 {
@@ -1543,15 +1517,15 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     stage[1].pName = "main";
 
     VkVertexInputBindingDescription binding_desc[1] = {};
-    binding_desc[0].stride = sizeof(MoVertexAttributes);
+    binding_desc[0].stride = sizeof(MoVertex);
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexAttributes, position)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct MoVertexAttributes, texcoord)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexAttributes, normal)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexAttributes, tangent)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertexAttributes, bitangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, position)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct MoVertex, texcoord)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, normal)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, tangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, bitangent)});
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1653,74 +1627,13 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
     MoMesh mesh = *pMesh = new MoMesh_T();
     *mesh = {};
 
-    // tangent + bitangent
-    std::vector<MoVertexAttributes> vertices; vertices.reserve(pCreateInfo->vertexCount);
-    std::vector<uint32_t> indices; indices.reserve(pCreateInfo->indexCount);
-    if (pCreateInfo->indicesCountFromOne == VK_TRUE)
-    {
-        for (uint32_t i = 0; i < pCreateInfo->indexCount; i++) { indices.push_back(pCreateInfo->pIndices[i] - 1); }
-    }
-    for (uint32_t i = 0; i < indices.size(); i+=3)
-    {
-        uint32_t j1 = indices[i+0];
-        uint32_t j2 = indices[i+1];
-        uint32_t j3 = indices[i+2];
-
-        // triangle
-        MoVertexAttributes v1, v2, v3; v1 = v2 = v3 = {};
-        v1.position = pCreateInfo->pVertices[j1].position;
-        v2.position = pCreateInfo->pVertices[j2].position;
-        v3.position = pCreateInfo->pVertices[j3].position;
-        v1.normal   = pCreateInfo->pVertices[j1].normal;
-        v2.normal   = pCreateInfo->pVertices[j2].normal;
-        v3.normal   = pCreateInfo->pVertices[j3].normal;
-        v1.texcoord = pCreateInfo->pVertices[j1].texcoord;
-        v2.texcoord = pCreateInfo->pVertices[j2].texcoord;
-        v3.texcoord = pCreateInfo->pVertices[j3].texcoord;
-
-        if (pCreateInfo->discardNormals == VK_TRUE)
-        {
-            const MoFloat3 a = v2.position - v1.position;
-            const MoFloat3 b = v3.position - v1.position;
-            v1.normal = v2.normal = v3.normal = normalize(cross(a, b));
-        }
-
-        const MoFloat3 edge1 = v2.position - v1.position;
-        const MoFloat3 edge2 = v3.position - v1.position;
-        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
-        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
-
-        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-        if (f != 0.f)
-        {
-            f = 1.0f / f;
-
-            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
-            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
-        }
-        else
-        {
-            v1.tangent = v2.tangent = v3.tangent = {1.f, 0.f, 0.f};
-            v1.bitangent = v2.bitangent = v3.bitangent = {0.f, 0.f, 1.f};
-        }
-        vertices.push_back(v1);
-        vertices.push_back(v2);
-        vertices.push_back(v3);
-    }
-
-    mesh->indexBufferSize = indices.size();
-    const VkDeviceSize vertex_size = vertices.size() * sizeof(MoVertexAttributes);
-    const VkDeviceSize index_size = indices.size() * sizeof(uint32_t);
+    mesh->indexBufferSize = pCreateInfo->indexCount;
+    const VkDeviceSize vertex_size = pCreateInfo->vertexCount * sizeof(MoVertex);
+    const VkDeviceSize index_size = pCreateInfo->indexCount * sizeof(uint32_t);
     createBuffer(g_Device, &mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     createBuffer(g_Device, &mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    uploadBuffer(g_Device, mesh->vertexBuffer, vertex_size, vertices.data());
-    uploadBuffer(g_Device, mesh->indexBuffer, index_size, indices.data());
+    uploadBuffer(g_Device, mesh->vertexBuffer, vertex_size, pCreateInfo->pVertices);
+    uploadBuffer(g_Device, mesh->indexBuffer, index_size, pCreateInfo->pIndices);
 }
 
 void moDestroyMesh(MoMesh mesh)
@@ -1739,7 +1652,7 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
     auto & frame = g_SwapChain->frames[g_FrameIndex];
     generateTexture(&material->ambientImage,  pCreateInfo->pTextureAmbient,  pCreateInfo->textureAmbientExtent,  pCreateInfo->colorAmbient,  frame.pool, frame.buffer);
     generateTexture(&material->diffuseImage,  pCreateInfo->pTextureDiffuse,  pCreateInfo->textureDiffuseExtent,  pCreateInfo->colorDiffuse,  frame.pool, frame.buffer);
-    generateTexture(&material->normalImage,   pCreateInfo->pTextureNormal,   pCreateInfo->textureNormalExtent,   {0.f, 0.f, 0.f},            frame.pool, frame.buffer);
+    generateTexture(&material->normalImage,   pCreateInfo->pTextureNormal,   pCreateInfo->textureNormalExtent,   {0.f, 0.f, 0.f, 0.f},       frame.pool, frame.buffer);
     generateTexture(&material->emissiveImage, pCreateInfo->pTextureEmissive, pCreateInfo->textureEmissiveExtent, pCreateInfo->colorEmissive, frame.pool, frame.buffer);
     generateTexture(&material->specularImage, pCreateInfo->pTextureSpecular, pCreateInfo->textureSpecularExtent, pCreateInfo->colorSpecular, frame.pool, frame.buffer);
 
@@ -1837,22 +1750,14 @@ void moNewFrame(uint32_t frameIndex)
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 0, 1, &g_Pipeline->descriptorSet[g_FrameIndex], 0, nullptr);
 }
 
-void moSetPMV(const MoFloat4x4 &projection, const MoFloat4x4 &model, const MoFloat4x4 &view)
+void moSetPMV(const MoPushConstant* pProjectionModelView)
 {
-    static MoPushConstant g_PushConstant = {};
-    g_PushConstant.projection = projection;
-    g_PushConstant.model = model;
-    g_PushConstant.view = view;
-    auto & frame = g_SwapChain->frames[g_FrameIndex];
-    vkCmdPushConstants(frame.buffer, g_Pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MoPushConstant), &g_PushConstant);
+    vkCmdPushConstants(g_SwapChain->frames[g_FrameIndex].buffer, g_Pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MoPushConstant), pProjectionModelView);
 }
 
-void moSetLight(const MoFloat3 &light, const MoFloat3 &camera)
+void moSetLight(const MoUniform* pLightAndCamera)
 {
-    static MoUniform g_Uniform = {};
-    g_Uniform.light = light;
-    g_Uniform.camera = camera;
-    uploadBuffer(g_Device, g_Pipeline->uniformBuffer[g_FrameIndex], sizeof(MoUniform), &g_Uniform);
+    uploadBuffer(g_Device, g_Pipeline->uniformBuffer[g_FrameIndex], sizeof(MoUniform), pLightAndCamera);
 }
 
 void moDrawMesh(MoMesh mesh)

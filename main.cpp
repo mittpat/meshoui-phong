@@ -159,11 +159,53 @@ int main(int, char**)
 
         std::vector<uint32_t> indices;
         std::vector<MoVertex> vertices;
+#define INDICESCOUNTFROMONE
+#ifdef INDICESCOUNTFROMONE
         for (const auto & triangle : cube_triangles)
         {
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1] }); indices.push_back((uint32_t)vertices.size());
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1] }); indices.push_back((uint32_t)vertices.size());
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1] }); indices.push_back((uint32_t)vertices.size());
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+        }
+        for (uint32_t & index : indices) { --index; }
+#else
+        for (const auto & triangle : cube_triangles)
+        {
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x], cube_texcoords[triangle.y.x], cube_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y], cube_texcoords[triangle.y.y], cube_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z], cube_texcoords[triangle.y.z], cube_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        }
+#endif
+        for (uint32_t index = 0; index < indices.size(); index+=3)
+        {
+            MoVertex &v1 = vertices[indices[index+0]];
+            MoVertex &v2 = vertices[indices[index+1]];
+            MoVertex &v3 = vertices[indices[index+2]];
+
+            //discardNormals
+            const float3 edge1 = (float3&)v2.position - (float3&)v1.position;
+            const float3 edge2 = (float3&)v3.position - (float3&)v1.position;
+            (float3&)v1.normal = (float3&)v2.normal = (float3&)v3.normal = normalize(cross(edge1, edge2));
+
+#define GENERATETANGENTS
+#ifdef GENERATETANGENTS
+            const float2 deltaUV1 = (float2&)v2.texcoord - (float2&)v1.texcoord;
+            const float2 deltaUV2 = (float2&)v3.texcoord - (float2&)v1.texcoord;
+            float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+            if (f != 0.f)
+            {
+                f = 1.0f / f;
+
+                v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+                v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+                v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+                (float3&)v1.tangent = (float3&)v2.tangent = (float3&)v3.tangent = normalize((float3&)v1.tangent);
+                v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+                v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+                v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+                (float3&)v1.bitangent = (float3&)v2.bitangent = (float3&)v3.bitangent = normalize((float3&)v1.bitangent);
+            }
+#endif
         }
 
         MoMeshCreateInfo meshInfo = {};
@@ -171,15 +213,13 @@ int main(int, char**)
         meshInfo.pIndices = indices.data();
         meshInfo.vertexCount = (uint32_t)vertices.size();
         meshInfo.pVertices = vertices.data();
-        meshInfo.discardNormals = VK_TRUE;
-        meshInfo.indicesCountFromOne = VK_TRUE;
         moCreateMesh(&meshInfo, &cube);
 
         MoMaterialCreateInfo materialInfo = {};
-        materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f };
-        materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f };
-        materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f };
-        materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f };
+        materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
+        materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
+        materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
+        materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
         moCreateMaterial(&materialInfo, &material);
     }
 
@@ -193,8 +233,20 @@ int main(int, char**)
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         moNewFrame(frameIndex);
         moBindMaterial(material);
-        moSetPMV((MoFloat4x4&)linalg_proj_matrix, (MoFloat4x4&)linalg_model_matrix, (MoFloat4x4&)linalg_view_matrix);
-        moSetLight((MoFloat3&)linalg_light_position, { linalg_camera_matrix.w.x, linalg_camera_matrix.w.y, linalg_camera_matrix.w.z });
+        {
+            linalg_model_matrix = mul(linalg_model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f,1.0f,0.0f}, 0.01f)));
+
+            static MoPushConstant pmv = {};
+            (float4x4&)pmv.projection = linalg_proj_matrix;
+            (float4x4&)pmv.model = linalg_model_matrix;
+            (float4x4&)pmv.view = linalg_view_matrix;
+            moSetPMV(&pmv);
+
+            static MoUniform uni = {};
+            (float3&)uni.light = linalg_light_position;
+            (float3&)uni.camera = linalg_camera_matrix.w.xyz();
+            moSetLight(&uni);
+        }
         moDrawMesh(cube);
 
         // Frame end

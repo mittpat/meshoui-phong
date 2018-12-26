@@ -7,6 +7,8 @@ typedef struct MoSwapChain_T* MoSwapChain;
 typedef struct MoMesh_T* MoMesh;
 typedef struct MoMaterial_T* MoMaterial;
 typedef struct MoPipeline_T* MoPipeline;
+typedef struct MoDeviceBuffer_T* MoDeviceBuffer;
+typedef struct MoImageBuffer_T* MoImageBuffer;
 
 typedef struct MoInstanceCreateInfo
 {
@@ -79,6 +81,7 @@ typedef struct MoInitInfo {
     uint32_t                     swapChainSwapBufferCount;
     const MoCommandBuffer*       pSwapChainCommandBuffers;
     uint32_t                     swapChainCommandBufferCount;
+    MoImageBuffer                depthBuffer;
     VkSwapchainKHR               swapChainKHR;
     VkRenderPass                 renderPass;
     VkExtent2D                   extent;
@@ -150,6 +153,8 @@ typedef struct MoVertex {
     MoFloat3 position;
     MoFloat2 texcoord;
     MoFloat3 normal;
+    MoFloat3 tangent;
+    MoFloat3 bitangent;
 } MoVertex;
 #endif
 
@@ -158,15 +163,13 @@ typedef struct MoMeshCreateInfo {
     uint32_t        indexCount;
     const MoVertex* pVertices;
     uint32_t        vertexCount;
-    VkBool32        discardNormals;
-    VkBool32        indicesCountFromOne;
 } MoMeshCreateInfo;
 
 typedef struct MoMaterialCreateInfo {
-    MoFloat3       colorAmbient;
-    MoFloat3       colorDiffuse;
-    MoFloat3       colorSpecular;
-    MoFloat3       colorEmissive;
+    MoFloat4       colorAmbient;
+    MoFloat4       colorDiffuse;
+    MoFloat4       colorSpecular;
+    MoFloat4       colorEmissive;
     // VK_FORMAT_R8G8B8A8_UNORM
     const uint8_t* pTextureAmbient;
     VkExtent2D     textureAmbientExtent;
@@ -187,6 +190,17 @@ typedef struct MoPipelineCreateInfo {
     const uint32_t* pFragmentShader;
     uint32_t        fragmentShaderSize;
 } MoPipelineCreateInfo;
+
+typedef struct MoPushConstant {
+    MoFloat4x4 model;
+    MoFloat4x4 view;
+    MoFloat4x4 projection;
+} MoPushConstant;
+
+typedef struct MoUniform {
+    alignas(16) MoFloat3 camera;
+    alignas(16) MoFloat3 light;
+} MoUniform;
 
 // you can create a VkInstance using moCreateInstance(MoInstanceCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing instance
@@ -241,10 +255,10 @@ void moDestroyMaterial(MoMaterial material);
 void moNewFrame(uint32_t frameIndex);
 
 // set view's projection and view matrices, and the mesh's model matrix (as a push constant)
-void moSetPMV(const MoFloat4x4& projection, const MoFloat4x4& model, const MoFloat4x4& view);
+void moSetPMV(const MoPushConstant* pProjectionModelView);
 
 // set the camera's position and light position (as a UBO)
-void moSetLight(const MoFloat3& light, const MoFloat3& camera);
+void moSetLight(const MoUniform* pLightAndCamera);
 
 // bind a material
 void moBindMaterial(MoMaterial material);
