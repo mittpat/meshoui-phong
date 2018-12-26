@@ -7,25 +7,27 @@ if(NOT MSVC)
 endif()
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG")
 add_definitions(-DNV_DDS_NO_GL_SUPPORT)
-add_definitions(-DMESHOUI_USE_IMGUI)
+
+find_package(Vulkan REQUIRED)
 
 include_directories(3rdparty/glfw/include)
+include_directories(3rdparty/lodepng)
+include_directories(3rdparty/nv_dds)
 
 add_subdirectory(3rdparty)
 
-include(CMake/modules/3p_glslang.cmake)
 include(CMake/modules/3p_linalg.cmake)
 include(CMake/modules/3p_pugixml.cmake)
-include(CMake/modules/3p_qu3e.cmake)
-
-add_subdirectory(common)
-add_subdirectory(meshoui)
-
-include_directories(common)
-include_directories(meshoui)
 
 use_linalg()
-use_qu3e()
+use_pugixml()
 
-add_executable(meshouiview main.cpp assets.h assets.cpp manipulators.h)
-target_link_libraries(meshouiview meshouilib qu3e)
+add_executable(meshouiview
+    collada.cpp    main.cpp
+    collada.h      phong.cpp
+                   phong.h)
+
+target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds)
+if(NOT MSVC)
+    target_link_libraries(meshouiview stdc++fs)
+endif()

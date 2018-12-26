@@ -8,25 +8,6 @@ set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target")
 set(GLFW_VULKAN_STATIC OFF CACHE BOOL "Use the Vulkan loader statically linked into application")
 add_subdirectory(glfw)
 
-# glslang
-set(ENABLE_HLSL OFF CACHE BOOL "Enables HLSL input support")
-add_subdirectory(glslang)
-
-# imgui
-find_package(Vulkan REQUIRED)
-include_directories(${Vulkan_INCLUDE_DIR} imgui)
-add_definitions(-DIMGUI_IMPL_API=)
-add_library(imgui
-    imgui/imconfig.h      imgui/imgui.h           imgui/examples/imgui_impl_glfw.cpp   imgui/imstb_textedit.h
-    imgui/imgui.cpp       imgui/imgui_internal.h  imgui/examples/imgui_impl_glfw.h     imgui/imstb_truetype.h
-    imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/examples/imgui_impl_vulkan.cpp
-    imgui/imgui_draw.cpp  imgui/imstb_rectpack.h  imgui/examples/imgui_impl_vulkan.h)
-target_link_libraries(imgui)
-install(TARGETS imgui
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)
-
 # linalg
 add_custom_target(linalg SOURCES linalg/linalg.h)
 
@@ -53,11 +34,3 @@ install(TARGETS pugixml
                 RUNTIME DESTINATION bin COMPONENT libraries
                 LIBRARY DESTINATION lib COMPONENT libraries
                 ARCHIVE DESTINATION lib/static COMPONENT libraries)
-
-# qu3e
-project("qu3e")
-set(qu3e_version 1.1)
-option(qu3e_build_shared "Build qu3e shared libraries" OFF)
-option(qu3e_build_static "Build qu3e static libraries" ON)
-option(qu3e_build_demo "Build qu3e demo" OFF)
-add_subdirectory(qu3e/src)
