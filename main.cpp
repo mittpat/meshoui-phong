@@ -68,13 +68,13 @@ static MoUInt3x3 cube_triangles[] = { { { 2, 3, 1 },{ 1, 2, 3 },{ 1,1,1 } },
                                       { { 4, 2, 6 },{ 1, 4, 2 },{ 1,1,1 } } };
 static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f,-1.0f, 0.0f, 0.0f },
-                                { 0.0f, 0.0f, 0.5f, 0.0f },
-                                { 0.0f, 0.0f, 0.5f, 1.0f } };
-static float4x4 linalg_proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(100.f), 1920 / 1080.f, 0.1f, 1000.f));
-static float4x4 linalg_camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 5.0f });
-static float4x4 linalg_view_matrix = inverse(linalg_camera_matrix);
-static float4x4 linalg_model_matrix = identity;
-static float3   linalg_light_position = { 500.0f, 1000.0f, 500.0f };
+                                { 0.0f, 0.0f, 1.0f, 0.0f },
+                                { 0.0f, 0.0f, 0.0f, 1.0f } };
+static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 1920 / 1080.f, 0.1f, 1000.f, pos_z, zero_to_one));
+static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 5.0f });
+static float4x4 view_matrix = inverse(camera_matrix);
+static float4x4 model_matrix = identity;
+static float3   light_position = { 500.0f, 1000.0f, 500.0f };
 
 int main(int, char**)
 {
@@ -118,6 +118,8 @@ int main(int, char**)
             glfwPostEmptyEvent();
             glfwWaitEvents();
         }
+
+        proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
         {
             VkFormat requestFormats[4] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
@@ -234,17 +236,17 @@ int main(int, char**)
         moNewFrame(frameIndex);
         moBindMaterial(material);
         {
-            linalg_model_matrix = mul(linalg_model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f,1.0f,0.0f}, 0.01f)));
+            model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f,1.0f,0.0f}, 0.01f)));
 
             static MoPushConstant pmv = {};
-            (float4x4&)pmv.projection = linalg_proj_matrix;
-            (float4x4&)pmv.model = linalg_model_matrix;
-            (float4x4&)pmv.view = linalg_view_matrix;
+            (float4x4&)pmv.projection = proj_matrix;
+            (float4x4&)pmv.model = model_matrix;
+            (float4x4&)pmv.view = view_matrix;
             moSetPMV(&pmv);
 
             static MoUniform uni = {};
-            (float3&)uni.light = linalg_light_position;
-            (float3&)uni.camera = linalg_camera_matrix.w.xyz();
+            (float3&)uni.light = light_position;
+            (float3&)uni.camera = camera_matrix.w.xyz();
             moSetLight(&uni);
         }
         moDrawMesh(cube);
@@ -260,6 +262,8 @@ int main(int, char**)
                 glfwPostEmptyEvent();
                 glfwWaitEvents();
             }
+
+            proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
             MoSwapChainRecreateInfo recreateInfo = {};
             recreateInfo.surface = surface;
