@@ -2,16 +2,11 @@
 
 #include <vulkan/vulkan.h>
 
-typedef struct MoDevice_T* MoDevice;
-typedef struct MoSwapChain_T* MoSwapChain;
-typedef struct MoMesh_T* MoMesh;
-typedef struct MoMaterial_T* MoMaterial;
-typedef struct MoPipeline_T* MoPipeline;
-typedef struct MoDeviceBuffer_T* MoDeviceBuffer;
-typedef struct MoImageBuffer_T* MoImageBuffer;
+#define MO_FRAME_COUNT 2
+#define MO_PROGRAM_DESC_LAYOUT 0
+#define MO_MATERIAL_DESC_LAYOUT 1
 
-typedef struct MoInstanceCreateInfo
-{
+typedef struct MoInstanceCreateInfo {
     const char* const*           pExtensions;
     uint32_t                     extensionsCount;
     VkBool32                     debugReport;
@@ -20,8 +15,7 @@ typedef struct MoInstanceCreateInfo
     void                       (*pCheckVkResultFn)(VkResult err);
 } MoInstanceCreateInfo;
 
-typedef struct MoDeviceCreateInfo
-{
+typedef struct MoDeviceCreateInfo {
     VkInstance          instance;
     VkSurfaceKHR        surface;
     const VkFormat*     pRequestFormats;
@@ -31,8 +25,29 @@ typedef struct MoDeviceCreateInfo
     void              (*pCheckVkResultFn)(VkResult err);
 } MoDeviceCreateInfo;
 
-typedef struct MoSwapChainCreateInfo
-{
+typedef struct MoDeviceBuffer_T {
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    VkDeviceSize size;
+}* MoDeviceBuffer;
+
+typedef struct MoImageBuffer_T {
+    VkImage image;
+    VkDeviceMemory memory;
+    VkImageView view;
+}* MoImageBuffer;
+
+typedef struct MoDevice_T {
+    VkPhysicalDevice physicalDevice;
+    VkDevice         device;
+    uint32_t         queueFamily;
+    VkQueue          queue;
+    VkDescriptorPool descriptorPool;
+    VkDeviceSize     memoryAlignment;
+    void           (*pCheckVkResultFn)(VkResult err);
+}* MoDevice;
+
+typedef struct MoSwapChainCreateInfo {
     MoDevice                     device;
     VkSurfaceKHR                 surface;
     VkSurfaceFormatKHR           surfaceFormat;
@@ -42,23 +57,20 @@ typedef struct MoSwapChainCreateInfo
     void                       (*pCheckVkResultFn)(VkResult err);
 } MoSwapChainCreateInfo;
 
-typedef struct MoSwapChainRecreateInfo
-{
+typedef struct MoSwapChainRecreateInfo {
     VkSurfaceKHR       surface;
     VkSurfaceFormatKHR surfaceFormat;
     VkExtent2D         extent;
     VkBool32           vsync;
 } MoSwapChainRecreateInfo;
 
-typedef struct MoSwapBuffer
-{
+typedef struct MoSwapBuffer {
     VkImage       back;
     VkImageView   view;
     VkFramebuffer front;
 } MoSwapBuffer;
 
-typedef struct MoCommandBuffer
-{
+typedef struct MoCommandBuffer {
     VkCommandPool   pool;
     VkCommandBuffer buffer;
     VkFence         fence;
@@ -66,9 +78,49 @@ typedef struct MoCommandBuffer
     VkSemaphore     complete;
 } MoCommandBuffer;
 
-// version using only Vulkan API objects
+typedef struct MoSwapChain_T {
+    MoSwapBuffer    images[MO_FRAME_COUNT];
+    MoCommandBuffer frames[MO_FRAME_COUNT];
+    MoImageBuffer   depthBuffer;
+    VkSwapchainKHR  swapChainKHR;
+    VkRenderPass    renderPass;
+    VkExtent2D      extent;
+}* MoSwapChain;
+
+typedef struct MoMesh_T {
+    MoDeviceBuffer vertexBuffer;
+    MoDeviceBuffer indexBuffer;
+    uint32_t indexBufferSize;
+}* MoMesh;
+
+typedef struct MoMaterial_T {
+    VkSampler ambientSampler;
+    VkSampler diffuseSampler;
+    VkSampler normalSampler;
+    VkSampler specularSampler;
+    VkSampler emissiveSampler;
+    // this descriptor set uses only immutable samplers, one set per swapchain
+    VkDescriptorSet descriptorSet;
+    MoImageBuffer ambientImage;
+    MoImageBuffer diffuseImage;
+    MoImageBuffer normalImage;
+    MoImageBuffer specularImage;
+    MoImageBuffer emissiveImage;
+}* MoMaterial;
+
+typedef struct MoPipeline_T {
+    VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
+    // the buffers bound to this descriptor set may change frame to frame, one set per frame
+    VkDescriptorSetLayout descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT+1];
+    VkDescriptorSet descriptorSet[MO_FRAME_COUNT];
+    MoDeviceBuffer uniformBuffer[MO_FRAME_COUNT];
+}* MoPipeline;
+
 // you must call moInit(MoInitInfo) before creating a mesh or material, typically when starting your application
 // call moShutdown() when closing your application
+// initialization uses only Vulkan API objects, it is therefore easy to integrate without calling moCreateInstance,
+// moCreateDevice and moCreateSwapChain
 typedef struct MoInitInfo {
     VkInstance                   instance;
     VkPhysicalDevice             physicalDevice;
@@ -89,20 +141,8 @@ typedef struct MoInitInfo {
     void                         (*pCheckVkResultFn)(VkResult err);
 } MoInitInfo;
 
-// version using mixed Mo objects and Vulkan API objects
-// you must call moInit(MoInitInfo2) before creating a mesh or material, typically when starting your application
-// use moCreateDevice(MoDeviceCreateInfo) and moCreateSwapChain(MoSwapChainCreateInfo) to create device and swapchain
-// call moShutdown() when closing your application
-typedef struct MoInitInfo2 {
-    VkInstance                   instance;
-    MoDevice                     device;
-    MoSwapChain                  swapChain;
-    VkPipelineCache              pipelineCache;
-    const VkAllocationCallbacks* pAllocator;
-} MoInitInfo2;
-
 // vector types, can be declared as your own so long as memory alignment is respected
-#ifndef MOSKIPVECTYPES
+#ifndef MO_SKIP_VEC_TYPES
 typedef struct MoUInt3 {
     uint32_t x;
     uint32_t y;
@@ -148,7 +188,7 @@ typedef struct MoFloat4x4 {
 #endif
 
 // vertex type, can be declared as your own so long as memory alignment is respected
-#ifndef MOSKIPVERTEXTYPE
+#ifndef MO_SKIP_VERTEX_TYPE
 typedef struct MoVertex {
     MoFloat3 position;
     MoFloat2 texcoord;
@@ -228,7 +268,6 @@ void moDestroySwapChain(MoDevice device, MoSwapChain pSwapChain);
 
 // set global handles and create default phong pipeline
 void moInit(MoInitInfo* pInfo);
-void moInit(MoInitInfo2* pInfo);
 
 // free default phong pipeline and clear global handles
 void moShutdown();
@@ -265,6 +304,12 @@ void moBindMaterial(MoMaterial material);
 
 // draw a mesh
 void moDrawMesh(MoMesh mesh);
+
+// create a demo mesh
+void moDemoCube(MoMesh* pMesh);
+
+// create a demo material
+void moDemoMaterial(MoMaterial* pMaterial);
 
 /*
 ------------------------------------------------------------------------------

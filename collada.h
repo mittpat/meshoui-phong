@@ -7,15 +7,15 @@ namespace pugi { class xml_node; }
 
 namespace DAE
 {
-#ifndef COLLADASKIPVECTYPES
+#ifndef COLLADA_SKIP_VEC_TYPES
     struct uint3 final { unsigned x,y,z; };
     struct float2 final { float x,y; };
     struct float3 final { float x,y,z; };
     struct float4 final { float x,y,z,w; };
     struct float4x4 final { float4 x,y,z,w; };
 #endif
-#ifndef COLLADAIDENTITYMAT
-#define COLLADAIDENTITYMAT
+#ifndef COLLADA_IDENTITY_MAT
+#define COLLADA_IDENTITY_MAT
     const float4x4 identity = {{1.f,0.f,0.f,0.f},
                                {0.f,1.f,0.f,0.f},
                                {0.f,0.f,1.f,0.f},

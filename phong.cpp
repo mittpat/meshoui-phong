@@ -358,10 +358,6 @@ static uint32_t glsl_shader_frag_spv[] =
     0x0000002c,0x00000096,0x000200f9,0x0000006f,0x000200f8,0x0000006f,0x000100fd,0x00010038
 };
 
-#define FrameCount 2
-#define MESHOUI_PROGRAM_DESC_LAYOUT 0
-#define MESHOUI_MATERIAL_DESC_LAYOUT 1
-
 static VkDebugReportCallbackEXT     g_DebugReport   = VK_NULL_HANDLE;
 static MoDevice                     g_Device        = VK_NULL_HANDLE;
 static MoSwapChain                  g_SwapChain     = VK_NULL_HANDLE;
@@ -379,41 +375,6 @@ static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { 
 static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
 static constexpr MoFloat3       cross(const MoFloat3 & a, const MoFloat3 & b) { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
 static           MoFloat3   normalize(const MoFloat3 & a)                     { return a * (1.0f / std::sqrt(dot(a, a))); }
-
-typedef struct MoDeviceBuffer_T
-{
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-    VkDeviceSize size;
-} MoDeviceBuffer_T;
-
-typedef struct MoImageBuffer_T
-{
-    VkImage image;
-    VkDeviceMemory memory;
-    VkImageView view;
-} MoImageBuffer_T;
-
-struct MoDevice_T
-{
-    VkPhysicalDevice physicalDevice;
-    VkDevice         device;
-    uint32_t         queueFamily;
-    VkQueue          queue;
-    VkDescriptorPool descriptorPool;
-    VkDeviceSize     memoryAlignment;
-    void           (*pCheckVkResultFn)(VkResult err);
-};
-
-struct MoSwapChain_T
-{
-    MoSwapBuffer    images[FrameCount];
-    MoCommandBuffer frames[FrameCount];
-    MoImageBuffer   depthBuffer;
-    VkSwapchainKHR  swapChainKHR;
-    VkRenderPass    renderPass;
-    VkExtent2D      extent;
-};
 
 static uint32_t memoryType(VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits)
 {
@@ -648,39 +609,6 @@ static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture,
 
     deleteBuffer(g_Device, upload);
 }
-
-struct MoMesh_T
-{
-    MoDeviceBuffer vertexBuffer;
-    MoDeviceBuffer indexBuffer;
-    uint32_t indexBufferSize;
-};
-
-struct MoMaterial_T
-{
-    VkSampler ambientSampler;
-    VkSampler diffuseSampler;
-    VkSampler normalSampler;
-    VkSampler specularSampler;
-    VkSampler emissiveSampler;
-    // this descriptor set uses only immutable samplers, one set per swapchain
-    VkDescriptorSet descriptorSet;
-    MoImageBuffer ambientImage;
-    MoImageBuffer diffuseImage;
-    MoImageBuffer normalImage;
-    MoImageBuffer specularImage;
-    MoImageBuffer emissiveImage;
-};
-
-struct MoPipeline_T
-{
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
-    // the buffers bound to this descriptor set may change frame to frame, one set per frame
-    VkDescriptorSetLayout descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT+1];
-    VkDescriptorSet descriptorSet[FrameCount];
-    MoDeviceBuffer uniformBuffer[FrameCount];
-};
 
 void moCreateInstance(MoInstanceCreateInfo *pCreateInfo, VkInstance *pInstance)
 {
@@ -926,7 +854,7 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
         VkSwapchainCreateInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = pCreateInfo->surface;
-        info.minImageCount = FrameCount;
+        info.minImageCount = MO_FRAME_COUNT;
         info.imageFormat = pCreateInfo->surfaceFormat.format;
         info.imageColorSpace = pCreateInfo->surfaceFormat.colorSpace;
         info.imageArrayLayers = 1;
@@ -958,7 +886,7 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
         uint32_t backBufferCount = 0;
         err = vkGetSwapchainImagesKHR(pCreateInfo->device->device, swapChain->swapChainKHR, &backBufferCount, NULL);
         pCreateInfo->pCheckVkResultFn(err);
-        VkImage backBuffer[FrameCount] = {};
+        VkImage backBuffer[MO_FRAME_COUNT] = {};
         err = vkGetSwapchainImagesKHR(pCreateInfo->device->device, swapChain->swapChainKHR, &backBufferCount, backBuffer);
         pCreateInfo->pCheckVkResultFn(err);
 
@@ -1071,7 +999,7 @@ void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapC
         VkSwapchainCreateInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = pCreateInfo->surface;
-        info.minImageCount = FrameCount;
+        info.minImageCount = MO_FRAME_COUNT;
         info.imageFormat = pCreateInfo->surfaceFormat.format;
         info.imageColorSpace = pCreateInfo->surfaceFormat.colorSpace;
         info.imageArrayLayers = 1;
@@ -1103,7 +1031,7 @@ void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapC
         uint32_t backBufferCount = 0;
         err = vkGetSwapchainImagesKHR(g_Device->device, swapChain->swapChainKHR, &backBufferCount, NULL);
         g_Device->pCheckVkResultFn(err);
-        VkImage backBuffer[FrameCount] = {};
+        VkImage backBuffer[MO_FRAME_COUNT] = {};
         err = vkGetSwapchainImagesKHR(g_Device->device, swapChain->swapChainKHR, &backBufferCount, backBuffer);
         g_Device->pCheckVkResultFn(err);
 
@@ -1351,34 +1279,10 @@ void moInit(MoInitInfo *pInfo)
     moCreatePipeline(&pipelineCreateInfo, &g_Pipeline);
 }
 
-void moInit(MoInitInfo2 *pInfo)
-{
-    MoInitInfo initInfo = {};
-    initInfo.instance = pInfo->instance;
-    initInfo.physicalDevice = pInfo->device->physicalDevice;
-    initInfo.device = pInfo->device->device;
-    initInfo.queueFamily = pInfo->device->queueFamily;
-    initInfo.queue = pInfo->device->queue;
-    initInfo.pipelineCache = pInfo->pipelineCache;
-    initInfo.descriptorPool = pInfo->device->descriptorPool;
-    initInfo.pSwapChainSwapBuffers = pInfo->swapChain->images;
-    initInfo.swapChainSwapBufferCount = (uint32_t)countof(pInfo->swapChain->images);
-    initInfo.pSwapChainCommandBuffers = pInfo->swapChain->frames;
-    initInfo.swapChainCommandBufferCount = (uint32_t)countof(pInfo->swapChain->frames);
-    initInfo.depthBuffer = pInfo->swapChain->depthBuffer;
-    initInfo.swapChainKHR = pInfo->swapChain->swapChainKHR;
-    initInfo.renderPass = pInfo->swapChain->renderPass;
-    initInfo.extent = pInfo->swapChain->extent;
-    initInfo.pAllocator = pInfo->pAllocator;
-    initInfo.pCheckVkResultFn = pInfo->device->pCheckVkResultFn;
-    moInit(&initInfo);
-}
-
 void moShutdown()
 {
     moDestroyPipeline(g_Pipeline);
     g_Pipeline = VK_NULL_HANDLE;
-
     g_Instance = VK_NULL_HANDLE;
     g_Device->physicalDevice = VK_NULL_HANDLE;
     g_Device->device = VK_NULL_HANDLE;
@@ -1394,6 +1298,8 @@ void moShutdown()
     g_Device->descriptorPool = VK_NULL_HANDLE;
     delete g_Device;
     delete g_SwapChain;
+    g_Device = VK_NULL_HANDLE;
+    g_SwapChain = VK_NULL_HANDLE;
     g_Allocator = VK_NULL_HANDLE;
 }
 
@@ -1436,7 +1342,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = (uint32_t)countof(binding);
         info.pBindings = binding;
-        err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT]);
+        err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT]);
         g_Device->pCheckVkResultFn(err);
     }
 
@@ -1454,24 +1360,24 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         info.bindingCount = (uint32_t)countof(binding);
         info.pBindings = binding;
-        err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT]);
+        err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT]);
         g_Device->pCheckVkResultFn(err);
     }
 
     {
-        VkDescriptorSetLayout descriptorSetLayout[FrameCount] = {};
-        for (size_t i = 0; i < FrameCount; ++i)
-            descriptorSetLayout[i] = pipeline->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT];
+        VkDescriptorSetLayout descriptorSetLayout[MO_FRAME_COUNT] = {};
+        for (size_t i = 0; i < MO_FRAME_COUNT; ++i)
+            descriptorSetLayout[i] = pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT];
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         alloc_info.descriptorPool = g_Device->descriptorPool;
-        alloc_info.descriptorSetCount = FrameCount;
+        alloc_info.descriptorSetCount = MO_FRAME_COUNT;
         alloc_info.pSetLayouts = descriptorSetLayout;
         err = vkAllocateDescriptorSets(g_Device->device, &alloc_info, pipeline->descriptorSet);
         g_Device->pCheckVkResultFn(err);
     }
 
-    for (size_t i = 0; i < FrameCount; ++i)
+    for (size_t i = 0; i < MO_FRAME_COUNT; ++i)
     {
         createBuffer(g_Device, &pipeline->uniformBuffer[i], sizeof(MoUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
@@ -1608,13 +1514,13 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
 void moDestroyPipeline(MoPipeline pipeline)
 {
     vkQueueWaitIdle(g_Device->queue);
-    for (size_t i = 0; i < FrameCount; ++i) { deleteBuffer(g_Device, pipeline->uniformBuffer[i]); }
-    vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT], g_Allocator);
-    vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT], g_Allocator);
+    for (size_t i = 0; i < MO_FRAME_COUNT; ++i) { deleteBuffer(g_Device, pipeline->uniformBuffer[i]); }
+    vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT], g_Allocator);
+    vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT], g_Allocator);
     vkDestroyPipelineLayout(g_Device->device, pipeline->pipelineLayout, g_Allocator);
     vkDestroyPipeline(g_Device->device, pipeline->pipeline, g_Allocator);
-    pipeline->descriptorSetLayout[MESHOUI_PROGRAM_DESC_LAYOUT] = VK_NULL_HANDLE;
-    pipeline->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
+    pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT] = VK_NULL_HANDLE;
+    pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
     pipeline->pipelineLayout = VK_NULL_HANDLE;
     pipeline->pipeline = VK_NULL_HANDLE;
     memset(&pipeline->uniformBuffer, 0, sizeof(pipeline->uniformBuffer));
@@ -1689,7 +1595,7 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
         if (pCreateInfo->setLayout != VK_NULL_HANDLE)
             alloc_info.pSetLayouts = &pCreateInfo->setLayout;
         else
-            alloc_info.pSetLayouts = &g_Pipeline->descriptorSetLayout[MESHOUI_MATERIAL_DESC_LAYOUT];
+            alloc_info.pSetLayouts = &g_Pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT];
         err = vkAllocateDescriptorSets(g_Device->device, &alloc_info, &material->descriptorSet);
         g_Device->pCheckVkResultFn(err);
     }
@@ -1774,6 +1680,103 @@ void moBindMaterial(MoMaterial material)
 {
     auto & frame = g_SwapChain->frames[g_FrameIndex];
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 1, 1, &material->descriptorSet, 0, nullptr);
+}
+
+void moDemoCube(MoMesh *pMesh)
+{
+    static MoFloat3 cube_positions[] = { { -1.0f, -1.0f, -1.0f },
+                                         { -1.0f, -1.0f,  1.0f },
+                                         { -1.0f,  1.0f, -1.0f },
+                                         { -1.0f,  1.0f,  1.0f },
+                                         { 1.0f, -1.0f, -1.0f },
+                                         { 1.0f, -1.0f,  1.0f },
+                                         { 1.0f,  1.0f, -1.0f },
+                                         { 1.0f,  1.0f,  1.0f } };
+    static MoFloat2 cube_texcoords[] = { { 1.0f, 0.0f },
+                                         { 0.0f, 1.0f },
+                                         { 0.0f, 0.0f },
+                                         { 1.0f, 1.0f } };
+    static MoFloat3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
+    static MoUInt3x3 cube_triangles[] = { { { 2, 3, 1 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 4, 7, 3 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 8, 5, 7 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 6, 1, 5 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 7, 1, 3 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 4, 6, 8 },{ 1, 2, 3 },{ 1,1,1 } },
+                                          { { 2, 4, 3 },{ 1, 4, 2 },{ 1,1,1 } },
+                                          { { 4, 8, 7 },{ 1, 4, 2 },{ 1,1,1 } },
+                                          { { 8, 6, 5 },{ 1, 4, 2 },{ 1,1,1 } },
+                                          { { 6, 2, 1 },{ 1, 4, 2 },{ 1,1,1 } },
+                                          { { 7, 5, 1 },{ 1, 4, 2 },{ 1,1,1 } },
+                                          { { 4, 2, 6 },{ 1, 4, 2 },{ 1,1,1 } } };
+
+    std::vector<uint32_t> indices;
+    std::vector<MoVertex> vertices;
+#define INDICES_COUNT_FROM_ONE
+#ifdef INDICES_COUNT_FROM_ONE
+    for (const auto & triangle : cube_triangles)
+    {
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+    }
+    for (uint32_t & index : indices) { --index; }
+#else
+    for (const auto & triangle : cube_triangles)
+    {
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x], cube_texcoords[triangle.y.x], cube_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y], cube_texcoords[triangle.y.y], cube_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z], cube_texcoords[triangle.y.z], cube_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+    }
+#endif
+    for (uint32_t index = 0; index < indices.size(); index+=3)
+    {
+        MoVertex &v1 = vertices[indices[index+0]];
+        MoVertex &v2 = vertices[indices[index+1]];
+        MoVertex &v3 = vertices[indices[index+2]];
+
+        //discardNormals
+        const MoFloat3 edge1 = v2.position - v1.position;
+        const MoFloat3 edge2 = v3.position - v1.position;
+        v1.normal = v2.normal = v3.normal = normalize(cross(edge1, edge2));
+
+#define GENERATE_TANGENTS
+#ifdef GENERATE_TANGENTS
+        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
+        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
+        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (f != 0.f)
+        {
+            f = 1.0f / f;
+
+            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
+            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
+        }
+#endif
+    }
+
+    MoMeshCreateInfo meshInfo = {};
+    meshInfo.indexCount = (uint32_t)indices.size();
+    meshInfo.pIndices = indices.data();
+    meshInfo.vertexCount = (uint32_t)vertices.size();
+    meshInfo.pVertices = vertices.data();
+    moCreateMesh(&meshInfo, pMesh);
+}
+
+void moDemoMaterial(MoMaterial *pMaterial)
+{
+    MoMaterialCreateInfo materialInfo = {};
+    materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
+    materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
+    materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
+    materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
+    moCreateMaterial(&materialInfo, pMaterial);
 }
 
 /*

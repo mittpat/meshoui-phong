@@ -41,31 +41,6 @@ static constexpr float degreesToRadians(float angle)
 using namespace linalg;
 using namespace linalg::aliases;
 
-static MoFloat3 cube_positions[] = { { -1.0f, -1.0f, -1.0f },
-                                     { -1.0f, -1.0f,  1.0f },
-                                     { -1.0f,  1.0f, -1.0f },
-                                     { -1.0f,  1.0f,  1.0f },
-                                     { 1.0f, -1.0f, -1.0f },
-                                     { 1.0f, -1.0f,  1.0f },
-                                     { 1.0f,  1.0f, -1.0f },
-                                     { 1.0f,  1.0f,  1.0f } };
-static MoFloat2 cube_texcoords[] = { { 1, 0 },
-                                     { 0, 1 },
-                                     { 0, 0 },
-                                     { 1, 1 } };
-static MoFloat3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
-static MoUInt3x3 cube_triangles[] = { { { 2, 3, 1 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 4, 7, 3 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 8, 5, 7 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 6, 1, 5 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 7, 1, 3 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 4, 6, 8 },{ 1, 2, 3 },{ 1,1,1 } },
-                                      { { 2, 4, 3 },{ 1, 4, 2 },{ 1,1,1 } },
-                                      { { 4, 8, 7 },{ 1, 4, 2 },{ 1,1,1 } },
-                                      { { 8, 6, 5 },{ 1, 4, 2 },{ 1,1,1 } },
-                                      { { 6, 2, 1 },{ 1, 4, 2 },{ 1,1,1 } },
-                                      { { 7, 5, 1 },{ 1, 4, 2 },{ 1,1,1 } },
-                                      { { 4, 2, 6 },{ 1, 4, 2 },{ 1,1,1 } } };
 static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f,-1.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 1.0f, 0.0f },
@@ -85,6 +60,7 @@ int main(int, char**)
     VkSurfaceKHR                 surface = VK_NULL_HANDLE;
     VkSurfaceFormatKHR           surfaceFormat = {};
     uint32_t                     frameIndex = 0;
+    VkPipelineCache              pipelineCache = VK_NULL_HANDLE;
     const VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 
     // Initialization
@@ -95,6 +71,7 @@ int main(int, char**)
         window = glfwCreateWindow(1920 / 2, 1080 / 2, "Graphics Previewer", nullptr, nullptr);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
 
+        // Create Vulkan instance
         {
             MoInstanceCreateInfo createInfo = {};
             createInfo.pExtensions = glfwGetRequiredInstanceExtensions(&createInfo.extensionsCount);
@@ -121,6 +98,7 @@ int main(int, char**)
 
         proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
+        // Create device
         {
             VkFormat requestFormats[4] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
             MoDeviceCreateInfo createInfo = {};
@@ -149,81 +127,33 @@ int main(int, char**)
     }
 
     // Meshoui initialization
-    uint32_t indicesCount = 0;
-    MoMesh cube;
-    MoMaterial material;
     {
-        MoInitInfo2 initInfo = {};
+        MoInitInfo initInfo = {};
         initInfo.instance = instance;
-        initInfo.device = device;
-        initInfo.swapChain = swapChain;
+        initInfo.physicalDevice = device->physicalDevice;
+        initInfo.device = device->device;
+        initInfo.queueFamily = device->queueFamily;
+        initInfo.queue = device->queue;
+        initInfo.pipelineCache = pipelineCache;
+        initInfo.descriptorPool = device->descriptorPool;
+        initInfo.pSwapChainSwapBuffers = swapChain->images;
+        initInfo.swapChainSwapBufferCount = MO_FRAME_COUNT;
+        initInfo.pSwapChainCommandBuffers = swapChain->frames;
+        initInfo.swapChainCommandBufferCount = MO_FRAME_COUNT;
+        initInfo.depthBuffer = swapChain->depthBuffer;
+        initInfo.swapChainKHR = swapChain->swapChainKHR;
+        initInfo.renderPass = swapChain->renderPass;
+        initInfo.extent = swapChain->extent;
+        initInfo.pAllocator = allocator;
+        initInfo.pCheckVkResultFn = device->pCheckVkResultFn;
         moInit(&initInfo);
-
-        std::vector<uint32_t> indices;
-        std::vector<MoVertex> vertices;
-#define INDICESCOUNTFROMONE
-#ifdef INDICESCOUNTFROMONE
-        for (const auto & triangle : cube_triangles)
-        {
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-        }
-        for (uint32_t & index : indices) { --index; }
-#else
-        for (const auto & triangle : cube_triangles)
-        {
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x], cube_texcoords[triangle.y.x], cube_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y], cube_texcoords[triangle.y.y], cube_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-            vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z], cube_texcoords[triangle.y.z], cube_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        }
-#endif
-        for (uint32_t index = 0; index < indices.size(); index+=3)
-        {
-            MoVertex &v1 = vertices[indices[index+0]];
-            MoVertex &v2 = vertices[indices[index+1]];
-            MoVertex &v3 = vertices[indices[index+2]];
-
-            //discardNormals
-            const float3 edge1 = (float3&)v2.position - (float3&)v1.position;
-            const float3 edge2 = (float3&)v3.position - (float3&)v1.position;
-            (float3&)v1.normal = (float3&)v2.normal = (float3&)v3.normal = normalize(cross(edge1, edge2));
-
-#define GENERATETANGENTS
-#ifdef GENERATETANGENTS
-            const float2 deltaUV1 = (float2&)v2.texcoord - (float2&)v1.texcoord;
-            const float2 deltaUV2 = (float2&)v3.texcoord - (float2&)v1.texcoord;
-            float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-            if (f != 0.f)
-            {
-                f = 1.0f / f;
-
-                v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-                v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-                v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-                (float3&)v1.tangent = (float3&)v2.tangent = (float3&)v3.tangent = normalize((float3&)v1.tangent);
-                v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-                v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-                v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-                (float3&)v1.bitangent = (float3&)v2.bitangent = (float3&)v3.bitangent = normalize((float3&)v1.bitangent);
-            }
-#endif
-        }
-
-        MoMeshCreateInfo meshInfo = {};
-        meshInfo.indexCount = indicesCount = (uint32_t)indices.size();
-        meshInfo.pIndices = indices.data();
-        meshInfo.vertexCount = (uint32_t)vertices.size();
-        meshInfo.pVertices = vertices.data();
-        moCreateMesh(&meshInfo, &cube);
-
-        MoMaterialCreateInfo materialInfo = {};
-        materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
-        materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
-        materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
-        materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
-        moCreateMaterial(&materialInfo, &material);
     }
+
+    // Demo
+    MoMesh cube;
+    moDemoCube(&cube);
+    MoMaterial material;
+    moDemoMaterial(&material);
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -236,7 +166,7 @@ int main(int, char**)
         moNewFrame(frameIndex);
         moBindMaterial(material);
         {
-            model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f,1.0f,0.0f}, 0.01f)));
+            model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f, 1.0f, 0.0f}, 0.01f)));
 
             MoPushConstant pmv = {};
             (float4x4&)pmv.projection = proj_matrix;
@@ -277,22 +207,18 @@ int main(int, char**)
     }
 
     // Meshoui cleanup
-    {
-        moDestroyMaterial(material);
-        moDestroyMesh(cube);
-    }
+    moDestroyMaterial(material);
+    moDestroyMesh(cube);
 
     // Cleanup
-    {
-        moShutdown();
-        moDestroySwapChain(device, swapChain);
-        vkDestroySurfaceKHR(instance, surface, allocator);
-        moDestroyDevice(device);
-        moDestroyInstance(instance);
+    moShutdown();
+    moDestroySwapChain(device, swapChain);
+    vkDestroySurfaceKHR(instance, surface, allocator);
+    moDestroyDevice(device);
+    moDestroyInstance(instance);
 
-        glfwDestroyWindow(window);
-        glfwTerminate();
-    }
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     return 0;
 }
