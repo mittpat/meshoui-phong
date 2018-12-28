@@ -552,10 +552,9 @@ static void deleteBuffer(MoDevice device, MoImageBuffer imageBuffer)
 static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture, const VkExtent2D & textureExtent, MoFloat4 fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
 {
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-    unsigned width = 0, height = 0;
+    unsigned width = textureExtent.width, height = textureExtent.height;
     std::vector<uint8_t> data;
     const uint8_t* dataPtr = texture;
-    VkDeviceSize size = textureExtent.width * textureExtent.height * 4;
     if (dataPtr == nullptr)
     {
         // use fallback
@@ -566,8 +565,8 @@ static void generateTexture(MoImageBuffer *pImageBuffer, const uint8_t* texture,
         data[2] = (uint8_t)(fallbackColor.z * 0xFF);
         data[3] = (uint8_t)(fallbackColor.w * 0xFF);
         dataPtr = data.data();
-        size = data.size();
     }
+    VkDeviceSize size = width * height * 4;
 
     VkResult err;
 
@@ -1682,6 +1681,17 @@ void moBindMaterial(MoMaterial material)
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 1, 1, &material->descriptorSet, 0, nullptr);
 }
 
+void moDefaultMaterial(MoMaterial *pMaterial)
+{
+    MoMaterialCreateInfo materialInfo = {};
+    materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
+    materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
+    materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
+    materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
+    moCreateMaterial(&materialInfo, pMaterial);
+}
+
+
 void moDemoCube(MoMesh *pMesh)
 {
     static MoFloat3 cube_positions[] = { { -1.0f, -1.0f, -1.0f },
@@ -1771,11 +1781,18 @@ void moDemoCube(MoMesh *pMesh)
 
 void moDemoMaterial(MoMaterial *pMaterial)
 {
+    const uint32_t BrickGray = 4288585632;
+    const uint32_t BrickRed = 4279911853;
+    uint32_t diffuse[256] = {};
+    for (uint32_t i = 0; i < 256; ++i) { diffuse[i] = (i < 128 && i % 16 == 0) || (i >= 128 && ((i >= 128 && i < 128 + 16) || (i % 16 != 0 && i % 8 == 0))) ? BrickGray : BrickRed; }
+
     MoMaterialCreateInfo materialInfo = {};
     materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
     materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
     materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
     materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
+    materialInfo.pTextureDiffuse = (uint8_t*)diffuse;
+    materialInfo.textureDiffuseExtent = { 16, 16 };
     moCreateMaterial(&materialInfo, pMaterial);
 }
 

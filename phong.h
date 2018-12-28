@@ -305,6 +305,9 @@ void moBindMaterial(MoMaterial material);
 // draw a mesh
 void moDrawMesh(MoMesh mesh);
 
+// create a default material
+void moDefaultMaterial(MoMaterial* pMaterial);
+
 // create a demo mesh
 void moDemoCube(MoMesh* pMesh);
 
