@@ -190,12 +190,12 @@ int main(int argc, char** argv)
             attributes[0].pAttribute = &geom.mesh.vertices.data()->x;
             attributes[0].attributeCount = (uint32_t)geom.mesh.vertices.size();
             attributes[0].componentCount = 3;
-            attributes[1].pAttribute = &geom.mesh.normals.data()->x;
-            attributes[1].attributeCount = (uint32_t)geom.mesh.normals.size();
-            attributes[1].componentCount = 3;
-            attributes[2].pAttribute = &geom.mesh.texcoords.data()->x;
-            attributes[2].attributeCount = (uint32_t)geom.mesh.texcoords.size();
-            attributes[2].componentCount = 2;
+            attributes[1].pAttribute = &geom.mesh.texcoords.data()->x;
+            attributes[1].attributeCount = (uint32_t)geom.mesh.texcoords.size();
+            attributes[1].componentCount = 2;
+            attributes[2].pAttribute = &geom.mesh.normals.data()->x;
+            attributes[2].attributeCount = (uint32_t)geom.mesh.normals.size();
+            attributes[2].componentCount = 3;
 
             MoVertexFormatCreateInfo createInfo = {};
             createInfo.pAttributes = attributes.data();

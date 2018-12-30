@@ -3,6 +3,7 @@
 #include <array>
 #include <cstring>
 #include <numeric>
+#include <stdlib.h>
 #include <vector>
 
 #define MO_OCTREE_DOT_PRODUCT_THRESHOLD 0.9f
@@ -208,20 +209,20 @@ void buildGeometry(Meshoui::MeshDefinition & definition, const DAE::Mesh & mesh,
 #endif
 void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat *pFormat)
 {
-    MoVertexFormat format = *pFormat = new MoVertexFormat_T();
-    format->indexCount = pCreateInfo->indexCount*3;
-    format->pIndices = new uint32_t[format->indexCount];
-    format->vertexCount = format->indexCount;
-    format->pVertices = new MoVertex[format->indexCount];
+    uint32_t triangleCount = pCreateInfo->indexCount;
 
-    //std::vector<uint32_t> outIndices;
-    //std::vector<MoVertex> outVertices;
-    for (uint32_t i = 0; i < pCreateInfo->indexCount; ++i)
+    MoVertexFormat format = *pFormat = new MoVertexFormat_T();
+    format->indexCount = 0;
+    format->pIndices = new uint32_t[triangleCount*3]; // actual output size
+    format->vertexCount = 0;
+    format->pVertices = new MoVertex[triangleCount*3]; // may resize down with indexing
+
+    for (uint32_t i = 0; i < triangleCount; ++i)
     {
         // uint3 vertices, texcoords, normals;
         uint32_t stride = pCreateInfo->attributeCount * 3;
         // one triangle has 3 vertices
-        std::vector<uint32_t> vertexIndices[3];//, vertex2Indices, vertex3Indices;
+        std::vector<uint32_t> vertexIndices[3];
         for (uint32_t j = 0; j < pCreateInfo->attributeCount; ++j)
         {
             vertexIndices[0].push_back(pCreateInfo->pIndexes[0+i*stride+j*3] - (pCreateInfo->indicesCountFromOne ? 1 : 0));
@@ -230,7 +231,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         }
 
         // one triangle has 3 vertices
-        MoVertex *vertex = (MoVertex *)&format->pVertices[3*i];
+        MoVertex *vertex = (MoVertex*)&format->pVertices[3*i];
         for (uint32_t k = 0; k < 3; ++k)
         {
             vertex[k] = {};
@@ -241,13 +242,18 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
                 std::memcpy(&vertex[k].data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l]*attribute.componentCount], sizeof(float)*attribute.componentCount);
                 attributeIterator += attribute.componentCount;
             }
+            // not generating proper tangents yet
+            vertex[k].tangent = {1,0,0};
+            vertex[k].bitangent = {0,0,1};
+
+            // not using indexes yet
+            (uint32_t&)format->pIndices[format->indexCount] = format->vertexCount; // index of vertex
+            ++format->indexCount;
+
+            ++format->vertexCount;
         }
     }
-    // not using indexes for now
-    for (uint32_t m = 0; m < format->indexCount; ++m)
-    {
-        (uint32_t&)format->pIndices[m] = m;
-    }
+    format->pVertices = (MoVertex*)realloc((MoVertex*)format->pVertices, format->vertexCount * sizeof(MoVertex));
 
     return;
 #if 0
