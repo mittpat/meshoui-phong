@@ -6,13 +6,20 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "collada.h"
 #include "phong.h"
+#include "vertexformat.h"
 
 #include <linalg.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <experimental/filesystem>
+#include <fstream>
+#include <streambuf>
 #include <vector>
+
+namespace std { namespace filesystem = experimental::filesystem; }
 
 static void glfw_error_callback(int, const char* description)
 {
@@ -46,13 +53,29 @@ static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 1.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 1920 / 1080.f, 0.1f, 1000.f, pos_z, zero_to_one));
-static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 5.0f });
+static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
 static float4x4 view_matrix = inverse(camera_matrix);
 static float4x4 model_matrix = identity;
 static float3   light_position = { 500.0f, 1000.0f, 500.0f };
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
+    const char * filename = nullptr;
+    if (argc > 1)
+    {
+        filename = argv[1];
+        if (std::filesystem::path(filename).extension() != ".dae" || !std::filesystem::exists(filename))
+        {
+            printf("Usage: meshouiview [options] file          \n"
+                   "Options:                                   \n"
+                   "  --help Display this information.         \n"
+                   "                                           \n"
+                   "For bug reporting instructions, please see:\n"
+                   "<https://github.com/mittpat/meshoui>.      \n");
+            return 0;
+        }
+    }
+
     GLFWwindow*                  window = nullptr;
     VkInstance                   instance = VK_NULL_HANDLE;
     MoDevice                     device = VK_NULL_HANDLE;
@@ -149,11 +172,56 @@ int main(int, char**)
         moInit(&initInfo);
     }
 
-    // Demo
-    MoMesh cube;
-    moDemoCube(&cube);
-    MoMaterial material;
-    moDemoMaterial(&material);
+    MoMesh cube = {};
+    MoMaterial material = {};
+
+    if (filename != nullptr)
+    {
+        std::ifstream fileStream(filename);
+        std::string contents((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        DAE::Data data;
+        DAE::parse(contents.data(), data);
+
+        for (const DAE::Geometry & geom : data.geometries)
+        {
+            MoVertexFormat vertexFormat;
+
+            std::vector<MoVertexAttribute> attributes(3);
+            attributes[0].pAttribute = &geom.mesh.vertices.data()->x;
+            attributes[0].attributeCount = (uint32_t)geom.mesh.vertices.size();
+            attributes[0].componentCount = 3;
+            attributes[1].pAttribute = &geom.mesh.normals.data()->x;
+            attributes[1].attributeCount = (uint32_t)geom.mesh.normals.size();
+            attributes[1].componentCount = 3;
+            attributes[2].pAttribute = &geom.mesh.texcoords.data()->x;
+            attributes[2].attributeCount = (uint32_t)geom.mesh.texcoords.size();
+            attributes[2].componentCount = 2;
+
+            MoVertexFormatCreateInfo createInfo = {};
+            createInfo.pAttributes = attributes.data();
+            createInfo.attributeCount = (uint32_t)attributes.size();
+            createInfo.pIndexes = &geom.mesh.triangles.front().vertices.x;
+            createInfo.indexCount = (uint32_t)geom.mesh.triangles.size();
+            createInfo.indicesCountFromOne = VK_TRUE;
+            moCreateVertexFormat(&createInfo, &vertexFormat);
+
+            MoMeshCreateInfo meshInfo = {};
+            meshInfo.indexCount = vertexFormat->indexCount;
+            meshInfo.pIndices = vertexFormat->pIndices;
+            meshInfo.vertexCount = vertexFormat->vertexCount;
+            meshInfo.pVertices = vertexFormat->pVertices;
+            moCreateMesh(&meshInfo, &cube);
+            moDemoMaterial(&material);
+
+            moDestroyVertexFormat(vertexFormat);
+        }
+    }
+    else
+    {
+        // Demo
+        moDemoCube(&cube);
+        moDemoMaterial(&material);
+    }
 
     // Main loop
     while (!glfwWindowShouldClose(window))

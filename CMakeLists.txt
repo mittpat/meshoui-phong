@@ -22,10 +22,10 @@ include(CMake/modules/3p_pugixml.cmake)
 use_linalg()
 use_pugixml()
 
-add_executable(meshouiview
-    collada.cpp    main.cpp
-    collada.h      phong.cpp
-                   phong.h)
+add_executable(meshouiview main.cpp 
+    collada.h collada.cpp
+    phong.h phong.cpp
+    vertexformat.h vertexformat.cpp)
 
 target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds)
 if(NOT MSVC)

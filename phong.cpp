@@ -1426,11 +1426,11 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, position)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(struct MoVertex, texcoord)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, normal)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, tangent)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(struct MoVertex, bitangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, position)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(MoVertex, texcoord)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, normal)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, tangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, bitangent)});
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1707,18 +1707,18 @@ void moDemoCube(MoMesh *pMesh)
                                          { 0.0f, 0.0f },
                                          { 1.0f, 1.0f } };
     static MoFloat3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
-    static MoUInt3x3 cube_triangles[] = { { { 2, 3, 1 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 4, 7, 3 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 8, 5, 7 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 6, 1, 5 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 7, 1, 3 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 4, 6, 8 },{ 1, 2, 3 },{ 1,1,1 } },
-                                          { { 2, 4, 3 },{ 1, 4, 2 },{ 1,1,1 } },
-                                          { { 4, 8, 7 },{ 1, 4, 2 },{ 1,1,1 } },
-                                          { { 8, 6, 5 },{ 1, 4, 2 },{ 1,1,1 } },
-                                          { { 6, 2, 1 },{ 1, 4, 2 },{ 1,1,1 } },
-                                          { { 7, 5, 1 },{ 1, 4, 2 },{ 1,1,1 } },
-                                          { { 4, 2, 6 },{ 1, 4, 2 },{ 1,1,1 } } };
+    static MoUInt3x3 cube_triangles[] = { { MoUInt3{ 2, 3, 1 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 4, 7, 3 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 8, 5, 7 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 6, 1, 5 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 7, 1, 3 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 4, 6, 8 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 2, 4, 3 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 4, 8, 7 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 8, 6, 5 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 6, 2, 1 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 7, 5, 1 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 4, 2, 6 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } } };
 
     std::vector<uint32_t> indices;
     std::vector<MoVertex> vertices;

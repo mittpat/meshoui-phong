@@ -142,59 +142,85 @@ typedef struct MoInitInfo {
 } MoInitInfo;
 
 // vector types, can be declared as your own so long as memory alignment is respected
-#ifndef MO_SKIP_VEC_TYPES
-typedef struct MoUInt3 {
-    uint32_t x;
-    uint32_t y;
-    uint32_t z;
+#if !defined(MO_SKIP_VEC_TYPES) && !defined(MO_VEC_TYPES_DEFINED)
+#define MO_VEC_TYPES_DEFINED
+typedef union MoUInt3 {
+    struct {
+        uint32_t x;
+        uint32_t y;
+        uint32_t z;
+    };
+    float uint32_t[3];
 } MoUInt3;
 
-typedef struct MoUInt3x3 {
-    MoUInt3 x;
-    MoUInt3 y;
-    MoUInt3 z;
+typedef union MoUInt3x3 {
+    struct {
+        MoUInt3 x;
+        MoUInt3 y;
+        MoUInt3 z;
+    };
+    float uint32_t[9];
 } MoUInt3x3;
 
-typedef struct MoFloat2 {
-    float x;
-    float y;
+typedef union MoFloat2 {
+    struct {
+        float x;
+        float y;
+    };
+    float data[2];
 } MoFloat2;
 
-typedef struct MoFloat3 {
-    float x;
-    float y;
-    float z;
+typedef union MoFloat3 {
+    struct {
+        float x;
+        float y;
+        float z;
+    };
+    float data[3];
 } MoFloat3;
 
-typedef struct MoFloat3x3 {
-    MoFloat3 x;
-    MoFloat3 y;
-    MoFloat3 z;
+typedef union MoFloat3x3 {
+    struct {
+        MoFloat3 x;
+        MoFloat3 y;
+        MoFloat3 z;
+    };
+    float data[9];
 } MoFloat3x3;
 
-typedef struct MoFloat4 {
-    float x;
-    float y;
-    float z;
-    float w;
+typedef union MoFloat4 {
+    struct {
+        float x;
+        float y;
+        float z;
+        float w;
+    };
+    float data[4];
 } MoFloat4;
 
-typedef struct MoFloat4x4 {
-    MoFloat4 x;
-    MoFloat4 y;
-    MoFloat4 z;
-    MoFloat4 w;
+typedef union MoFloat4x4 {
+    struct {
+        MoFloat4 x;
+        MoFloat4 y;
+        MoFloat4 z;
+        MoFloat4 w;
+    };
+    float data[16];
 } MoFloat4x4;
 #endif
 
 // vertex type, can be declared as your own so long as memory alignment is respected
-#ifndef MO_SKIP_VERTEX_TYPE
-typedef struct MoVertex {
-    MoFloat3 position;
-    MoFloat2 texcoord;
-    MoFloat3 normal;
-    MoFloat3 tangent;
-    MoFloat3 bitangent;
+#if !defined(MO_SKIP_VERTEX_TYPE) && !defined(MO_VERTEX_TYPE_DEFINED)
+#define MO_VERTEX_TYPE_DEFINED
+typedef union MoVertex {
+    struct {
+        MoFloat3 position;
+        MoFloat2 texcoord;
+        MoFloat3 normal;
+        MoFloat3 tangent;
+        MoFloat3 bitangent;
+    };
+    float data[14];
 } MoVertex;
 #endif
 

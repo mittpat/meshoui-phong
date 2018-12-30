@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
-#include <map>
 #include <pugixml.hpp>
 
 namespace DAE
@@ -600,13 +599,10 @@ void DAE::parse(pugi::xml_node root, DAE::Data &data, Flags flags)
     }
 }
 
-bool DAE::parse(const std::string &filename, DAE::Data & data, Flags flags)
+bool DAE::parse(const char *contents, DAE::Data & data, Flags flags)
 {
-    data.filename = filename;
-    printf("Loading '%s'\n", data.filename.c_str());
-
     pugi::xml_document doc;
-    pugi::xml_parse_result result = doc.load_file(data.filename.c_str());
+    pugi::xml_parse_result result = doc.load_string(contents);
     if (result.status != pugi::status_ok)
         return false;
 
@@ -616,8 +612,6 @@ bool DAE::parse(const std::string &filename, DAE::Data & data, Flags flags)
     data.upAxis = root.child("asset").child_value("up_axis");
 
     parse(root, data, flags);
-
-    fflush(stdout);
 
     return !data.nodes.empty();
 }

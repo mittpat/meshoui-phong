@@ -162,7 +162,7 @@ namespace DAE
     void parse_library_physics_scenes(pugi::xml_node branch, Data & data);
     void parse_library_visual_scenes(pugi::xml_node branch, Data & data);
     void parse(pugi::xml_node root, Data & data, Flags flags = All);
-    bool parse(const std::string & filename, Data & data, Flags flags = All);
+    bool parse(const char * contents, Data & data, Flags flags = All);
 }
 
 /*
