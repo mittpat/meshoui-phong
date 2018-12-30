@@ -1,10 +1,20 @@
 #include "vertexformat.h"
 
+#include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstring>
+#include <limits>
+#include <memory>
 #include <numeric>
-#include <stdlib.h>
 #include <vector>
+
+static constexpr MoFloat3 operator * (const MoFloat3 & a, float b) { return {a.x*b,a.y*b,a.z*b}; }
+static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
+static constexpr MoFloat3 operator + (const MoFloat3 & a, const MoFloat3 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
+static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
+static           MoFloat3         min(const MoFloat3 & a, const MoFloat3 & b) { return {std::min(a.x,b.x),std::min(a.y,b.y),std::min(a.z,b.z)}; }
+static           MoFloat3         max(const MoFloat3 & a, const MoFloat3 & b) { return {std::max(a.x,b.x),std::max(a.y,b.y),std::max(a.z,b.z)}; }
 
 #define MO_OCTREE_DOT_PRODUCT_THRESHOLD 0.9f
 typedef struct MoOctreeNode {
@@ -12,14 +22,14 @@ typedef struct MoOctreeNode {
     unsigned int index;
 } MoOctreeNode;
 
-static constexpr MoFloat3 operator * (const MoFloat3 & a, float b) { return {a.x*b,a.y*b,a.z*b}; }
-static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
-static constexpr MoFloat3 operator + (const MoFloat3 & a, const MoFloat3 & b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
-static constexpr bool     operator ==(const MoFloat2 & a, const MoFloat2 & b) { return a.x==b.x&&a.y==b.y; }
-static constexpr bool     operator ==(const MoFloat3 & a, const MoFloat3 & b) { return a.x==b.x&&a.y==b.y&&a.z==b.z; }
-static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
-
-static constexpr bool     operator ==(const MoOctreeNode & lhs, const MoVertex &rhs) { return lhs.vertex.position == rhs.position && lhs.vertex.texcoord == rhs.texcoord && dot(lhs.vertex.normal, rhs.normal) > MO_OCTREE_DOT_PRODUCT_THRESHOLD; }
+static bool equal(const MoFloat2 & a, const MoFloat2 & b, float tol = 1.0e-6) { return std::abs(a.x-b.x) < tol
+                                                                                    && std::abs(a.y-b.y) < tol; }
+static bool equal(const MoFloat3 & a, const MoFloat3 & b, float tol = 1.0e-6) { return std::abs(a.x-b.x) < tol
+                                                                                    && std::abs(a.y-b.y) < tol
+                                                                                    && std::abs(a.z-b.z) < tol; }
+static bool operator ==(const MoOctreeNode & lhs, const MoVertex &rhs) { return equal(lhs.vertex.position, rhs.position)
+                                                                             && equal(lhs.vertex.texcoord, rhs.texcoord)
+                                                                             && dot(lhs.vertex.normal, rhs.normal) > MO_OCTREE_DOT_PRODUCT_THRESHOLD; }
 
 struct MoOctree final
 {
@@ -37,7 +47,7 @@ struct MoOctree final
     void insert(const MoOctreeNode & point) {
         if (isLeafNode())
         {
-            if (data.empty() || point.vertex.position == data.front().vertex.position)
+            if (data.empty() || equal(point.vertex.position, data.front().vertex.position))
             {
                 data.push_back(point);
                 return;
@@ -105,108 +115,7 @@ struct MoOctree final
     std::array<MoOctree*, 8> children;
     std::vector<MoOctreeNode> data;
 };
-#if 0
-void buildGeometry(Meshoui::MeshDefinition & definition, const DAE::Mesh & mesh, bool renormalize = false)
-{
-    struct AABB final
-    {
-        AABB() : lower(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()),
-                 upper(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()) {}
-        void extend(MoFloat3 p) { lower = min(lower, p); upper = max(upper, p); }
-        MoFloat3 center() const { return (lower + upper) * 0.5f; }
-        MoFloat3 half() const { return (upper - lower) * 0.5f; }
-        MoFloat3 lower, upper;
-    } bbox;
-    for (const auto & vertex : mesh.vertices)
-        bbox.extend({vertex.x,vertex.y,vertex.z});
 
-    std::vector<Node> nodes;
-    nodes.reserve(unsigned(sqrt(mesh.triangles.size())));
-    Octree<Node> octree(bbox.center(), bbox.half());
-
-    printf("Loading '%s'\n", definition.definitionId.str.empty() ? "(unnamed root)" : definition.definitionId.str.c_str());
-
-    // indexed
-    for (size_t i = 0; i < mesh.triangles.size(); ++i)
-    {
-        std::array<MoVertex, 3> avertex;
-
-        const auto & ivertices = mesh.triangles[i].vertices;
-        avertex[0].position = mesh.vertices[ivertices.x-1];
-        avertex[1].position = mesh.vertices[ivertices.y-1];
-        avertex[2].position = mesh.vertices[ivertices.z-1];
-
-        const auto & itexcoords = mesh.triangles[i].texcoords;
-        if (itexcoords.x-1 < mesh.texcoords.size())
-            avertex[0].texcoord = mesh.texcoords[itexcoords.x-1];
-        if (itexcoords.y-1 < mesh.texcoords.size())
-            avertex[1].texcoord = mesh.texcoords[itexcoords.y-1];
-        if (itexcoords.z-1 < mesh.texcoords.size())
-            avertex[2].texcoord = mesh.texcoords[itexcoords.z-1];
-
-        if (renormalize)
-        {
-            MoFloat3 a = avertex[1].position - avertex[0].position;
-            MoFloat3 b = avertex[2].position - avertex[0].position;
-            MoFloat3 normal = normalize(cross(a, b));
-            avertex[0].normal = normal;
-            avertex[1].normal = normal;
-            avertex[2].normal = normal;
-        }
-        else
-        {
-            const auto & inormals = mesh.triangles[i].normals;
-            if (inormals.x-1 < mesh.normals.size())
-                avertex[0].normal = mesh.normals[inormals.x-1];
-            if (inormals.y-1 < mesh.normals.size())
-                avertex[1].normal = mesh.normals[inormals.y-1];
-            if (inormals.z-1 < mesh.normals.size())
-                avertex[2].normal = mesh.normals[inormals.z-1];
-        }
-
-        // tangent + bitangent
-        MoFloat3 edge1 = avertex[1].position - avertex[0].position;
-        MoFloat3 edge2 = avertex[2].position - avertex[0].position;
-        float2 deltaUV1 = avertex[1].texcoord - avertex[0].texcoord;
-        float2 deltaUV2 = avertex[2].texcoord - avertex[0].texcoord;
-
-        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-        if (f != 0.f)
-        {
-            f = 1.0f / f;
-
-            MoFloat3 tangent(0.f,0.f,0.f);
-            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-            avertex[0].tangent = avertex[1].tangent = avertex[2].tangent = normalize(tangent);
-
-            MoFloat3 bitangent(0.f,0.f,0.f);
-            bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-            bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-            bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-            avertex[0].bitangent = avertex[1].bitangent = avertex[2].bitangent = normalize(bitangent);
-        }
-
-        for (auto & vertex : avertex)
-        {
-            nodes.clear();
-            octree.getPointsInsideBox(vertex.position, vertex.position, nodes);
-            auto found = std::find(nodes.begin(), nodes.end(), vertex);
-            if (found == nodes.end())
-            {
-                definition.vertices.push_back(vertex);
-                definition.indices.push_back(unsigned(definition.vertices.size()) - 1);
-                octree.insert(Node(vertex, definition.indices.back()));
-            }
-            else
-            {
-                definition.indices.push_back((*found).index);
-            }
-        }
-    }
-}
-#endif
 void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat *pFormat)
 {
     uint32_t triangleCount = pCreateInfo->indexCount;
@@ -217,6 +126,30 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
     format->vertexCount = 0;
     format->pVertices = new MoVertex[triangleCount*3]; // may resize down with indexing
 
+    // indexing begin
+    std::unique_ptr<MoOctree> octree = nullptr;
+    if (!pCreateInfo->disableIndexing)
+    {
+        struct AABB final
+        {
+            AABB() : lower{std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()},
+                     upper{std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::min()} {}
+            void extend(MoFloat3 p) { lower = min(lower, p); upper = max(upper, p); }
+            MoFloat3 center() const { return (lower + upper) * 0.5f; }
+            MoFloat3 half() const { return (upper - lower) * 0.5f; }
+            MoFloat3 lower, upper;
+        } bbox;
+        const MoVertexAttribute & positionAttribute = pCreateInfo->pAttributes[0];
+        assert(positionAttribute.componentCount == 3);
+        for (uint32_t i = 0; i < positionAttribute.attributeCount; ++i)
+            bbox.extend({pCreateInfo->pAttributes[0].pAttribute[i*3+0],
+                         pCreateInfo->pAttributes[0].pAttribute[i*3+1],
+                         pCreateInfo->pAttributes[0].pAttribute[i*3+2]});
+        octree.reset(new MoOctree(bbox.center(), bbox.half()));
+    }
+    // indexing end
+
+    uint32_t globalVertexIndexingOffset = 0;
     for (uint32_t i = 0; i < triangleCount; ++i)
     {
         // uint3 vertices, texcoords, normals;
@@ -231,57 +164,56 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         }
 
         // one triangle has 3 vertices
-        MoVertex *vertex = (MoVertex*)&format->pVertices[3*i];
+        MoVertex *vertex = (MoVertex*)&format->pVertices[3*i-globalVertexIndexingOffset];
+        uint32_t localVertexIndexingOffset = 0;
         for (uint32_t k = 0; k < 3; ++k)
         {
-            vertex[k] = {};
+            MoVertex &current = vertex[k-localVertexIndexingOffset] = {};
             uint32_t attributeIterator = 0;
             for (uint32_t l = 0; l < vertexIndices[k].size(); ++l)
             {
                 const MoVertexAttribute & attribute = pCreateInfo->pAttributes[l];
-                std::memcpy(&vertex[k].data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l]*attribute.componentCount], sizeof(float)*attribute.componentCount);
+                std::memcpy(&current.data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l]*attribute.componentCount], sizeof(float)*attribute.componentCount);
                 attributeIterator += attribute.componentCount;
             }
             // not generating proper tangents yet
-            vertex[k].tangent = {1,0,0};
-            vertex[k].bitangent = {0,0,1};
+            current.tangent = {1,0,0};
+            current.bitangent = {0,0,1};
 
-            // not using indexes yet
-            (uint32_t&)format->pIndices[format->indexCount] = format->vertexCount; // index of vertex
+            bool reuse = false;
+            // indexing begin
+            if (octree)
+            {
+                std::vector<MoOctreeNode> nodes;
+                octree->getPointsInsideBox(current.position-MoFloat3{0.01,0.01,0.01}, current.position+MoFloat3{0.01,0.01,0.01}, nodes);
+                auto found = std::find(nodes.begin(), nodes.end(), current);
+                if (found != nodes.end())
+                {
+                    (uint32_t&)format->pIndices[format->indexCount] = (*found).index;
+                    ++globalVertexIndexingOffset;
+                    ++localVertexIndexingOffset;
+                    reuse = true;
+                }
+                else
+                {
+                    octree->insert(MoOctreeNode{current, format->vertexCount});
+                }
+            }
+            // indexing end
+            if (!reuse)
+            {
+                (uint32_t&)format->pIndices[format->indexCount] = format->vertexCount;
+                ++format->vertexCount;
+            }
+
             ++format->indexCount;
-
-            ++format->vertexCount;
         }
     }
+
     format->pVertices = (MoVertex*)realloc((MoVertex*)format->pVertices, format->vertexCount * sizeof(MoVertex));
 
     return;
 #if 0
-    std::vector<uint32_t> indices;
-    std::vector<MoVertex> vertices;
-#define INDICES_COUNT_FROM_ONE
-#ifdef INDICES_COUNT_FROM_ONE
-    for (const auto & triangle : cube_triangles)
-    {
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-    }
-    for (uint32_t & index : indices) { --index; }
-#else
-    for (const auto & triangle : cube_triangles)
-    {
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x], cube_texcoords[triangle.y.x], cube_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y], cube_texcoords[triangle.y.y], cube_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z], cube_texcoords[triangle.y.z], cube_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-    }
-#endif
-    for (uint32_t index = 0; index < indices.size(); index+=3)
-    {
-        MoVertex &v1 = vertices[indices[index+0]];
-        MoVertex &v2 = vertices[indices[index+1]];
-        MoVertex &v3 = vertices[indices[index+2]];
-
         //discardNormals
         const MoFloat3 edge1 = v2.position - v1.position;
         const MoFloat3 edge2 = v3.position - v1.position;

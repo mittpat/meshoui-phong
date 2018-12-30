@@ -210,10 +210,14 @@ int main(int argc, char** argv)
             meshInfo.pIndices = vertexFormat->pIndices;
             meshInfo.vertexCount = vertexFormat->vertexCount;
             meshInfo.pVertices = vertexFormat->pVertices;
+
             moCreateMesh(&meshInfo, &cube);
             moDemoMaterial(&material);
 
             moDestroyVertexFormat(vertexFormat);
+
+            // first only
+            break;
         }
     }
     else

@@ -98,6 +98,7 @@ typedef struct MoVertexFormatCreateInfo {
     const uint32_t*          pIndexes;
     uint32_t                 indexCount;
     VkBool32                 indicesCountFromOne;
+    VkBool32                 disableIndexing;
 } MoVertexFormatCreateInfo;
 
 typedef struct MoVertexFormat_T {
@@ -107,6 +108,7 @@ typedef struct MoVertexFormat_T {
     uint32_t        vertexCount;
 }* MoVertexFormat;
 
+// converts from collada to MoVertex
 void moCreateVertexFormat(MoVertexFormatCreateInfo* pCreateInfo, MoVertexFormat* pFormat);
 
 // free vertex format
