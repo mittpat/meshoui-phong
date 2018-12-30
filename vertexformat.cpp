@@ -233,7 +233,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         MoVertex *vertex = (MoVertex *)&format->pVertices[3*i];
         for (uint32_t k = 0; k < 3; ++k)
         {
-            vertex[k] = MoVertex{MoFloat3{0.0f, 0.0f, 0.0f}, MoFloat2{0.0f, 0.0f}, MoFloat3{0.0f, 1.0f, 0.0f}, MoFloat3{1.0f, 0.0f, 0.0f}, MoFloat3{0.0f, 0.0f, 1.0f}};
+            vertex[k] = {};
             uint32_t attributeIterator = 0;
             for (uint32_t l = 0; l < vertexIndices[k].size(); ++l)
             {
