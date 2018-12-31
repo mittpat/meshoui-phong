@@ -175,6 +175,9 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         for (uint32_t k = 0; k < 3; ++k)
         {
             MoVertex &current = vertex[k-localVertexIndexingOffset] = {};
+            current.tangent = {1,0,0};
+            current.bitangent = {0,0,1};
+
             uint32_t attributeIterator = 0;
             for (uint32_t l = 0; l < vertexIndices[k].size(); ++l)
             {
@@ -182,9 +185,6 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
                 std::memcpy(&current.data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l]*attribute.componentCount], sizeof(float)*attribute.componentCount);
                 attributeIterator += attribute.componentCount;
             }
-            // not generating proper tangents yet
-            current.tangent = {1,0,0};
-            current.bitangent = {0,0,1};
 
             bool reuse = false;
             // indexing begin
