@@ -157,8 +157,10 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
     uint32_t globalVertexIndexingOffset = 0;
     for (uint32_t i = 0; i < triangleCount; ++i)
     {
-        // uint3 vertices, texcoords, normals;
-        uint32_t stride = pCreateInfo->attributeCount * 3;
+        uint32_t stride = 3;
+        if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE)
+            stride *= pCreateInfo->attributeCount;
+
         // one triangle has 3 vertices
         std::vector<uint32_t> vertexIndices[3];
         for (uint32_t j = 0; j < pCreateInfo->attributeCount; ++j)
