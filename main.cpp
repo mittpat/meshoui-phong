@@ -200,9 +200,10 @@ int main(int argc, char** argv)
             MoVertexFormatCreateInfo createInfo = {};
             createInfo.pAttributes = attributes.data();
             createInfo.attributeCount = (uint32_t)attributes.size();
-            createInfo.pIndexes = &geom.mesh.triangles.front().vertices.x;
+            createInfo.pIndexes = (uint8_t*)&geom.mesh.triangles.front().vertices.x;
             createInfo.indexCount = (uint32_t)geom.mesh.triangles.size();
-            createInfo.indicesCountFromOne = VK_TRUE;
+            createInfo.indexTypeSize = sizeof(uint32_t);
+            createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
             moCreateVertexFormat(&createInfo, &vertexFormat);
 
             MoMeshCreateInfo meshInfo = {};
