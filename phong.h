@@ -239,14 +239,19 @@ typedef struct MoMaterialCreateInfo {
     // VK_FORMAT_R8G8B8A8_UNORM
     const uint8_t* pTextureAmbient;
     VkExtent2D     textureAmbientExtent;
+    VkFilter       textureAmbientFilter;
     const uint8_t* pTextureDiffuse;
     VkExtent2D     textureDiffuseExtent;
+    VkFilter       textureDiffuseFilter;
     const uint8_t* pTextureNormal;
     VkExtent2D     textureNormalExtent;
+    VkFilter       textureNormalFilter;
     const uint8_t* pTextureSpecular;
     VkExtent2D     textureSpecularExtent;
+    VkFilter       textureSpecularFilter;
     const uint8_t* pTextureEmissive;
     VkExtent2D     textureEmissiveExtent;
+    VkFilter       textureEmissiveFilter;
     VkDescriptorSetLayout setLayout;
 } MoMaterialCreateInfo;
 

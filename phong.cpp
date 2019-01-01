@@ -1565,8 +1565,6 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
     {
         VkSamplerCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        info.magFilter = VK_FILTER_LINEAR;
-        info.minFilter = VK_FILTER_LINEAR;
         info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
         info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1574,14 +1572,19 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
         info.minLod = -1000;
         info.maxLod = 1000;
         info.maxAnisotropy = 1.0f;
+        info.minFilter = info.magFilter = pCreateInfo->textureAmbientFilter;
         err = vkCreateSampler(g_Device->device, &info, g_Allocator, &material->ambientSampler);
         g_Device->pCheckVkResultFn(err);
+        info.minFilter = info.magFilter = pCreateInfo->textureDiffuseFilter;
         err = vkCreateSampler(g_Device->device, &info, g_Allocator, &material->diffuseSampler);
         g_Device->pCheckVkResultFn(err);
+        info.minFilter = info.magFilter = pCreateInfo->textureNormalFilter;
         err = vkCreateSampler(g_Device->device, &info, g_Allocator, &material->normalSampler);
         g_Device->pCheckVkResultFn(err);
+        info.minFilter = info.magFilter = pCreateInfo->textureSpecularFilter;
         err = vkCreateSampler(g_Device->device, &info, g_Allocator, &material->specularSampler);
         g_Device->pCheckVkResultFn(err);
+        info.minFilter = info.magFilter = pCreateInfo->textureEmissiveFilter;
         err = vkCreateSampler(g_Device->device, &info, g_Allocator, &material->emissiveSampler);
         g_Device->pCheckVkResultFn(err);
     }
@@ -1781,10 +1784,14 @@ void moDemoCube(MoMesh *pMesh)
 
 void moDemoMaterial(MoMaterial *pMaterial)
 {
-    const uint32_t BrickGray = 4288585632;
-    const uint32_t BrickRed = 4279911853;
-    uint32_t diffuse[256] = {};
-    for (uint32_t i = 0; i < 256; ++i) { diffuse[i] = (i < 128 && i % 16 == 0) || (i >= 128 && ((i >= 128 && i < 128 + 16) || (i % 16 != 0 && i % 8 == 0))) ? BrickGray : BrickRed; }
+    const uint32_t diffuse[8*8] = {0xff1a07e3,0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,
+                                   0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,
+                                   0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,
+                                   0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,
+                                   0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,0xfff9fb00,
+                                   0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,
+                                   0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,
+                                   0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3};
 
     MoMaterialCreateInfo materialInfo = {};
     materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
@@ -1792,7 +1799,7 @@ void moDemoMaterial(MoMaterial *pMaterial)
     materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
     materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
     materialInfo.pTextureDiffuse = (uint8_t*)diffuse;
-    materialInfo.textureDiffuseExtent = { 16, 16 };
+    materialInfo.textureDiffuseExtent = { 8, 8 };
     moCreateMaterial(&materialInfo, pMaterial);
 }
 
