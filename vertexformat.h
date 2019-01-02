@@ -11,7 +11,7 @@ typedef union MoUInt3 {
         uint32_t y;
         uint32_t z;
     };
-    float uint32_t[3];
+    uint32_t data[3];
 } MoUInt3;
 
 typedef union MoUInt3x3 {
@@ -20,7 +20,7 @@ typedef union MoUInt3x3 {
         MoUInt3 y;
         MoUInt3 z;
     };
-    float uint32_t[9];
+    uint32_t data[9];
 } MoUInt3x3;
 
 typedef union MoFloat2 {
@@ -122,6 +122,9 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo* pCreateInfo, MoVertexFormat*
 
 // free vertex format
 void moDestroyVertexFormat(MoVertexFormat format);
+
+// test
+void moTestVertexFormat();
 
 /*
 ------------------------------------------------------------------------------

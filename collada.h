@@ -3,8 +3,6 @@
 #include <string>
 #include <vector>
 
-namespace pugi { class xml_node; }
-
 namespace DAE
 {
 #ifndef COLLADA_SKIP_VEC_TYPES
@@ -151,17 +149,6 @@ namespace DAE
     enum { None = 0x0, Graphics = 0x01, Physics = 0x02, All = Graphics | Physics };
     typedef int Flags;
 
-    void parse_effect_profile_phong(pugi::xml_node branch, Effect & effect);
-    void parse_effect_profile(pugi::xml_node branch, Effect & effect);
-    void parse_geometry_mesh(pugi::xml_node branch, Geometry & geometry);
-    void parse_library_images(pugi::xml_node branch, Data & data);
-    void parse_library_effects(pugi::xml_node branch, Data & data);
-    void parse_library_materials(pugi::xml_node branch, Data & data);
-    void parse_library_geometries(pugi::xml_node branch, Data & data);
-    void parse_library_physics_models(pugi::xml_node branch, Data & data);
-    void parse_library_physics_scenes(pugi::xml_node branch, Data & data);
-    void parse_library_visual_scenes(pugi::xml_node branch, Data & data);
-    void parse(pugi::xml_node root, Data & data, Flags flags = All);
     bool parse(const char * contents, Data & data, Flags flags = All);
 }
 

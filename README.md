@@ -1,6 +1,6 @@
 # meshouivk - Simple Collada parser and viewer
 
-![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/meshoui/resources/screenshot.png)
+![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/screenshot.png)
 
 Compiling
 -------
@@ -13,6 +13,7 @@ Notes
 -------
 
 The Collada support is partial. Only phong material is supported.
+Each header + implementation is independant from the others and can be used standalone.
 
 Master targets Vulkan 1.1.70.
 Compiled and tested on

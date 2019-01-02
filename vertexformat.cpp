@@ -117,9 +117,12 @@ struct MoOctree final
 
 void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat *pFormat)
 {
-    assert((pCreateInfo->indexTypeSize == 1 || pCreateInfo->indexTypeSize == 2 || pCreateInfo->indexTypeSize == 4) && "MoVertexFormatCreateInfo.indexTypeSize must describe index size of 1, 2 or 4 bytes");
+    if (pCreateInfo->indexCount > 0)
+    {
+        assert((pCreateInfo->indexTypeSize == 1 || pCreateInfo->indexTypeSize == 2 || pCreateInfo->indexTypeSize == 4) && "MoVertexFormatCreateInfo.indexTypeSize must describe index size of 1, 2 or 4 bytes");
+    }
     assert(pCreateInfo->attributeCount != 0 && "MoVertexFormatCreateInfo.attributeCount must count at least one MoVertexFormatCreateInfo.pAttributes");
-    uint32_t triangleCount = pCreateInfo->indexCount / 3;
+    uint32_t triangleCount = pCreateInfo->indexCount > 0 ? pCreateInfo->indexCount / 3 : pCreateInfo->pAttributes[0].attributeCount / 3;
     if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE)
         triangleCount /= pCreateInfo->attributeCount;
 
@@ -168,12 +171,22 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         // loop supports indexes of type uint8, uint16 and uint32 via indexTypeSize
         // loop supports one-based indexes (collada) via flags
         // loop supports per attribute indexing (collada) via flags
+        // loop supports only providing vertices without indexes
         for (uint32_t j = 0; j < pCreateInfo->attributeCount; ++j)
         {
-            struct Index { static uint32_t value(const uint8_t *data, uint32_t typeSize) { switch (typeSize) { case 4: return *(uint32_t*)data; case 1: return *(uint8_t*)data; case 2: return *(uint16_t*)data; } return 0; } };
-            vertexIndices[0].push_back(Index::value(&pCreateInfo->pIndexes[(0+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
-            vertexIndices[1].push_back(Index::value(&pCreateInfo->pIndexes[(1+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
-            vertexIndices[2].push_back(Index::value(&pCreateInfo->pIndexes[(2+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
+            if (pCreateInfo->indexCount > 0)
+            {
+                struct Index { static uint32_t value(const uint8_t *data, uint32_t typeSize) { switch (typeSize) { case 4: return *(uint32_t*)data; case 1: return *(uint8_t*)data; case 2: return *(uint16_t*)data; } return 0; } };
+                vertexIndices[0].push_back(Index::value(&pCreateInfo->pIndexes[(0+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
+                vertexIndices[1].push_back(Index::value(&pCreateInfo->pIndexes[(1+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
+                vertexIndices[2].push_back(Index::value(&pCreateInfo->pIndexes[(2+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
+            }
+            else
+            {
+                vertexIndices[0].push_back(0+i*triangleIndexingStride);
+                vertexIndices[1].push_back(1+i*triangleIndexingStride);
+                vertexIndices[2].push_back(2+i*triangleIndexingStride);
+            }
         }
 
         // pointer to next three vertices in output vertex array. if matching vertex is found in octree it will be reused and further addressing will be offset back by one
@@ -280,3 +293,434 @@ void moDestroyVertexFormat(MoVertexFormat format)
     delete[] format->pVertices;
     delete format;
 }
+
+template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
+
+void moTestVertexFormat_collada()
+{
+    static MoFloat3 test_positions[] = { { -1.0f, -1.0f, -1.0f },
+                                         { -1.0f, -1.0f,  1.0f },
+                                         { -1.0f,  1.0f, -1.0f },
+                                         { 1.0f,  1.0f, -1.0f } };
+    static MoFloat2 test_texcoords[] = { { 1.0f, 0.0f },
+                                         { 0.0f, 1.0f },
+                                         { 0.0f, 0.0f } };
+    static MoFloat3 test_normals[] = { { -1.0f, 0.0f, 0.0f },
+                                       { 0.0f, 0.0f, -1.0f }};
+    static MoUInt3x3 test_triangles[] = { { MoUInt3{ 2, 3, 1 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
+                                          { MoUInt3{ 4, 1, 3 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 2, 2, 2 } }};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndexes = (uint8_t*)test_triangles->data;
+    createInfo.indexCount = (uint32_t)countof(test_triangles)*3*createInfo.attributeCount;
+    createInfo.indexTypeSize = sizeof(uint32_t);
+    createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 6);
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{1.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,1.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_singleByteIndexes()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {-1.0f,1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f},
+                                         {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {0.0f,0.0f,-1.0f},
+                                       {0.0f,0.0f,-1.0f},
+                                       {0.0f,0.0f,-1.0f} };
+    static uint8_t test_triangles[] = {0,1,2,3,4,5};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndexes = test_triangles;
+    createInfo.indexCount = (uint32_t)countof(test_triangles);
+    createInfo.indexTypeSize = sizeof(uint8_t);
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 6);
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{1.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,1.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_renormalize()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {-1.0f,1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f},
+                                         {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f} };
+    static uint8_t test_triangles[] = {0,1,2,3,4,5};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndexes = test_triangles;
+    createInfo.indexCount = (uint32_t)countof(test_triangles);
+    createInfo.indexTypeSize = sizeof(uint8_t);
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISCARD_NORMALS_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 6);
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{1.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,1.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_unindexed()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {-1.0f,1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f},
+                                         {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {0.0f,0.0f,-1.0f},
+                                       {0.0f,0.0f,-1.0f},
+                                       {0.0f,0.0f,-1.0f} };
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 6);
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{1.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,1.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,0.0f,-1.0f},MoFloat3{1.0f,0.0f,0.0f},MoFloat3{0.0f,-1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_reindex()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f},
+                                         {-1.0f,1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {0.0f,0.0f},
+                                         {0.0f,0.0f},
+                                         {0.0f,0.0f},
+                                         {0.0f,0.0f},
+                                         {0.0f,0.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f},
+                                       {0.0f,1.0f,0.0f} };
+    static uint8_t test_triangles[] = {0,1,2,3,4,5};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndexes = test_triangles;
+    createInfo.indexCount = (uint32_t)countof(test_triangles);
+    createInfo.indexTypeSize = sizeof(uint8_t);
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 4);
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
+        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat()
+{
+    moTestVertexFormat_collada();
+    moTestVertexFormat_singleByteIndexes();
+    moTestVertexFormat_renormalize();
+    moTestVertexFormat_unindexed();
+    moTestVertexFormat_reindex();
+}
+
+/*
+------------------------------------------------------------------------------
+This software is available under 2 licenses -- choose whichever you prefer.
+------------------------------------------------------------------------------
+ALTERNATIVE A - MIT License
+Copyright (c) 2018 Patrick Pelletier
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+------------------------------------------------------------------------------
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+------------------------------------------------------------------------------
+*/

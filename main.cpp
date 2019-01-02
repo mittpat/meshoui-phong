@@ -60,6 +60,9 @@ static float3   light_position = { 500.0f, 1000.0f, 500.0f };
 
 int main(int argc, char** argv)
 {
+#ifdef _DEBUG
+    moTestVertexFormat();
+#endif
     const char * filename = nullptr;
     if (argc > 1)
     {
@@ -239,6 +242,12 @@ int main(int argc, char** argv)
         moNewFrame(frameIndex);
         moBindMaterial(material);
         {
+            MoUniform uni = {};
+            (float3&)uni.light = light_position;
+            (float3&)uni.camera = camera_matrix.w.xyz();
+            moSetLight(&uni);
+        }
+        {
             model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f, 1.0f, 0.0f}, 0.01f)));
 
             MoPushConstant pmv = {};
@@ -246,11 +255,6 @@ int main(int argc, char** argv)
             (float4x4&)pmv.model = model_matrix;
             (float4x4&)pmv.view = view_matrix;
             moSetPMV(&pmv);
-
-            MoUniform uni = {};
-            (float3&)uni.light = light_position;
-            (float3&)uni.camera = camera_matrix.w.xyz();
-            moSetLight(&uni);
         }
         moDrawMesh(cube);
 

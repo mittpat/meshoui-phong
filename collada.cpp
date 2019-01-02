@@ -220,6 +220,18 @@ namespace DAE
         }
         return ret;
     }
+
+    void parse_effect_profile_phong(pugi::xml_node branch, Effect & effect);
+    void parse_effect_profile(pugi::xml_node branch, Effect & effect);
+    void parse_geometry_mesh(pugi::xml_node branch, Geometry & geometry);
+    void parse_library_images(pugi::xml_node branch, Data & data);
+    void parse_library_effects(pugi::xml_node branch, Data & data);
+    void parse_library_materials(pugi::xml_node branch, Data & data);
+    void parse_library_geometries(pugi::xml_node branch, Data & data);
+    void parse_library_physics_models(pugi::xml_node branch, Data & data);
+    void parse_library_physics_scenes(pugi::xml_node branch, Data & data);
+    void parse_library_visual_scenes(pugi::xml_node branch, Data & data);
+    void parse(pugi::xml_node root, Data & data, Flags flags = All);
 }
 
 const std::string &DAE::Effect::solve(const std::string &v) const
