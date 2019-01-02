@@ -122,6 +122,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         assert((pCreateInfo->indexTypeSize == 1 || pCreateInfo->indexTypeSize == 2 || pCreateInfo->indexTypeSize == 4) && "MoVertexFormatCreateInfo.indexTypeSize must describe index size of 1, 2 or 4 bytes");
     }
     assert(pCreateInfo->attributeCount != 0 && "MoVertexFormatCreateInfo.attributeCount must count at least one MoVertexFormatCreateInfo.pAttributes");
+    assert(!((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE) && (pCreateInfo->flags & MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT)) && "MoVertexFormatCreateInfo.flags MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE is not compatible with MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT");
     uint32_t triangleCount = pCreateInfo->indexCount > 0 ? pCreateInfo->indexCount / 3 : pCreateInfo->pAttributes[0].attributeCount / 3;
     if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE)
         triangleCount /= pCreateInfo->attributeCount;
@@ -165,6 +166,20 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
     uint32_t globalVertexIndexingOffset = 0;
     for (uint32_t i = 0; i < triangleCount; ++i)
     {
+        struct Index
+        {
+            static uint32_t value(const uint8_t *data, uint32_t typeSize, MoVertexFormatCreateFlags flags)
+            {
+                uint32_t i = 0;
+                switch (typeSize)
+                {
+                case 1: i = *(uint8_t*)data;  break;
+                case 2: i = *(uint16_t*)data; break;
+                case 4: i = *(uint32_t*)data; break;
+                }
+                return i - ((flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0);
+            }
+        };
         // one triangle has 3 vertices
         std::vector<uint32_t> vertexIndices[3];
         // vertexIndices[0] will contain all attribute indexes for first vertex of triangle, vertexIndices[1] will contain all attribute indexes for second vertex, etc
@@ -176,10 +191,9 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         {
             if (pCreateInfo->indexCount > 0)
             {
-                struct Index { static uint32_t value(const uint8_t *data, uint32_t typeSize) { switch (typeSize) { case 4: return *(uint32_t*)data; case 1: return *(uint8_t*)data; case 2: return *(uint16_t*)data; } return 0; } };
-                vertexIndices[0].push_back(Index::value(&pCreateInfo->pIndexes[(0+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
-                vertexIndices[1].push_back(Index::value(&pCreateInfo->pIndexes[(1+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
-                vertexIndices[2].push_back(Index::value(&pCreateInfo->pIndexes[(2+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize) - ((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT) ? 1 : 0));
+                vertexIndices[0].push_back(Index::value(&pCreateInfo->pIndices[(0+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize, pCreateInfo->flags));
+                vertexIndices[1].push_back(Index::value(&pCreateInfo->pIndices[(1+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize, pCreateInfo->flags));
+                vertexIndices[2].push_back(Index::value(&pCreateInfo->pIndices[(2+i*triangleIndexingStride+j*attributeIndexingStride)*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize, pCreateInfo->flags));
             }
             else
             {
@@ -189,55 +203,58 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
             }
         }
 
-        // pointer to next three vertices in output vertex array. if matching vertex is found in octree it will be reused and further addressing will be offset back by one
-        MoVertex *vertex = (MoVertex*)&format->pVertices[3*i-globalVertexIndexingOffset];
-        uint32_t localVertexIndexingOffset = 0;
         // per vertex for triangle
         for (uint32_t k = 0; k < 3; ++k)
         {
-            MoVertex &current = vertex[k-localVertexIndexingOffset] = {};
-            current.tangent = {1,0,0};
-            current.bitangent = {0,0,1};
+            assert(format->indexCount == 3*i+k);
+
+            // pointer to next vertex in output vertex array. if matching vertex is found in octree it will be reused and further addressing will be offset back by one
+            MoVertex *current = nullptr;
+            if (octree)
+                current = (MoVertex*)&format->pVertices[3*i+k-globalVertexIndexingOffset];
+            else
+                current = (MoVertex*)&format->pVertices[Index::value(&pCreateInfo->pIndices[3*i+k*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize, pCreateInfo->flags)];
+            *current = {};
+            current->tangent = {1,0,0};
+            current->bitangent = {0,0,1};
 
             // copy attribute values to new vertex
             uint32_t attributeIterator = 0;
             for (uint32_t l = 0; l < vertexIndices[k].size(); ++l)
             {
                 const MoVertexAttribute & attribute = pCreateInfo->pAttributes[l];
-                std::memcpy(&current.data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l] * attribute.componentCount], sizeof(float)*attribute.componentCount);
+                std::memcpy(&current->data[attributeIterator], &attribute.pAttribute[vertexIndices[k][l] * attribute.componentCount], sizeof(float)*attribute.componentCount);
                 attributeIterator += attribute.componentCount;
             }
 
-            bool reuse = false;
             // indexing begin
             if (octree)
             {
                 // look for reusable candidates in octree
                 std::vector<MoOctreeNode> nodes;
-                octree->getPointsInsideBox(current.position, current.position, nodes);
+                octree->getPointsInsideBox(current->position, current->position, nodes);
                 // find an exact match in candidates
-                auto found = std::find(nodes.begin(), nodes.end(), current);
+                auto found = std::find(nodes.begin(), nodes.end(), *current);
                 if (found != nodes.end())
                 {
                     // reuse existing vertex and offset back by one
                     (uint32_t&)format->pIndices[format->indexCount] = (*found).index;
                     ++globalVertexIndexingOffset;
-                    ++localVertexIndexingOffset;
-                    reuse = true;
                 }
                 else
                 {
                     // add new vertex to octree for future potential reuse
-                    octree->insert(MoOctreeNode{current, format->vertexCount});
+                    octree->insert(MoOctreeNode{*current, format->vertexCount});
+                    // add an index pointing to last vertex added
+                    (uint32_t&)format->pIndices[format->indexCount] = format->vertexCount;
+                    ++format->vertexCount;
                 }
             }
             // indexing end
-
-            if (!reuse)
+            else
             {
-                // add an index pointing to last vertex added
-                (uint32_t&)format->pIndices[format->indexCount] = format->vertexCount;
-                ++format->vertexCount;
+                (uint32_t&)format->pIndices[format->indexCount] = Index::value(&pCreateInfo->pIndices[3*i+k*pCreateInfo->indexTypeSize], pCreateInfo->indexTypeSize, pCreateInfo->flags);
+                format->vertexCount = pCreateInfo->pAttributes[0].attributeCount;
             }
 
             // renormalize and generate tangents
@@ -326,7 +343,7 @@ void moTestVertexFormat_collada()
     MoVertexFormatCreateInfo createInfo = {};
     createInfo.pAttributes = attributes.data();
     createInfo.attributeCount = (uint32_t)attributes.size();
-    createInfo.pIndexes = (uint8_t*)test_triangles->data;
+    createInfo.pIndices = (uint8_t*)test_triangles->data;
     createInfo.indexCount = (uint32_t)countof(test_triangles)*3*createInfo.attributeCount;
     createInfo.indexTypeSize = sizeof(uint32_t);
     createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
@@ -404,7 +421,7 @@ void moTestVertexFormat_singleByteIndexes()
     MoVertexFormatCreateInfo createInfo = {};
     createInfo.pAttributes = attributes.data();
     createInfo.attributeCount = (uint32_t)attributes.size();
-    createInfo.pIndexes = test_triangles;
+    createInfo.pIndices = test_triangles;
     createInfo.indexCount = (uint32_t)countof(test_triangles);
     createInfo.indexTypeSize = sizeof(uint8_t);
     createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
@@ -482,7 +499,7 @@ void moTestVertexFormat_renormalize()
     MoVertexFormatCreateInfo createInfo = {};
     createInfo.pAttributes = attributes.data();
     createInfo.attributeCount = (uint32_t)attributes.size();
-    createInfo.pIndexes = test_triangles;
+    createInfo.pIndices = test_triangles;
     createInfo.indexCount = (uint32_t)countof(test_triangles);
     createInfo.indexTypeSize = sizeof(uint8_t);
     createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISCARD_NORMALS_BIT;
@@ -601,21 +618,21 @@ void moTestVertexFormat_reindex()
     static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
                                          {-1.0f,1.0f,-1.0f},
                                          {-1.0f,-1.0f,-1.0f},
-                                         {1.0f,1.0f,-1.0f},
-                                         {-1.0f,-1.0f,-1.0f},
-                                         {-1.0f,1.0f,-1.0f} };
-    static MoFloat2 test_texcoords[] = { {0.0f,0.0f},
+                                         {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
                                          {0.0f,0.0f},
-                                         {0.0f,0.0f},
-                                         {0.0f,0.0f},
-                                         {0.0f,0.0f},
+                                         {1.0f,0.0f},
+                                         {0.0f,1.0f},
                                          {0.0f,0.0f} };
-    static MoFloat3 test_normals[] = { {0.0f,1.0f,0.0f},
-                                       {0.0f,1.0f,0.0f},
-                                       {0.0f,1.0f,0.0f},
-                                       {0.0f,1.0f,0.0f},
-                                       {0.0f,1.0f,0.0f},
-                                       {0.0f,1.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f} };
     static uint8_t test_triangles[] = {0,1,2,3,4,5};
 
     MoVertexFormat vertexFormat;
@@ -634,22 +651,164 @@ void moTestVertexFormat_reindex()
     MoVertexFormatCreateInfo createInfo = {};
     createInfo.pAttributes = attributes.data();
     createInfo.attributeCount = (uint32_t)attributes.size();
-    createInfo.pIndexes = test_triangles;
+    createInfo.pIndices = test_triangles;
     createInfo.indexCount = (uint32_t)countof(test_triangles);
     createInfo.indexTypeSize = sizeof(uint8_t);
     createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
     moCreateVertexFormat(&createInfo, &vertexFormat);
 
     assert(vertexFormat->indexCount == 6);
-    assert(vertexFormat->vertexCount == 4);
+    assert(vertexFormat->vertexCount == 3);
 
     static MoVertex test_expected_vertices[] = {
-        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
-        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
-        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
-        {MoFloat3{1.0f,1.0f,-1.0f},  MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
-        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}},
-        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,0.0f},MoFloat3{0.0f,1.0f,0.0f},MoFloat3{1.0f,0.0f,0.0f}, MoFloat3{0.0f,0.0f,1.0f}}};
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_noReindex()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f} };
+    static uint8_t test_triangles[] = {0,1,2,0,1,2};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndices = test_triangles;
+    createInfo.indexCount = (uint32_t)countof(test_triangles);
+    createInfo.indexTypeSize = sizeof(uint8_t);
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 3);
+
+    for (uint32_t i = 0; i < 6; ++i) { assert(vertexFormat->pIndices[i] == test_triangles[i]); }
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}}};
+
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const MoVertex & v = vertexFormat->pVertices[vertexFormat->pIndices[i]];
+        const MoVertex & r = test_expected_vertices[i];
+        assert(v.position.x  == r.position.x);
+        assert(v.position.y  == r.position.y);
+        assert(v.position.z  == r.position.z);
+        assert(v.texcoord.x  == r.texcoord.x);
+        assert(v.texcoord.y  == r.texcoord.y);
+        assert(v.normal.x    == r.normal.x);
+        assert(v.normal.y    == r.normal.y);
+        assert(v.normal.z    == r.normal.z);
+        assert(v.tangent.x   == r.tangent.x);
+        assert(v.tangent.y   == r.tangent.y);
+        assert(v.tangent.z   == r.tangent.z);
+        assert(v.bitangent.x == r.bitangent.x);
+        assert(v.bitangent.y == r.bitangent.y);
+        assert(v.bitangent.z == r.bitangent.z);
+    }
+
+    moDestroyVertexFormat(vertexFormat);
+}
+
+void moTestVertexFormat_noReindexCountFromOne()
+{
+    static MoFloat3 test_positions[] = { {-1.0f,-1.0f,1.0f},
+                                         {-1.0f,1.0f,-1.0f},
+                                         {-1.0f,-1.0f,-1.0f} };
+    static MoFloat2 test_texcoords[] = { {1.0f,0.0f},
+                                         {0.0f,1.0f},
+                                         {0.0f,0.0f} };
+    static MoFloat3 test_normals[] = { {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f},
+                                       {-1.0f,0.0f,0.0f} };
+    static uint8_t test_triangles[] = {1,2,3,1,2,3};
+
+    MoVertexFormat vertexFormat;
+
+    std::vector<MoVertexAttribute> attributes(3);
+    attributes[0].pAttribute = test_positions[0].data;
+    attributes[0].attributeCount = (uint32_t)countof(test_positions);
+    attributes[0].componentCount = 3;
+    attributes[1].pAttribute = test_texcoords[0].data;
+    attributes[1].attributeCount = (uint32_t)countof(test_texcoords);
+    attributes[1].componentCount = 2;
+    attributes[2].pAttribute = test_normals[0].data;
+    attributes[2].attributeCount = (uint32_t)countof(test_normals);
+    attributes[2].componentCount = 3;
+
+    MoVertexFormatCreateInfo createInfo = {};
+    createInfo.pAttributes = attributes.data();
+    createInfo.attributeCount = (uint32_t)attributes.size();
+    createInfo.pIndices = test_triangles;
+    createInfo.indexCount = (uint32_t)countof(test_triangles);
+    createInfo.indexTypeSize = sizeof(uint8_t);
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT | MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT;
+    moCreateVertexFormat(&createInfo, &vertexFormat);
+
+    assert(vertexFormat->indexCount == 6);
+    assert(vertexFormat->vertexCount == 3);
+
+    for (uint32_t i = 0; i < 6; ++i) { assert(vertexFormat->pIndices[i] == test_triangles[i]-1); }
+
+    static MoVertex test_expected_vertices[] = {
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,1.0f}, MoFloat2{1.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,1.0f,-1.0f}, MoFloat2{0.0f,1.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}},
+        {MoFloat3{-1.0f,-1.0f,-1.0f},MoFloat2{0.0f,0.0f},MoFloat3{-1.0f,0.0f,0.0f},MoFloat3{0.0f,0.0f,1.0f}, MoFloat3{0.0f,1.0f,0.0f}}};
 
     for (uint32_t i = 0; i < 6; ++i)
     {
@@ -681,6 +840,8 @@ void moTestVertexFormat()
     moTestVertexFormat_renormalize();
     moTestVertexFormat_unindexed();
     moTestVertexFormat_reindex();
+    moTestVertexFormat_noReindex();
+    moTestVertexFormat_noReindexCountFromOne();
 }
 
 /*

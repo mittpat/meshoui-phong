@@ -104,7 +104,7 @@ typedef VkFlags MoVertexFormatCreateFlags;
 typedef struct MoVertexFormatCreateInfo {
     const MoVertexAttribute*  pAttributes;
     uint32_t                  attributeCount;
-    const uint8_t*            pIndexes;
+    const uint8_t*            pIndices;
     uint32_t                  indexCount;
     uint32_t                  indexTypeSize;
     MoVertexFormatCreateFlags flags;
