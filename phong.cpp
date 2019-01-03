@@ -1794,7 +1794,7 @@ void moDemoMaterial(MoMaterial *pMaterial)
                                    0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3};
 
     MoMaterialCreateInfo materialInfo = {};
-    materialInfo.colorAmbient = { 0.1f, 0.1f, 0.1f, 1.0f };
+    materialInfo.colorAmbient = { 0.2f, 0.2f, 0.2f, 1.0f };
     materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
     materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
     materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };

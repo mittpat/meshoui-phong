@@ -171,7 +171,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
             static uint32_t value(const uint8_t *data, uint32_t index, uint32_t typeSize, MoVertexFormatCreateFlags flags)
             {
                 uint32_t rewind = index;
-                if (flags & MO_VERTEX_FORMAT_REWIND_INDICES_BIT) { rewind -= 2 * (rewind % 3 - 1); }
+                if (flags & MO_VERTEX_FORMAT_INDICES_REWIND_BIT) { rewind -= 2 * (rewind % 3 - 1); }
                 uint32_t i = 0;
                 switch (typeSize)
                 {
@@ -215,7 +215,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
             if (octree)
                 current = (MoVertex*)&format->pVertices[3*i+k-globalVertexIndexingOffset];
             else
-                current = (MoVertex*)&format->pVertices[Index::value(pCreateInfo->pIndices, 3*i+k, pCreateInfo->indexTypeSize, pCreateInfo->flags & ~MO_VERTEX_FORMAT_REWIND_INDICES_BIT)];
+                current = (MoVertex*)&format->pVertices[Index::value(pCreateInfo->pIndices, 3*i+k, pCreateInfo->indexTypeSize, pCreateInfo->flags & ~MO_VERTEX_FORMAT_INDICES_REWIND_BIT)];
             *current = {};
             current->tangent = {1,0,0};
             current->bitangent = {0,0,1};
@@ -255,7 +255,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
             // indexing end
             else
             {
-                (uint32_t&)format->pIndices[format->indexCount] = Index::value(pCreateInfo->pIndices, 3*i+k, pCreateInfo->indexTypeSize, pCreateInfo->flags & ~MO_VERTEX_FORMAT_REWIND_INDICES_BIT);
+                (uint32_t&)format->pIndices[format->indexCount] = Index::value(pCreateInfo->pIndices, 3*i+k, pCreateInfo->indexTypeSize, pCreateInfo->flags & ~MO_VERTEX_FORMAT_INDICES_REWIND_BIT);
                 format->vertexCount = pCreateInfo->pAttributes[0].attributeCount;
             }
 
@@ -938,7 +938,7 @@ void moTestVertexFormat_noReindex_rewind()
     createInfo.pIndices = test_triangles;
     createInfo.indexCount = (uint32_t)countof(test_triangles);
     createInfo.indexTypeSize = sizeof(uint8_t);
-    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT | MO_VERTEX_FORMAT_REWIND_INDICES_BIT;
+    createInfo.flags = MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT | MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT | MO_VERTEX_FORMAT_INDICES_REWIND_BIT;
     moCreateVertexFormat(&createInfo, &vertexFormat);
 
     assert(vertexFormat->indexCount == 6);
