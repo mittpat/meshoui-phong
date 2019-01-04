@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include <cstdint>
 
 // vector types, can be declared as your own so long as memory alignment is respected
 #if !defined(MO_SKIP_VEC_TYPES) && !defined(MO_VEC_TYPES_DEFINED)
@@ -93,13 +93,13 @@ typedef struct MoVertexAttribute {
 
 typedef enum MoVertexFormatCreateFlagBits {
     MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT = 0x00000001,
-    MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE = 0x00000002,
+    MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT = 0x00000002,
     MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT = 0x00000004,
     MO_VERTEX_FORMAT_DISCARD_NORMALS_BIT = 0x00000008,
     MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT = 0x00000010,
     MO_VERTEX_FORMAT_MAX_ENUM = 0x7FFFFFFF
 } MoVertexFormatCreateFlagBits;
-typedef VkFlags MoVertexFormatCreateFlags;
+typedef uint32_t MoVertexFormatCreateFlags;
 
 typedef struct MoVertexFormatCreateInfo {
     const MoVertexAttribute*  pAttributes;

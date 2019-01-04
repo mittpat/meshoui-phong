@@ -122,16 +122,16 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
         assert((pCreateInfo->indexTypeSize == 1 || pCreateInfo->indexTypeSize == 2 || pCreateInfo->indexTypeSize == 4) && "MoVertexFormatCreateInfo.indexTypeSize must describe index size of 1, 2 or 4 bytes");
     }
     assert(pCreateInfo->attributeCount != 0 && "MoVertexFormatCreateInfo.attributeCount must count at least one MoVertexFormatCreateInfo.pAttributes");
-    assert(!((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE) && (pCreateInfo->flags & MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT)) && "MoVertexFormatCreateInfo.flags MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE is not compatible with MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT");
+    assert(!((pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT) && (pCreateInfo->flags & MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT)) && "MoVertexFormatCreateInfo.flags MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE is not compatible with MO_VERTEX_FORMAT_DISABLE_REINDEXING_BIT");
     uint32_t triangleCount = pCreateInfo->indexCount > 0 ? pCreateInfo->indexCount / 3 : pCreateInfo->pAttributes[0].attributeCount / 3;
-    if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE)
+    if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT)
         triangleCount /= pCreateInfo->attributeCount;
 
     MoVertexFormat format = *pFormat = new MoVertexFormat_T();
     format->indexCount = 0;
     format->pIndices = new uint32_t[triangleCount*3]; // actual output size
     format->vertexCount = 0;
-    format->pVertices = new MoVertex[triangleCount*3]; // may resize down with indexing
+    format->pVertices = (MoVertex*)malloc(sizeof(MoVertex) * triangleCount*3); // may resize down with indexing
 
     // indexing begin
     std::unique_ptr<MoOctree> octree = nullptr;
@@ -158,7 +158,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
 
     uint32_t triangleIndexingStride = 3;
     uint32_t attributeIndexingStride = 0;
-    if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE)
+    if (pCreateInfo->flags & MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT)
     {
         attributeIndexingStride = pCreateInfo->attributeCount;
         triangleIndexingStride *= attributeIndexingStride;
@@ -307,7 +307,7 @@ void moCreateVertexFormat(MoVertexFormatCreateInfo *pCreateInfo, MoVertexFormat 
 void moDestroyVertexFormat(MoVertexFormat format)
 {
     delete[] format->pIndices;
-    delete[] format->pVertices;
+    free((void*)format->pVertices);
     delete format;
 }
 
@@ -346,7 +346,7 @@ void moTestVertexFormat_collada()
     createInfo.pIndices = (uint8_t*)test_triangles->data;
     createInfo.indexCount = (uint32_t)countof(test_triangles)*3*createInfo.attributeCount;
     createInfo.indexTypeSize = sizeof(uint32_t);
-    createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
+    createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
     moCreateVertexFormat(&createInfo, &vertexFormat);
 
     assert(vertexFormat->indexCount == 6);
