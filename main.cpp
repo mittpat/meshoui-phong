@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <experimental/filesystem>
+#include <functional>
 #include <fstream>
 #include <streambuf>
 #include <vector>
@@ -175,36 +176,49 @@ int main(int argc, char** argv)
         moInit(&initInfo);
     }
 
-    MoMesh cube = {};
-    MoMaterial material = {};
+    struct Drawable {
+        float4x4 model;
+        MoMesh   mesh;
+    };
+    std::vector<MoMesh> meshes;
+    std::vector<Drawable> drawables;
 
+    MoMaterial material = {};
     if (filename != nullptr)
     {
-        std::ifstream fileStream(filename);
-        std::string contents((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-        DAE::Data data;
-        DAE::parse(contents.data(), data);
+        MoColladaData collada;
 
-        for (const DAE::Geometry & geom : data.geometries)
         {
+            std::ifstream fileStream(filename);
+            std::string contents((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+            MoColladaDataCreateInfo createInfo;
+            createInfo.pContents = contents.data();
+            moCreateColladaData(&createInfo, &collada);
+        }
+
+        meshes.resize(collada->meshCount, 0);
+        for (uint32_t i = 0; i < collada->meshCount; ++i)
+        {
+            MoColladaMesh colladaMesh = collada->pMeshes[i];
+
             MoVertexFormat vertexFormat;
 
             std::vector<MoVertexAttribute> attributes(3);
-            attributes[0].pAttribute = &geom.mesh.vertices.data()->x;
-            attributes[0].attributeCount = (uint32_t)geom.mesh.vertices.size();
+            attributes[0].pAttribute = &colladaMesh->pVertices->data[0];
+            attributes[0].attributeCount = colladaMesh->vertexCount;
             attributes[0].componentCount = 3;
-            attributes[1].pAttribute = &geom.mesh.texcoords.data()->x;
-            attributes[1].attributeCount = (uint32_t)geom.mesh.texcoords.size();
+            attributes[1].pAttribute = &colladaMesh->pTexcoords->data[0];
+            attributes[1].attributeCount = colladaMesh->texcoordCount;
             attributes[1].componentCount = 2;
-            attributes[2].pAttribute = &geom.mesh.normals.data()->x;
-            attributes[2].attributeCount = (uint32_t)geom.mesh.normals.size();
+            attributes[2].pAttribute = &colladaMesh->pNormals->data[0];
+            attributes[2].attributeCount = colladaMesh->normalCount;
             attributes[2].componentCount = 3;
 
             MoVertexFormatCreateInfo createInfo = {};
             createInfo.pAttributes = attributes.data();
             createInfo.attributeCount = (uint32_t)attributes.size();
-            createInfo.pIndices = (uint8_t*)&geom.mesh.triangles.front().vertices.x;
-            createInfo.indexCount = (uint32_t)geom.mesh.triangles.size()*3*createInfo.attributeCount;
+            createInfo.pIndices = (uint8_t*)&colladaMesh->pTriangles->data[0];
+            createInfo.indexCount = colladaMesh->triangleCount*3*createInfo.attributeCount;
             createInfo.indexTypeSize = sizeof(uint32_t);
             createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
             moCreateVertexFormat(&createInfo, &vertexFormat);
@@ -214,22 +228,36 @@ int main(int argc, char** argv)
             meshInfo.pIndices = vertexFormat->pIndices;
             meshInfo.vertexCount = vertexFormat->vertexCount;
             meshInfo.pVertices = vertexFormat->pVertices;
-
-            moCreateMesh(&meshInfo, &cube);
-            moDemoMaterial(&material);
+            moCreateMesh(&meshInfo, &meshes[i]);
+            colladaMesh->userData = meshes[i];
 
             moDestroyVertexFormat(vertexFormat);
-
-            // first only
-            break;
         }
+
+        // flatten transforms of node tree
+        for (uint32_t i = 0; i < collada->nodeCount; ++i)
+        {
+            std::function<void(MoColladaNode, float4x4)> recurse = [&](MoColladaNode currentNode, float4x4 transform)
+            {
+                for (uint32_t j = 0; j < currentNode->nodeCount; ++j)
+                {
+                    MoColladaNode child = currentNode->pNodes[j];
+                    recurse(child, mul(transform, (float4x4&)child->transform));
+                }
+                if (currentNode->mesh != nullptr)
+                {
+                    drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData});
+                }
+            };
+            MoColladaNode colladaNode = collada->pNodes[i];
+            recurse(colladaNode, (float4x4&)colladaNode->transform);
+        }
+
+        moDestroyColladaData(collada);
     }
-    else
-    {
-        // Demo
-        moDemoCube(&cube);
-        moDemoMaterial(&material);
-    }
+    // Demo
+    if (meshes.empty()) { meshes.resize(1); meshes[0] = {}; moDemoCube(&meshes[0]); drawables.push_back(Drawable{model_matrix, meshes[0]}); }
+    if (material == nullptr) { moDemoMaterial(&material); }
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -248,15 +276,16 @@ int main(int argc, char** argv)
             moSetLight(&uni);
         }
         {
-            model_matrix = mul(model_matrix, linalg::rotation_matrix(linalg::rotation_quat({0.0f, 1.0f, 0.0f}, 0.01f)));
-
             MoPushConstant pmv = {};
             (float4x4&)pmv.projection = proj_matrix;
-            (float4x4&)pmv.model = model_matrix;
             (float4x4&)pmv.view = view_matrix;
-            moSetPMV(&pmv);
+            for (const auto & drawable : drawables)
+            {
+                (float4x4&)pmv.model = drawable.model;
+                moSetPMV(&pmv);
+                moDrawMesh(drawable.mesh);
+            }
         }
-        moDrawMesh(cube);
 
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
@@ -285,7 +314,8 @@ int main(int argc, char** argv)
 
     // Meshoui cleanup
     moDestroyMaterial(material);
-    moDestroyMesh(cube);
+    for (MoMesh mesh : meshes)
+        moDestroyMesh(mesh);
 
     // Cleanup
     moShutdown();

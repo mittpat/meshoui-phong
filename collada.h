@@ -1,156 +1,119 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <cstdint>
 
-namespace DAE
-{
-#ifndef COLLADA_SKIP_VEC_TYPES
-    struct uint3 final { unsigned x,y,z; };
-    struct float2 final { float x,y; };
-    struct float3 final { float x,y,z; };
-    struct float4 final { float x,y,z,w; };
-    struct float4x4 final { float4 x,y,z,w; };
+// vector types, can be declared as your own so long as memory alignment is respected
+#if !defined(MO_SKIP_VEC_TYPES) && !defined(MO_VEC_TYPES_DEFINED)
+#define MO_VEC_TYPES_DEFINED
+typedef union MoUInt3 {
+    struct {
+        uint32_t x;
+        uint32_t y;
+        uint32_t z;
+    };
+    uint32_t data[3];
+} MoUInt3;
+
+typedef union MoUInt3x3 {
+    struct {
+        MoUInt3 x;
+        MoUInt3 y;
+        MoUInt3 z;
+    };
+    uint32_t data[9];
+} MoUInt3x3;
+
+typedef union MoFloat2 {
+    struct {
+        float x;
+        float y;
+    };
+    float data[2];
+} MoFloat2;
+
+typedef union MoFloat3 {
+    struct {
+        float x;
+        float y;
+        float z;
+    };
+    float data[3];
+} MoFloat3;
+
+typedef union MoFloat3x3 {
+    struct {
+        MoFloat3 x;
+        MoFloat3 y;
+        MoFloat3 z;
+    };
+    float data[9];
+} MoFloat3x3;
+
+typedef union MoFloat4 {
+    struct {
+        float x;
+        float y;
+        float z;
+        float w;
+    };
+    float data[4];
+} MoFloat4;
+
+typedef union MoFloat4x4 {
+    struct {
+        MoFloat4 x;
+        MoFloat4 y;
+        MoFloat4 z;
+        MoFloat4 w;
+    };
+    float data[16];
+} MoFloat4x4;
 #endif
-#ifndef COLLADA_IDENTITY_MAT
-#define COLLADA_IDENTITY_MAT
-    const float4x4 identity = {{1.f,0.f,0.f,0.f},
-                               {0.f,1.f,0.f,0.f},
-                               {0.f,0.f,1.f,0.f},
-                               {0.f,0.f,0.f,1.f}};
-#endif
 
-    struct Image final
-    {
-        std::string id, initFrom;
-    };
+typedef struct MoColladaMesh_T {
+    const char*      name;
+    const MoUInt3x3* pTriangles;
+    uint32_t         triangleCount;
+    const MoFloat3*  pVertices;
+    uint32_t         vertexCount;
+    const MoFloat2*  pTexcoords;
+    uint32_t         texcoordCount;
+    const MoFloat3*  pNormals;
+    uint32_t         normalCount;
+    void*            userData;
+}* MoColladaMesh;
 
-    struct Surface final
-    {
-        std::string sid, initFrom;
-    };
+typedef struct MoColladaNode_T* MoColladaNode;
+struct MoColladaNode_T {
+    const char*          name;
+    MoFloat4x4           transform;
+    MoColladaMesh        mesh;
+    const MoColladaNode* pNodes;
+    uint32_t             nodeCount;
+};
 
-    struct Sampler final
-    {
-        std::string sid, source;
-    };
+typedef struct MoColladaData_T {
+    const MoColladaNode* pNodes;
+    uint32_t             nodeCount;
+    const MoColladaMesh* pMeshes;
+    uint32_t             meshCount;
+}* MoColladaData;
 
-    struct Effect final
-    {
-        struct Value final
-        {
-            Value(const std::string & i, const std::vector<float> & d);
-            Value(const std::string & i, const std::string & t);
-            std::string sid;
-            std::vector<float> data;
-            std::string texture;
-        };
+//typedef enum MoColladaDataCreateFlagBits {
+//    MO_COLLADA_DATA_GRAPHICS_BIT = 0x00000001,
+//    MO_COLLADA_DATA_PHYSICS_BIT = 0x00000002,
+//    MO_COLLADA_DATA_MAX_ENUM = 0x7FFFFFFF
+//} MoColladaDataCreateFlagBits;
+//typedef uint32_t MoColladaDataCreateFlags;
 
-        std::string id;
-        std::vector<Surface> surfaces;
-        std::vector<Sampler> samplers;
-        std::vector<Value> values;
-        const std::string & solve(const std::string & v) const;
-    };
-    inline Effect::Value::Value(const std::string & i, const std::vector<float> & d) : sid(i), data(d) {}
-    inline Effect::Value::Value(const std::string & i, const std::string & t) : sid(i), texture(t) {}
+typedef struct MoColladaDataCreateInfo {
+    const char*              pContents;
+//    MoColladaDataCreateFlags flags;
+} MoColladaDataCreateInfo;
 
-    struct InstanceEffect final
-    {
-        std::string url;
-    };
+void moCreateColladaData(MoColladaDataCreateInfo* pCreateInfo, MoColladaData* pColladaData);
 
-    struct Material final
-    {
-        std::string id;
-        InstanceEffect effect;
-    };
-
-    struct Triangle final
-    {
-        Triangle();
-        Triangle(const uint3 & v, const uint3 & t, const uint3 & n);
-        uint3 vertices, texcoords, normals;
-    };
-    inline Triangle::Triangle() : vertices{0,0,0}, texcoords{0,0,0}, normals{0,0,0} {}
-    inline Triangle::Triangle(const uint3 & v, const uint3 & t, const uint3 & n) : vertices(v), texcoords(t), normals(n) {}
-
-    struct Mesh final
-    {
-        std::vector<Triangle> triangles;
-        std::vector<float3> vertices;
-        std::vector<float2> texcoords;
-        std::vector<float3> normals;
-    };
-
-    struct Geometry final
-    {
-        Geometry();
-        std::string id;
-        Mesh mesh;
-        bool doubleSided;
-    };
-    inline Geometry::Geometry() : doubleSided(false) {}
-
-    struct InstanceGeometry final
-    {
-        std::string url, name, material;
-    };
-
-    struct Node final
-    {
-        Node();
-        std::string id;
-        float4x4 transform;
-        InstanceGeometry geometry;
-    };
-    inline Node::Node() : transform(identity) {}
-
-    struct Shape final
-    {
-        Shape();
-        float3 halfExtents;
-    };
-    inline Shape::Shape() : halfExtents{1.f, 1.f, 1.f} {}
-
-    struct RigidBody final
-    {
-        RigidBody();
-        std::string sid;
-        Shape shape;
-        bool dynamic;
-    };
-    inline RigidBody::RigidBody() : dynamic(true) {}
-
-    struct PhysicsModel final
-    {
-        std::string id;
-        std::vector<RigidBody> bodies;
-    };
-
-    struct InstancePhysicsModel final
-    {
-        std::string sid, url, parent;
-    };
-
-    struct Data final
-    {
-        std::string filename;
-        std::string upAxis;
-        std::vector<DAE::Image> images;
-        std::vector<DAE::Effect> effects;
-        std::vector<DAE::Material> materials;
-        std::vector<DAE::Geometry> geometries;
-        std::vector<DAE::Node> nodes;
-        std::vector<DAE::PhysicsModel> models;
-        std::vector<DAE::InstancePhysicsModel> instances;
-    };
-
-    enum { None = 0x0, Graphics = 0x01, Physics = 0x02, All = Graphics | Physics };
-    typedef int Flags;
-
-    bool parse(const char * contents, Data & data, Flags flags = All);
-}
+void moDestroyColladaData(MoColladaData collada);
 
 /*
 ------------------------------------------------------------------------------
