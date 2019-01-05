@@ -114,14 +114,6 @@ typedef struct MoColladaData_T {
     uint32_t                 materialCount;
 }* MoColladaData;
 
-// currently unused
-typedef enum MoColladaDataCreateFlagBits {
-    MO_COLLADA_DATA_GRAPHICS_BIT = 0x00000001,
-    MO_COLLADA_DATA_PHYSICS_BIT = 0x00000002,
-    MO_COLLADA_DATA_MAX_ENUM = 0x7FFFFFFF
-} MoColladaDataCreateFlagBits;
-typedef uint32_t MoColladaDataCreateFlags;
-
 typedef struct MoColladaDataCreateInfo {
     const char*              pContents;
 } MoColladaDataCreateInfo;

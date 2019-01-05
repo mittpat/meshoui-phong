@@ -7,27 +7,27 @@
 
 namespace DAE
 {
-    struct Image final
+    struct Image
     {
         std::string id, initFrom;
     };
 
-    struct Surface final
+    struct Surface
     {
         std::string sid, initFrom;
     };
 
-    struct Sampler final
+    struct Sampler
     {
         std::string sid, source;
     };
 
-    struct Effect final
+    struct Effect
     {
-        struct Value final
+        struct Value
         {
-            Value(const std::string & i, const std::vector<float> & d);
-            Value(const std::string & i, const std::string & t);
+            Value(const std::string & i, const std::vector<float> & d) : sid(i), data(d) {}
+            Value(const std::string & i, const std::string & t) : sid(i), texture(t) {}
             std::string sid;
             std::vector<float> data;
             std::string texture;
@@ -39,56 +39,12 @@ namespace DAE
         std::vector<Value> values;
         const std::string & solve(const std::string & v) const;
     };
-    inline Effect::Value::Value(const std::string & i, const std::vector<float> & d) : sid(i), data(d) {}
-    inline Effect::Value::Value(const std::string & i, const std::string & t) : sid(i), texture(t) {}
 
-    struct InstanceEffect final
+    struct LibraryData
     {
-        std::string url;
-    };
-
-    struct Material final
-    {
-        std::string id;
-        InstanceEffect effect;
-    };
-
-    struct Shape final
-    {
-        Shape();
-        MoFloat3 halfExtents;
-    };
-    inline Shape::Shape() : halfExtents{1.f, 1.f, 1.f} {}
-
-    struct RigidBody final
-    {
-        RigidBody();
-        std::string sid;
-        Shape shape;
-        bool dynamic;
-    };
-    inline RigidBody::RigidBody() : dynamic(true) {}
-
-    struct PhysicsModel final
-    {
-        std::string id;
-        std::vector<RigidBody> bodies;
-    };
-
-    struct InstancePhysicsModel final
-    {
-        std::string sid, url, parent;
-    };
-
-    struct Data final
-    {
-        std::string filename;
         std::string upAxis;
         std::vector<DAE::Image> images;
         std::vector<DAE::Effect> effects;
-        std::vector<DAE::Material> materials;
-        std::vector<DAE::PhysicsModel> models;
-        std::vector<DAE::InstancePhysicsModel> instances;
     };
 }
 
@@ -602,7 +558,7 @@ void moParseGeometryMesh(pugi::xml_node branch, MoColladaMesh mesh)
     }
 }
 
-void moParseLibraryImages(pugi::xml_node branch, DAE::Data *colladaData)
+void moParseLibraryImages(pugi::xml_node branch, std::vector<DAE::Image> &images)
 {
     for (pugi::xml_node library_image : branch)
     {
@@ -610,29 +566,41 @@ void moParseLibraryImages(pugi::xml_node branch, DAE::Data *colladaData)
         image.id = library_image.attribute("id").as_string();
         if ((image.initFrom = library_image.child("init_from").child_value("ref")).empty())
             image.initFrom = library_image.child_value("init_from");
-        colladaData->images.push_back(image);
+        images.push_back(image);
     }
 }
 
-void moParseLibraryEffects(pugi::xml_node branch, DAE::Data *colladaData)
+void moParseLibraryEffects(pugi::xml_node branch, std::vector<DAE::Effect> &effects)
 {
     for (pugi::xml_node library_effect : branch)
     {
         DAE::Effect libraryEffect;
         libraryEffect.id = library_effect.attribute("id").as_string();
         moParseEffectProfile(library_effect.child("profile_COMMON"), libraryEffect);
-        colladaData->effects.push_back(libraryEffect);
+        effects.push_back(libraryEffect);
     }
 }
 
-void moParseLibraryMaterials(pugi::xml_node branch, DAE::Data *colladaData)
+void moParseLibraryMaterials(pugi::xml_node branch, MoColladaData colladaData, const std::vector<DAE::Effect> &effects)
 {
     for (pugi::xml_node library_material : branch)
     {
-        DAE::Material libraryMaterial;
-        libraryMaterial.id = library_material.attribute("id").as_string();
-        libraryMaterial.effect.url = &library_material.child("instance_effect").attribute("url").value()[1]; //#...
-        colladaData->materials.push_back(libraryMaterial);
+        std::string libraryMaterialUrl = &library_material.child("instance_effect").attribute("url").value()[1]; //#...
+        for (const auto & effect : effects)
+        {
+            if (effect.id == libraryMaterialUrl)
+            {
+                MoColladaMaterial material = (MoColladaMaterial)malloc(sizeof(MoColladaMaterial_T));
+                *material = {};
+                auto name = library_material.attribute("id").as_string();
+                material->name = (char*)malloc(strlen(name) + 1);
+                strcpy((char*)material->name, name);
+
+                push_back((MoColladaMaterial**)&colladaData->pMaterials, &colladaData->materialCount, material);
+
+                break;
+            }
+        }
     }
 }
 
@@ -651,201 +619,8 @@ void moParseLibraryGeometries(pugi::xml_node branch, MoColladaData colladaData)
     }
 }
 
-void moParseLibraryPhysicsModels(pugi::xml_node branch, DAE::Data *colladaData)
-{
-    for (pugi::xml_node library_physics_model : branch)
-    {
-        DAE::PhysicsModel model;
-        model.id = library_physics_model.attribute("id").as_string();
-        for (pugi::xml_node rigid_body : library_physics_model)
-        {
-            DAE::RigidBody body;
-            body.sid = rigid_body.attribute("sid").as_string();
-            body.dynamic = strcmp(rigid_body.child("technique_common").child_value("dynamic"), "true") == 0;
-            body.shape.halfExtents = stof3(rigid_body.child("technique_common").child("shape").child("box").child_value("half_extents"));
-            model.bodies.push_back(body);
-        }
-        colladaData->models.push_back(model);
-    }
-}
-
-void moParseLibraryPhysicsScenes(pugi::xml_node branch, DAE::Data *colladaData)
-{
-    for (pugi::xml_node library_physics_scene : branch)
-    {
-        for (pugi::xml_node instance_physics_model : library_physics_scene)
-        {
-            if (strcmp(instance_physics_model.name(), "instance_physics_model") == 0)
-            {
-                DAE::InstancePhysicsModel model;
-                model.sid = instance_physics_model.attribute("sid").as_string();
-                model.url = &instance_physics_model.attribute("url").as_string()[1]; //#...
-                model.parent = &instance_physics_model.attribute("parent").as_string()[1]; //#...
-                colladaData->instances.push_back(model);
-            }
-        }
-    }
-}
-#if 0
-void moParseLibraryVisualScenes(pugi::xml_node branch, DAE::Data *colladaData)
-{
-    // Nodes
-    std::function<void(pugi::xml_node, DAE::Node&)> parser = [&parser, colladaData](pugi::xml_node currentVisualNode, DAE::Node & currentNode)
-    {
-        currentNode.id = currentVisualNode.attribute("id").as_string();
-        for (pugi::xml_node visualNode : currentVisualNode)
-        {
-            if (strcmp(visualNode.name(), "instance_geometry") == 0)
-            {
-                currentNode.geometry = DAE::InstanceGeometry();
-                currentNode.geometry.name = visualNode.attribute("name").as_string();
-                currentNode.geometry.url = &visualNode.attribute("url").as_string()[1]; //#...
-                if (auto bind_material = visualNode.child("bind_material"))
-                    if (auto technique_common = bind_material.child("technique_common"))
-                        if (auto instance_material = technique_common.child("instance_material"))
-                            currentNode.geometry.material = &instance_material.attribute("target").as_string()[1];
-            }
-            else if (strcmp(visualNode.name(), "matrix") == 0)
-            {
-                // Collada is row major
-                // we are column major
-                auto m44 = stofa(visualNode.child_value());
-                currentNode.transform = mul(currentNode.transform,
-                                            MoFloat4x4{m44[0], m44[4], m44[8],  m44[12],
-                                                       m44[1], m44[5], m44[9],  m44[13],
-                                                       m44[2], m44[6], m44[10], m44[14],
-                                                       m44[3], m44[7], m44[11], m44[15]});
-            }
-            else if (strcmp(visualNode.name(), "translate") == 0)
-            {
-                currentNode.transform = mul(currentNode.transform, translation_matrix(stof3(visualNode.child_value())));
-            }
-            else if (strcmp(visualNode.name(), "rotate") == 0)
-            {
-                auto v4 = stofa(visualNode.child_value()).data();
-                currentNode.transform = mul(currentNode.transform, rotation_matrix(rotation_quat(MoFloat3{v4[0], v4[1], v4[2]}, degreesToRadians(v4[3]))));
-            }
-            else if (strcmp(visualNode.name(), "scale") == 0)
-            {
-                currentNode.transform = mul(currentNode.transform, scaling_matrix(stof3(visualNode.child_value())));
-            }
-        }
-
-        for (pugi::xml_node visualNode : currentVisualNode)
-        {
-            if (strcmp(visualNode.name(), "node") == 0)
-            {
-                DAE::Node node;
-                node.transform = currentNode.transform;
-                parser(visualNode, node);
-                colladaData->nodes.push_back(node);
-            }
-        }
-
-        if (colladaData->upAxis == "Z_UP")
-        {
-            currentNode.transform = mul(MoFloat4x4{1.f, 0.f, 0.f, 0.f,
-                                                   0.f, 0.f,-1.f, 0.f,
-                                                   0.f, 1.f, 0.f, 0.f,
-                                                   0.f, 0.f, 0.f, 1.f}, currentNode.transform);
-        }
-        else if (colladaData->upAxis == "X_UP")
-        {
-            currentNode.transform = mul(MoFloat4x4{ 0.f, 1.f, 0.f, 0.f,
-                                                   -1.f, 0.f, 0.f, 0.f,
-                                                    0.f, 0.f, 1.f, 0.f,
-                                                    0.f, 0.f, 0.f, 1.f}, currentNode.transform);
-        }
-    };
-
-    for (pugi::xml_node library_visual_scene : branch)
-    {
-        for (pugi::xml_node visualNode : library_visual_scene)
-        {
-            if (strcmp(visualNode.name(), "node") == 0)
-            {
-                DAE::Node node;
-                parser(visualNode, node);
-                colladaData->nodes.push_back(node);
-            }
-        }
-    }
-}
-#endif
-
 void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, const std::string &upAxis)
 {
-#if 0
-    // Nodes
-    std::function<void(pugi::xml_node, DAE::Node&)> parser = [&parser, colladaData](pugi::xml_node currentVisualNode, DAE::Node & currentNode)
-    {
-        currentNode.id = currentVisualNode.attribute("id").as_string();
-        for (pugi::xml_node visualNode : currentVisualNode)
-        {
-            if (strcmp(visualNode.name(), "instance_geometry") == 0)
-            {
-                currentNode.geometry = DAE::InstanceGeometry();
-                currentNode.geometry.name = visualNode.attribute("name").as_string();
-                currentNode.geometry.url = &visualNode.attribute("url").as_string()[1]; //#...
-                if (auto bind_material = visualNode.child("bind_material"))
-                    if (auto technique_common = bind_material.child("technique_common"))
-                        if (auto instance_material = technique_common.child("instance_material"))
-                            currentNode.geometry.material = &instance_material.attribute("target").as_string()[1];
-            }
-            else if (strcmp(visualNode.name(), "matrix") == 0)
-            {
-                // Collada is row major
-                // we are column major
-                auto m44 = stofa(visualNode.child_value());
-                currentNode.transform = mul(currentNode.transform,
-                                            MoFloat4x4{m44[0], m44[4], m44[8],  m44[12],
-                                                       m44[1], m44[5], m44[9],  m44[13],
-                                                       m44[2], m44[6], m44[10], m44[14],
-                                                       m44[3], m44[7], m44[11], m44[15]});
-            }
-            else if (strcmp(visualNode.name(), "translate") == 0)
-            {
-                currentNode.transform = mul(currentNode.transform, translation_matrix(stof3(visualNode.child_value())));
-            }
-            else if (strcmp(visualNode.name(), "rotate") == 0)
-            {
-                auto v4 = stofa(visualNode.child_value()).data();
-                currentNode.transform = mul(currentNode.transform, rotation_matrix(rotation_quat(MoFloat3{v4[0], v4[1], v4[2]}, degreesToRadians(v4[3]))));
-            }
-            else if (strcmp(visualNode.name(), "scale") == 0)
-            {
-                currentNode.transform = mul(currentNode.transform, scaling_matrix(stof3(visualNode.child_value())));
-            }
-        }
-
-        for (pugi::xml_node visualNode : currentVisualNode)
-        {
-            if (strcmp(visualNode.name(), "node") == 0)
-            {
-                DAE::Node node;
-                node.transform = currentNode.transform;
-                parser(visualNode, node);
-                colladaData->nodes.push_back(node);
-            }
-        }
-
-        if (colladaData->upAxis == "Z_UP")
-        {
-            currentNode.transform = mul(MoFloat4x4{1.f, 0.f, 0.f, 0.f,
-                                                   0.f, 0.f,-1.f, 0.f,
-                                                   0.f, 1.f, 0.f, 0.f,
-                                                   0.f, 0.f, 0.f, 1.f}, currentNode.transform);
-        }
-        else if (colladaData->upAxis == "X_UP")
-        {
-            currentNode.transform = mul(MoFloat4x4{ 0.f, 1.f, 0.f, 0.f,
-                                                   -1.f, 0.f, 0.f, 0.f,
-                                                    0.f, 0.f, 1.f, 0.f,
-                                                    0.f, 0.f, 0.f, 1.f}, currentNode.transform);
-        }
-    };
-#endif
-
     std::function<void(pugi::xml_node, MoColladaNode)> parser = [&](pugi::xml_node currentVisualNode, MoColladaNode currentNode)
     {
         currentNode->transform = { 1.f, 0.f, 0.f, 0.f,
@@ -860,13 +635,32 @@ void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, co
                 currentNode->name = (char*)malloc(strlen(name) + 1);
                 strcpy((char*)currentNode->name, name);
 
-                auto url = &visualNode.attribute("url").as_string()[1]; //#...
+                auto geom_url = &visualNode.attribute("url").as_string()[1]; //#...
                 for (uint32_t i = 0; i < collada->meshCount; ++i)
                 {
-                    if (strcmp(collada->pMeshes[i]->name, url) == 0)
+                    if (strcmp(collada->pMeshes[i]->name, geom_url) == 0)
                     {
                         currentNode->mesh = collada->pMeshes[i];
                         break;
+                    }
+                }
+
+                if (auto bind_material = visualNode.child("bind_material"))
+                {
+                    if (auto technique_common = bind_material.child("technique_common"))
+                    {
+                        if (auto instance_material = technique_common.child("instance_material"))
+                        {
+                            auto geom_mat = &instance_material.attribute("target").as_string()[1];
+                            for (uint32_t i = 0; i < collada->materialCount; ++i)
+                            {
+                                if (strcmp(collada->pMaterials[i]->name, geom_mat) == 0)
+                                {
+                                    currentNode->material = collada->pMaterials[i];
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -938,50 +732,14 @@ void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, co
     }
 }
 
-void moParseCollada(pugi::xml_node root, DAE::Data *colladaData/*, MoColladaDataCreateFlags flags*/)
+void moParseCollada(pugi::xml_node root, DAE::LibraryData &libraryData)
 {
-    //if (flags & MO_COLLADA_DATA_GRAPHICS_BIT)
-    //{
-    moParseLibraryImages(root.child("library_images"), colladaData);
-    moParseLibraryEffects(root.child("library_effects"), colladaData);
-    moParseLibraryMaterials(root.child("library_materials"), colladaData);
-//        moParseLibraryGeometries(root.child("library_geometries"), colladaData);
-    //}
-    //if (flags & MO_COLLADA_DATA_PHYSICS_BIT)
-    //{
-    moParseLibraryPhysicsModels(root.child("library_physics_models"), colladaData);
-    moParseLibraryPhysicsScenes(root.child("library_physics_scenes"), colladaData);
-    //}
-    //moParseLibraryVisualScenes(root.child("library_visual_scenes"), colladaData);
+    moParseLibraryImages(root.child("library_images"), libraryData.images);
+    moParseLibraryEffects(root.child("library_effects"), libraryData.effects);
 }
 
-//#include <chrono>
 void moCreateColladaData(MoColladaDataCreateInfo *pCreateInfo, MoColladaData *pColladaData)
 {
-#if 0
-    auto start = std::chrono::high_resolution_clock::now();
-    ArrayC<MoFloat3> temp = {};
-    for (uint32_t i = 0; i < 10000000; ++i)
-    {
-        push_back(temp, {1.f, 2.f, 3.f});
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end-start;
-    printf("time A %fs\n", diff.count());
-
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<MoFloat3> temp2 = {};
-    for (uint32_t i = 0; i < 10000000; ++i)
-    {
-        temp2.push_back({1.f, 2.f, 3.f});
-    }
-    end = std::chrono::high_resolution_clock::now();
-    diff = end-start;
-    printf("time B %fs\n", diff.count());
-
-    fflush(stdout);
-    abort();
-#endif
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_string(pCreateInfo->pContents);
     assert(result.status == pugi::status_ok);
@@ -989,14 +747,15 @@ void moCreateColladaData(MoColladaDataCreateInfo *pCreateInfo, MoColladaData *pC
     auto root = doc.child("COLLADA");
     std::string version = root.attribute("version").as_string();
     printf("COLLADA version '%s'\n", version.c_str());
-    DAE::Data data;
-    data.upAxis = root.child("asset").child_value("up_axis");
-    moParseCollada(root, &data/*, pCreateInfo->flags*/);
+    DAE::LibraryData libraryData;
+    libraryData.upAxis = root.child("asset").child_value("up_axis");
+    moParseCollada(root, libraryData);
 
     MoColladaData colladaData = *pColladaData = (MoColladaData)malloc(sizeof(MoColladaData_T));
     *colladaData = {};
     moParseLibraryGeometries(root.child("library_geometries"), colladaData);
-    moParseLibraryVisualScenes(root.child("library_visual_scenes"), colladaData, data.upAxis);
+    moParseLibraryMaterials(root.child("library_materials"), colladaData, libraryData.effects);
+    moParseLibraryVisualScenes(root.child("library_visual_scenes"), colladaData, libraryData.upAxis);
 }
 
 void moDestroyColladaNode(MoColladaNode node)
