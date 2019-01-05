@@ -83,36 +83,53 @@ typedef struct MoColladaMesh_T {
     void*            userData;
 }* MoColladaMesh;
 
+typedef struct MoColladaMaterial_T {
+    const char* name;
+    MoFloat3    colorAmbient;
+    MoFloat3    colorDiffuse;
+    MoFloat3    colorSpecular;
+    MoFloat3    colorEmissive;
+    const char* filenameDiffuse;
+    const char* filenameNormal;
+    const char* filenameSpecular;
+    const char* filenameEmissive;
+}* MoColladaMaterial;
+
 typedef struct MoColladaNode_T* MoColladaNode;
 struct MoColladaNode_T {
     const char*          name;
     MoFloat4x4           transform;
     MoColladaMesh        mesh;
+    MoColladaMaterial    material;
     const MoColladaNode* pNodes;
     uint32_t             nodeCount;
 };
 
 typedef struct MoColladaData_T {
-    const MoColladaNode* pNodes;
-    uint32_t             nodeCount;
-    const MoColladaMesh* pMeshes;
-    uint32_t             meshCount;
+    const MoColladaNode*     pNodes;
+    uint32_t                 nodeCount;
+    const MoColladaMesh*     pMeshes;
+    uint32_t                 meshCount;
+    const MoColladaMaterial* pMaterials;
+    uint32_t                 materialCount;
 }* MoColladaData;
 
-//typedef enum MoColladaDataCreateFlagBits {
-//    MO_COLLADA_DATA_GRAPHICS_BIT = 0x00000001,
-//    MO_COLLADA_DATA_PHYSICS_BIT = 0x00000002,
-//    MO_COLLADA_DATA_MAX_ENUM = 0x7FFFFFFF
-//} MoColladaDataCreateFlagBits;
-//typedef uint32_t MoColladaDataCreateFlags;
+// currently unused
+typedef enum MoColladaDataCreateFlagBits {
+    MO_COLLADA_DATA_GRAPHICS_BIT = 0x00000001,
+    MO_COLLADA_DATA_PHYSICS_BIT = 0x00000002,
+    MO_COLLADA_DATA_MAX_ENUM = 0x7FFFFFFF
+} MoColladaDataCreateFlagBits;
+typedef uint32_t MoColladaDataCreateFlags;
 
 typedef struct MoColladaDataCreateInfo {
     const char*              pContents;
-//    MoColladaDataCreateFlags flags;
 } MoColladaDataCreateInfo;
 
+// parse a collada document to nodes, meshes and materials
 void moCreateColladaData(MoColladaDataCreateInfo* pCreateInfo, MoColladaData* pColladaData);
 
+// destroy parsed collada document's nodes, meshes and materials
 void moDestroyColladaData(MoColladaData collada);
 
 /*

@@ -53,49 +53,6 @@ namespace DAE
         InstanceEffect effect;
     };
 
-    struct Triangle final
-    {
-        Triangle();
-        Triangle(const MoUInt3 & v, const MoUInt3 & t, const MoUInt3 & n);
-        MoUInt3 vertices, texcoords, normals;
-    };
-    inline Triangle::Triangle() : vertices{0,0,0}, texcoords{0,0,0}, normals{0,0,0} {}
-    inline Triangle::Triangle(const MoUInt3 & v, const MoUInt3 & t, const MoUInt3 & n) : vertices(v), texcoords(t), normals(n) {}
-
-    struct Mesh final
-    {
-        std::vector<Triangle> triangles;
-        std::vector<MoFloat3> vertices;
-        std::vector<MoFloat2> texcoords;
-        std::vector<MoFloat3> normals;
-    };
-
-    struct Geometry final
-    {
-        Geometry();
-        std::string id;
-        Mesh mesh;
-        bool doubleSided;
-    };
-    inline Geometry::Geometry() : doubleSided(false) {}
-
-    struct InstanceGeometry final
-    {
-        std::string url, name, material;
-    };
-
-    //struct Node final
-    //{
-    //    Node();
-    //    std::string id;
-    //    MoFloat4x4 transform;
-    //    InstanceGeometry geometry;
-    //};
-    //inline Node::Node() : transform{1.f,0.f,0.f,0.f,
-    //                                0.f,1.f,0.f,0.f,
-    //                                0.f,0.f,1.f,0.f,
-    //                                0.f,0.f,0.f,1.f} {}
-
     struct Shape final
     {
         Shape();
@@ -130,8 +87,6 @@ namespace DAE
         std::vector<DAE::Image> images;
         std::vector<DAE::Effect> effects;
         std::vector<DAE::Material> materials;
-        std::vector<DAE::Geometry> geometries;
-        //std::vector<DAE::Node> nodes;
         std::vector<DAE::PhysicsModel> models;
         std::vector<DAE::InstancePhysicsModel> instances;
     };
@@ -618,7 +573,9 @@ void moParseGeometryMesh(pugi::xml_node branch, MoColladaMesh mesh)
                 auto vcount = polygons[j];
                 for (size_t k = 2; k < vcount; ++k)
                 {
-                    DAE::Triangle face;
+                    struct Triangle {
+                        MoUInt3 vertices, texcoords, normals;
+                    } face = {};
                     if (sourceIndexes[kVertexIdx] >= 0)
                     {
                         face.vertices.x = 1+indexes[i+unsigned(sourceIndexes[kVertexIdx])+(0  )*max];
@@ -1060,12 +1017,24 @@ void moDestroyColladaMesh(MoColladaMesh mesh)
     free(mesh);
 }
 
+void moDestroyColladaMaterial(MoColladaMaterial material)
+{
+    free((char*)material->name);
+    free((char*)material->filenameDiffuse);
+    free((char*)material->filenameNormal);
+    free((char*)material->filenameSpecular);
+    free((char*)material->filenameEmissive);
+    free(material);
+}
+
 void moDestroyColladaData(MoColladaData collada)
 {
     for (uint32_t i = 0; i < collada->nodeCount; ++i) { moDestroyColladaNode(collada->pNodes[i]); }
     for (uint32_t i = 0; i < collada->meshCount; ++i) { moDestroyColladaMesh(collada->pMeshes[i]); }
+    for (uint32_t i = 0; i < collada->materialCount; ++i) { moDestroyColladaMaterial(collada->pMaterials[i]); }
     free((MoColladaNode*)collada->pNodes);
     free((MoColladaMesh*)collada->pMeshes);
+    free((MoColladaMaterial*)collada->pMaterials);
     free(collada);
 }
 

@@ -1594,10 +1594,7 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         alloc_info.descriptorPool = g_Device->descriptorPool;
         alloc_info.descriptorSetCount = 1;
-        if (pCreateInfo->setLayout != VK_NULL_HANDLE)
-            alloc_info.pSetLayouts = &pCreateInfo->setLayout;
-        else
-            alloc_info.pSetLayouts = &g_Pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT];
+        alloc_info.pSetLayouts = &g_Pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT];
         err = vkAllocateDescriptorSets(g_Device->device, &alloc_info, &material->descriptorSet);
         g_Device->pCheckVkResultFn(err);
     }
