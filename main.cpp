@@ -345,6 +345,7 @@ int main(int argc, char** argv)
                 glfwWaitEvents();
             }
 
+            // in case the window was resized
             proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
             MoSwapChainRecreateInfo recreateInfo = {};
