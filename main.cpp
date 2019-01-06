@@ -11,6 +11,7 @@
 #include "vertexformat.h"
 
 #include <linalg.h>
+#include <lodepng.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -57,7 +58,7 @@ static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadia
 static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
 static float4x4 view_matrix = inverse(camera_matrix);
 static float4x4 model_matrix = identity;
-static float3   light_position = { 500.0f, 1000.0f, 500.0f };
+static float3   light_position = { 3.0f, 0.0f, 15.0f };
 
 int main(int argc, char** argv)
 {
@@ -192,6 +193,7 @@ int main(int argc, char** argv)
     {
         MoColladaData collada;
 
+        // the file
         {
             std::ifstream fileStream(filename);
             std::string contents((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
@@ -200,6 +202,7 @@ int main(int argc, char** argv)
             moCreateColladaData(&createInfo, &collada);
         }
 
+        // meshes
         for (uint32_t i = 0; i < collada->meshCount; ++i)
         {
             MoColladaMesh colladaMesh = collada->pMeshes[i];
@@ -240,16 +243,24 @@ int main(int argc, char** argv)
             moDestroyVertexFormat(vertexFormat);
         }
 
+        // materials
+        std::filesystem::path parentdirectory = std::filesystem::path(filename).parent_path();
         materials.push_back({}); materials.back() = {}; moDefaultMaterial(&materials.back());
         for (uint32_t i = 0; i < collada->materialCount; ++i)
         {
             MoColladaMaterial colladaMaterial = collada->pMaterials[i];
 
             MoMaterialCreateInfo materialInfo = {};
-            (MoFloat3&)materialInfo.colorAmbient = colladaMaterial->colorAmbient; materialInfo.colorAmbient.w = 1.0f;
-            (MoFloat3&)materialInfo.colorDiffuse = colladaMaterial->colorDiffuse; materialInfo.colorDiffuse.w = 1.0f;
-            (MoFloat3&)materialInfo.colorEmissive = colladaMaterial->colorEmissive; materialInfo.colorEmissive.w = 1.0f;
+            (MoFloat3&)materialInfo.colorAmbient  = colladaMaterial->colorAmbient ; materialInfo.colorAmbient.w  = 1.0f;
+            (MoFloat3&)materialInfo.colorDiffuse  = colladaMaterial->colorDiffuse ; materialInfo.colorDiffuse.w  = 1.0f;
             (MoFloat3&)materialInfo.colorSpecular = colladaMaterial->colorSpecular; materialInfo.colorSpecular.w = 1.0f;
+            (MoFloat3&)materialInfo.colorEmissive = colladaMaterial->colorEmissive; materialInfo.colorEmissive.w = 1.0f;
+
+            std::vector<uint8_t> dataDiffuse, dataNormal, dataSpecular, dataEmissive;
+            if (colladaMaterial->filenameDiffuse  && std::filesystem::exists(parentdirectory / colladaMaterial->filenameDiffuse )) { lodepng::decode(dataDiffuse , materialInfo.textureDiffuseExtent.width, materialInfo.textureDiffuseExtent.height  , (parentdirectory / colladaMaterial->filenameDiffuse ).u8string()); materialInfo.pTextureDiffuse  = dataDiffuse.data (); }
+            if (colladaMaterial->filenameNormal   && std::filesystem::exists(parentdirectory / colladaMaterial->filenameNormal  )) { lodepng::decode(dataNormal  , materialInfo.textureNormalExtent.width, materialInfo.textureNormalExtent.height    , (parentdirectory / colladaMaterial->filenameNormal  ).u8string()); materialInfo.pTextureNormal   = dataNormal.data  (); }
+            if (colladaMaterial->filenameSpecular && std::filesystem::exists(parentdirectory / colladaMaterial->filenameSpecular)) { lodepng::decode(dataSpecular, materialInfo.textureSpecularExtent.width, materialInfo.textureSpecularExtent.height, (parentdirectory / colladaMaterial->filenameSpecular).u8string()); materialInfo.pTextureSpecular = dataSpecular.data(); }
+            if (colladaMaterial->filenameEmissive && std::filesystem::exists(parentdirectory / colladaMaterial->filenameEmissive)) { lodepng::decode(dataEmissive, materialInfo.textureEmissiveExtent.width, materialInfo.textureEmissiveExtent.height, (parentdirectory / colladaMaterial->filenameEmissive).u8string()); materialInfo.pTextureEmissive = dataEmissive.data(); }
 
             MoMaterial material = {};
             moCreateMaterial(&materialInfo, &material);
@@ -279,6 +290,7 @@ int main(int argc, char** argv)
 
         moDestroyColladaData(collada);
     }
+
     // Demo
     if (meshes.empty())
     {
