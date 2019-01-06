@@ -647,10 +647,6 @@ void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, co
         {
             if (strcmp(visualNode.name(), "instance_geometry") == 0)
             {
-                auto name = visualNode.attribute("name").as_string();
-                currentNode->name = (char*)malloc(strlen(name) + 1);
-                strcpy((char*)currentNode->name, name);
-
                 auto geom_url = &visualNode.attribute("url").as_string()[1]; //#...
                 for (uint32_t i = 0; i < collada->meshCount; ++i)
                 {
@@ -712,6 +708,11 @@ void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, co
             {
                 MoColladaNode node = (MoColladaNode)malloc(sizeof(MoColladaNode_T));
                 *node = {};
+
+                auto name = visualNode.attribute("name").as_string();
+                node->name = (char*)malloc(strlen(name) + 1);
+                strcpy((char*)node->name, name);
+
                 push_back((MoColladaNode**)&currentNode->pNodes, &currentNode->nodeCount, node);
                 parser(visualNode, node);
             }
@@ -741,6 +742,11 @@ void moParseLibraryVisualScenes(pugi::xml_node branch, MoColladaData collada, co
             {
                 MoColladaNode node = (MoColladaNode)malloc(sizeof(MoColladaNode_T));
                 *node = {};
+
+                auto name = visualNode.attribute("name").as_string();
+                node->name = (char*)malloc(strlen(name) + 1);
+                strcpy((char*)node->name, name);
+
                 push_back((MoColladaNode**)&collada->pNodes, &collada->nodeCount, node);
                 parser(visualNode, node);
             }
@@ -811,6 +817,106 @@ void moDestroyColladaData(MoColladaData collada)
     free((MoColladaMesh*)collada->pMeshes);
     free((MoColladaMaterial*)collada->pMaterials);
     free(collada);
+}
+
+void moTestCollada()
+{
+    static const char *data =
+"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+"<COLLADA xmlns=\"http://www.collada.org/2005/11/COLLADASchema\" version=\"1.4.1\">\n"
+"  <asset>\n"
+"    <contributor>\n"
+"      <author>Blender User</author>\n"
+"      <authoring_tool>Blender 2.79.0</authoring_tool>\n"
+"    </contributor>\n"
+"    <created>2019-01-06T10:17:21</created>\n"
+"    <modified>2019-01-06T10:17:21</modified>\n"
+"    <unit name=\"meter\" meter=\"1\"/>\n"
+"    <up_axis>Z_UP</up_axis>\n"
+"  </asset>\n"
+"  <library_images/>\n"
+"  <library_geometries>\n"
+"    <geometry id=\"Cube-mesh\" name=\"Cube\">\n"
+"      <mesh>\n"
+"        <source id=\"Cube-mesh-positions\">\n"
+"          <float_array id=\"Cube-mesh-positions-array\" count=\"24\">-1 -1 -1 -1 -1 1 -1 1 -1 -1 1 1 1 -1 -1 1 -1 1 1 1 -1 1 1 1</float_array>\n"
+"          <technique_common>\n"
+"            <accessor source=\"#Cube-mesh-positions-array\" count=\"8\" stride=\"3\">\n"
+"              <param name=\"X\" type=\"float\"/>\n"
+"              <param name=\"Y\" type=\"float\"/>\n"
+"              <param name=\"Z\" type=\"float\"/>\n"
+"            </accessor>\n"
+"          </technique_common>\n"
+"        </source>\n"
+"        <source id=\"Cube-mesh-normals\">\n"
+"          <float_array id=\"Cube-mesh-normals-array\" count=\"18\">-1 0 0 0 1 0 1 0 0 0 -1 0 0 0 -1 0 0 1</float_array>\n"
+"          <technique_common>\n"
+"            <accessor source=\"#Cube-mesh-normals-array\" count=\"6\" stride=\"3\">\n"
+"              <param name=\"X\" type=\"float\"/>\n"
+"              <param name=\"Y\" type=\"float\"/>\n"
+"              <param name=\"Z\" type=\"float\"/>\n"
+"            </accessor>\n"
+"          </technique_common>\n"
+"        </source>\n"
+"        <source id=\"Cube-mesh-map-0\">\n"
+"          <float_array id=\"Cube-mesh-map-0-array\" count=\"72\">0.3333334 0.6666666 0.6666667 0.3333333 0.6666668 0.6666666 0 0.6666667 0.3333333 "
+"0.3333333 0.3333333 0.6666666 1.29143e-7 0.3333333 0.3333333 0 0.3333334 0.3333333 0.3333334 0 0.6666668 0.3333333 0.3333334 0.3333333 0.6666668 0.3333332 "
+"1 0 1 0.3333332 0.3333333 1 0 0.6666668 0.3333333 0.6666667 0.3333334 0.6666666 0.3333334 0.3333334 0.6666667 0.3333333 0 0.6666667 0 0.3333334 0.3333333 "
+"0.3333333 1.29143e-7 0.3333333 0 0 0.3333333 0 0.3333334 0 0.6666667 0 0.6666668 0.3333333 0.6666668 0.3333332 0.6666668 0 1 0 0.3333333 1 0 1 0 0.6666668</float_array>\n"
+"          <technique_common>\n"
+"            <accessor source=\"#Cube-mesh-map-0-array\" count=\"36\" stride=\"2\">\n"
+"              <param name=\"S\" type=\"float\"/>\n"
+"              <param name=\"T\" type=\"float\"/>\n"
+"            </accessor>\n"
+"          </technique_common>\n"
+"        </source>\n"
+"        <vertices id=\"Cube-mesh-vertices\">\n"
+"          <input semantic=\"POSITION\" source=\"#Cube-mesh-positions\"/>\n"
+"        </vertices>\n"
+"        <triangles count=\"12\">\n"
+"          <input semantic=\"VERTEX\" source=\"#Cube-mesh-vertices\" offset=\"0\"/>\n"
+"          <input semantic=\"NORMAL\" source=\"#Cube-mesh-normals\" offset=\"1\"/>\n"
+"          <input semantic=\"TEXCOORD\" source=\"#Cube-mesh-map-0\" offset=\"2\" set=\"0\"/>\n"
+"          <p>1 0 0 2 0 1 0 0 2 3 1 3 6 1 4 2 1 5 7 2 6 4 2 7 6 2 8 5 3 9 0 3 10 4 3 11 6 4 12 0 4 13 2 4 14 3 5 15 5 5 16 7 5 17 1 0 18 3 0 19 2 0 20 3 1 21 "
+"7 1 22 6 1 23 7 2 24 5 2 25 4 2 26 5 3 27 1 3 28 0 3 29 6 4 30 4 4 31 0 4 32 3 5 33 1 5 34 5 5 35</p>\n"
+"        </triangles>\n"
+"      </mesh>\n"
+"    </geometry>\n"
+"  </library_geometries>\n"
+"  <library_controllers/>\n"
+"  <library_visual_scenes>\n"
+"    <visual_scene id=\"Scene\" name=\"Scene\">\n"
+"      <node id=\"Node\" name=\"Node\" type=\"NODE\">\n"
+"        <matrix sid=\"transform\">7.54979e-8 -1 0 0 1 7.54979e-8 0 0 0 0 1 0 0 0 0 1</matrix>\n"
+"        <node id=\"Cube\" name=\"Cube\" type=\"NODE\">\n"
+"          <matrix sid=\"transform\">1 0 0 0 0 1 0 -4 0 0 1 2 0 0 0 1</matrix>\n"
+"          <instance_geometry url=\"#Cube-mesh\" name=\"Cube\"/>\n"
+"        </node>\n"
+"      </node>\n"
+"    </visual_scene>\n"
+"  </library_visual_scenes>\n"
+"  <scene>\n"
+"    <instance_visual_scene url=\"#Scene\"/>\n"
+"  </scene>\n"
+"</COLLADA>\n";
+
+    MoColladaDataCreateInfo createInfo;
+    createInfo.pContents = data;
+
+    MoColladaData collada;
+    moCreateColladaData(&createInfo, &collada);
+
+    assert(       collada->materialCount == 0);
+    assert(       collada->meshCount == 1);
+    assert(strcmp(collada->pMeshes[0]->name, "Cube-mesh") == 0);
+    assert(       collada->nodeCount == 1);
+    assert(strcmp(collada->pNodes[0]->name, "Node") == 0);
+    assert(       collada->pNodes[0]->nodeCount == 1);
+    assert(strcmp(collada->pNodes[0]->pNodes[0]->name, "Cube") == 0);
+    assert(       collada->pNodes[0]->pNodes[0]->nodeCount == 0);
+    assert(       collada->pNodes[0]->pNodes[0]->mesh == collada->pMeshes[0]);
+
+    moDestroyColladaData(collada);
 }
 
 /*

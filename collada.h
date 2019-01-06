@@ -125,6 +125,9 @@ void moCreateColladaData(MoColladaDataCreateInfo* pCreateInfo, MoColladaData* pC
 // destroy parsed collada document's nodes, meshes and materials
 void moDestroyColladaData(MoColladaData collada);
 
+// test
+void moTestCollada();
+
 /*
 ------------------------------------------------------------------------------
 This software is available under 2 licenses -- choose whichever you prefer.

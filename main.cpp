@@ -64,6 +64,7 @@ static float3   light_position = { 3.0f, 0.0f, 15.0f };
 int main(int argc, char** argv)
 {
 #ifdef _DEBUG
+    moTestCollada();
     moTestVertexFormat();
 #endif
     const char * filename = nullptr;
