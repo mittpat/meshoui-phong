@@ -93,6 +93,7 @@ typedef struct MoColladaMaterial_T {
     const char* filenameNormal;
     const char* filenameSpecular;
     const char* filenameEmissive;
+    void*       userData;
 }* MoColladaMaterial;
 
 typedef struct MoColladaNode_T* MoColladaNode;

@@ -581,12 +581,12 @@ void moParseLibraryEffects(pugi::xml_node branch, std::vector<DAE::Effect> &effe
     }
 }
 
-void moParseLibraryMaterials(pugi::xml_node branch, MoColladaData colladaData, const std::vector<DAE::Effect> &effects)
+void moParseLibraryMaterials(pugi::xml_node branch, MoColladaData colladaData, const DAE::LibraryData &libraryData)
 {
     for (pugi::xml_node library_material : branch)
     {
         std::string libraryMaterialUrl = &library_material.child("instance_effect").attribute("url").value()[1]; //#...
-        for (const auto & effect : effects)
+        for (const auto & effect : libraryData.effects)
         {
             if (effect.id == libraryMaterialUrl)
             {
@@ -595,6 +595,22 @@ void moParseLibraryMaterials(pugi::xml_node branch, MoColladaData colladaData, c
                 auto name = library_material.attribute("id").as_string();
                 material->name = (char*)malloc(strlen(name) + 1);
                 strcpy((char*)material->name, name);
+
+                for (const auto & value : effect.values)
+                {
+                    DAE::Effect::Value v = value;
+                    auto image = std::find_if(libraryData.images.begin(), libraryData.images.end(), [v](const DAE::Image & image){ return image.id == v.texture; });
+                    if (image != libraryData.images.end()) { v.texture = (*image).initFrom; }
+
+                    if (v.sid == "uniformAmbient") { material->colorAmbient = {v.data[0], v.data[1], v.data[2]}; }
+                    else if (v.sid == "uniformDiffuse") { material->colorDiffuse = {v.data[0], v.data[1], v.data[2]}; }
+                    else if (v.sid == "uniformTextureDiffuse") { material->filenameDiffuse = (char*)malloc(v.texture.size() + 1); strcpy((char*)material->filenameDiffuse, v.texture.c_str()); }
+                    else if (v.sid == "uniformSpecular") { material->colorSpecular = {v.data[0], v.data[1], v.data[2]}; }
+                    else if (v.sid == "uniformTextureSpecular") { material->filenameSpecular = (char*)malloc(v.texture.size() + 1); strcpy((char*)material->filenameSpecular, v.texture.c_str()); }
+                    else if (v.sid == "uniformEmissive") { material->colorEmissive = {v.data[0], v.data[1], v.data[2]}; }
+                    else if (v.sid == "uniformTextureEmissive") { material->filenameEmissive = (char*)malloc(v.texture.size() + 1); strcpy((char*)material->filenameEmissive, v.texture.c_str()); }
+                    else if (v.sid == "uniformTextureNormal") { material->filenameNormal = (char*)malloc(v.texture.size() + 1); strcpy((char*)material->filenameNormal, v.texture.c_str()); }
+                }
 
                 push_back((MoColladaMaterial**)&colladaData->pMaterials, &colladaData->materialCount, material);
 
@@ -754,7 +770,7 @@ void moCreateColladaData(MoColladaDataCreateInfo *pCreateInfo, MoColladaData *pC
     MoColladaData colladaData = *pColladaData = (MoColladaData)malloc(sizeof(MoColladaData_T));
     *colladaData = {};
     moParseLibraryGeometries(root.child("library_geometries"), colladaData);
-    moParseLibraryMaterials(root.child("library_materials"), colladaData, libraryData.effects);
+    moParseLibraryMaterials(root.child("library_materials"), colladaData, libraryData);
     moParseLibraryVisualScenes(root.child("library_visual_scenes"), colladaData, libraryData.upAxis);
 }
 

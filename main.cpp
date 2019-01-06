@@ -177,13 +177,17 @@ int main(int argc, char** argv)
     }
 
     struct Drawable {
-        float4x4 model;
-        MoMesh   mesh;
+        float4x4   model;
+        MoMesh     mesh;
+        MoMaterial material;
     };
-    std::vector<MoMesh> meshes;
+    // reference only
     std::vector<Drawable> drawables;
+    // owning
+    std::vector<MoMesh> meshes;
+    // owning
+    std::vector<MoMaterial> materials;
 
-    MoMaterial material = {};
     if (filename != nullptr)
     {
         MoColladaData collada;
@@ -196,7 +200,6 @@ int main(int argc, char** argv)
             moCreateColladaData(&createInfo, &collada);
         }
 
-        meshes.resize(collada->meshCount, 0);
         for (uint32_t i = 0; i < collada->meshCount; ++i)
         {
             MoColladaMesh colladaMesh = collada->pMeshes[i];
@@ -228,10 +231,30 @@ int main(int argc, char** argv)
             meshInfo.pIndices = vertexFormat->pIndices;
             meshInfo.vertexCount = vertexFormat->vertexCount;
             meshInfo.pVertices = vertexFormat->pVertices;
-            moCreateMesh(&meshInfo, &meshes[i]);
-            colladaMesh->userData = meshes[i];
+
+            MoMesh mesh;
+            moCreateMesh(&meshInfo, &mesh);
+            colladaMesh->userData = mesh;
+            meshes.push_back(mesh);
 
             moDestroyVertexFormat(vertexFormat);
+        }
+
+        materials.push_back({}); materials.back() = {}; moDefaultMaterial(&materials.back());
+        for (uint32_t i = 0; i < collada->materialCount; ++i)
+        {
+            MoColladaMaterial colladaMaterial = collada->pMaterials[i];
+
+            MoMaterialCreateInfo materialInfo = {};
+            (MoFloat3&)materialInfo.colorAmbient = colladaMaterial->colorAmbient; materialInfo.colorAmbient.w = 1.0f;
+            (MoFloat3&)materialInfo.colorDiffuse = colladaMaterial->colorDiffuse; materialInfo.colorDiffuse.w = 1.0f;
+            (MoFloat3&)materialInfo.colorEmissive = colladaMaterial->colorEmissive; materialInfo.colorEmissive.w = 1.0f;
+            (MoFloat3&)materialInfo.colorSpecular = colladaMaterial->colorSpecular; materialInfo.colorSpecular.w = 1.0f;
+
+            MoMaterial material = {};
+            moCreateMaterial(&materialInfo, &material);
+            colladaMaterial->userData = material;
+            materials.push_back(material);
         }
 
         // flatten transforms of node tree
@@ -246,7 +269,8 @@ int main(int argc, char** argv)
                 }
                 if (currentNode->mesh != nullptr)
                 {
-                    drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData});
+                    if (currentNode->material != nullptr) { drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData, (MoMaterial)currentNode->material->userData}); }
+                    else                                  { drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData, materials[0]}); }
                 }
             };
             MoColladaNode colladaNode = collada->pNodes[i];
@@ -256,8 +280,12 @@ int main(int argc, char** argv)
         moDestroyColladaData(collada);
     }
     // Demo
-    if (meshes.empty()) { meshes.resize(1); meshes[0] = {}; moDemoCube(&meshes[0]); drawables.push_back(Drawable{model_matrix, meshes[0]}); }
-    if (material == nullptr) { moDemoMaterial(&material); }
+    if (meshes.empty())
+    {
+        meshes.push_back({}); meshes.back() = {}; moDemoCube(&meshes.back());
+        materials.push_back({}); materials.back() = {}; moDemoMaterial(&materials.back());
+        drawables.push_back(Drawable{model_matrix, meshes.back(), materials.back()});
+    }
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -268,7 +296,6 @@ int main(int argc, char** argv)
         VkSemaphore imageAcquiredSemaphore;
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         moNewFrame(frameIndex);
-        moBindMaterial(material);
         {
             MoUniform uni = {};
             (float3&)uni.light = light_position;
@@ -283,6 +310,7 @@ int main(int argc, char** argv)
             {
                 (float4x4&)pmv.model = drawable.model;
                 moSetPMV(&pmv);
+                moBindMaterial(drawable.material);
                 moDrawMesh(drawable.mesh);
             }
         }
@@ -313,7 +341,8 @@ int main(int argc, char** argv)
     }
 
     // Meshoui cleanup
-    moDestroyMaterial(material);
+    for (MoMaterial material : materials)
+        moDestroyMaterial(material);
     for (MoMesh mesh : meshes)
         moDestroyMesh(mesh);
 
