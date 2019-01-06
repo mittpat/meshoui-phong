@@ -18,6 +18,7 @@
 #include <experimental/filesystem>
 #include <functional>
 #include <fstream>
+#include <random>
 #include <streambuf>
 #include <vector>
 
@@ -296,7 +297,12 @@ int main(int argc, char** argv)
     {
         meshes.push_back({}); meshes.back() = {}; moDemoCube(&meshes.back());
         materials.push_back({}); materials.back() = {}; moDemoMaterial(&materials.back());
-        drawables.push_back(Drawable{model_matrix, meshes.back(), materials.back()});
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dis(-10.0f, 10.0f);
+        for (uint32_t i = 0; i < 16; ++i)
+            drawables.push_back(Drawable{translation_matrix(float3{ dis(gen), dis(gen), dis(gen) }), meshes.back(), materials.back()});
     }
 
     // Main loop
