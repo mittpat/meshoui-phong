@@ -909,6 +909,10 @@ void moTestCollada()
     assert(       collada->materialCount == 0);
     assert(       collada->meshCount == 1);
     assert(strcmp(collada->pMeshes[0]->name, "Cube-mesh") == 0);
+    assert(       collada->pMeshes[0]->normalCount == 6);
+    assert(       collada->pMeshes[0]->texcoordCount == 36);
+    assert(       collada->pMeshes[0]->triangleCount == 12);
+    assert(       collada->pMeshes[0]->vertexCount == 8);
     assert(       collada->nodeCount == 1);
     assert(strcmp(collada->pNodes[0]->name, "Node") == 0);
     assert(       collada->pNodes[0]->nodeCount == 1);
