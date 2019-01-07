@@ -984,6 +984,7 @@ void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapC
     err = vkDeviceWaitIdle(g_Device->device);
     g_Device->pCheckVkResultFn(err);
 
+    deleteBuffer(g_Device, swapChain->depthBuffer);
     for (uint32_t i = 0; i < countof(swapChain->images); ++i)
     {
         vkDestroyImageView(g_Device->device, swapChain->images[i].view, g_Allocator);
