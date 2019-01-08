@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 
 #include "collada.h"
+#include "control.h"
 #include "phong.h"
 #include "vertexformat.h"
 
@@ -57,7 +58,8 @@ static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 1920 / 1080.f, 0.1f, 1000.f, pos_z, zero_to_one));
 static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
-static float4x4 view_matrix = inverse(camera_matrix);
+static float4x4 camera_altitude_matrix = identity;
+static float4x4 camera_azimuth_matrix = identity;
 static float4x4 model_matrix = identity;
 static float3   light_position = { 3.0f, 0.0f, 15.0f };
 
@@ -306,10 +308,26 @@ int main(int argc, char** argv)
             drawables.push_back(Drawable{translation_matrix(float3{ dis(gen), dis(gen), dis(gen) }), meshes.back(), materials.back()});
     }
 
+    // Controls init
+    MoMouselook mouselook;
+    {
+        MoControlInitInfo initInfo = {};
+        initInfo.pWindow = window;
+        moControlInit(&initInfo);
+
+        MoMouselookCreateInfo createInfo = {};
+        createInfo.pAltitude = (MoFloat4x4*)&camera_altitude_matrix;
+        createInfo.pAzimuth = (MoFloat4x4*)&camera_azimuth_matrix;
+        createInfo.scale = 0.001f;
+        moCreateMouselook(&createInfo, &mouselook);
+    }
+
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+
+        float4x4 camera_matrix_frame = mul(camera_matrix, mul(camera_azimuth_matrix, camera_altitude_matrix));
 
         // Frame begin
         VkSemaphore imageAcquiredSemaphore;
@@ -318,13 +336,13 @@ int main(int argc, char** argv)
         {
             MoUniform uni = {};
             (float3&)uni.light = light_position;
-            (float3&)uni.camera = camera_matrix.w.xyz();
+            (float3&)uni.camera = camera_matrix_frame.w.xyz();
             moSetLight(&uni);
         }
         {
             MoPushConstant pmv = {};
             (float4x4&)pmv.projection = proj_matrix;
-            (float4x4&)pmv.view = view_matrix;
+            (float4x4&)pmv.view = inverse(camera_matrix_frame);
             for (const auto & drawable : drawables)
             {
                 (float4x4&)pmv.model = drawable.model;
@@ -359,6 +377,10 @@ int main(int argc, char** argv)
         }
         vk_check_result(err);
     }
+
+    // Controls cleanup
+    moDestroyMouselook(mouselook);
+    moControlShutdown();
 
     // Meshoui cleanup
     for (MoMaterial material : materials)
