@@ -8,6 +8,14 @@
 #include <cmath>
 #include <vector>
 
+static GLFWwindow *g_window = nullptr;
+static GLFWcursorenterfun g_previous_cursorenterfun = nullptr;
+static GLFWcursorposfun   g_previous_cursorposfun   = nullptr;
+static GLFWmousebuttonfun g_previous_mousebuttonfun = nullptr;
+static GLFWscrollfun      g_previous_scrollfun      = nullptr;
+static GLFWkeyfun         g_previous_keyfun         = nullptr;
+static GLFWcharfun        g_previous_charfun        = nullptr;
+
 namespace GlfwCallbacks
 {
     class IKeyboard
@@ -16,7 +24,6 @@ namespace GlfwCallbacks
         virtual ~IKeyboard() {}
         virtual void keyAction(void* /*window*/, int /*key*/, int /*scancode*/, int /*action*/, int /*mods*/) {}
         virtual void charAction(void* /*window*/, unsigned int /*c*/) {}
-        virtual void keyboardLost() {}
     };
 
     class IMouse
@@ -32,33 +39,39 @@ namespace GlfwCallbacks
     std::vector<IKeyboard *> keyboards;
     std::vector<IMouse *> mice;
 
-    void cursorEnterCallback(GLFWwindow *, int)
+    void cursorEnterCallback(GLFWwindow *window, int entered)
     {
+        if (g_previous_cursorenterfun) { g_previous_cursorenterfun(window, entered); }
         for (auto * cb : mice) { cb->mouseLost(); }
     }
 
     void cursorPositionCallback(GLFWwindow *window, double xpos, double ypos)
     {
+        if (g_previous_cursorposfun) { g_previous_cursorposfun(window, xpos, ypos); }
         for (auto * cb : mice) { cb->cursorPositionAction(window, xpos, ypos); }
     }
 
     void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
     {
+        if (g_previous_mousebuttonfun) { g_previous_mousebuttonfun(window, button, action, mods); }
         for (auto * cb : mice) { cb->mouseButtonAction(window, button, action, mods); }
     }
 
     void scrollCallback(GLFWwindow *window, double xoffset, double yoffset)
     {
+        if (g_previous_scrollfun) { g_previous_scrollfun(window, xoffset, yoffset); }
         for (auto * cb : mice) { cb->scrollAction(window, xoffset, yoffset); }
     }
 
     void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
     {
+        if (g_previous_keyfun) { g_previous_keyfun(window, key, scancode, action, mods); }
         for (auto * cb : keyboards) { cb->keyAction(window, key, scancode, action, mods); }
     }
 
     void charCallback(GLFWwindow *window, unsigned int c)
     {
+        if (g_previous_charfun) { g_previous_charfun(window, c); }
         for (auto * cb : keyboards) { cb->charAction(window, c); }
     }
 }
@@ -82,8 +95,6 @@ static constexpr MoFloat4x4 rotation_matrix(const MoFloat4 & rotation)
             c.x,c.y,c.z,0.f,
             0.f,0.f,0.f,1.f};
 }
-
-static GLFWwindow *g_window = nullptr;
 
 struct MoMouselook_T
     : public GlfwCallbacks::IMouse
@@ -119,23 +130,29 @@ void moControlInit(MoControlInitInfo *pInfo)
 {
     assert(g_window == nullptr && "Control system cannot be initialized twice.");
     g_window = pInfo->pWindow;
-    glfwSetCursorEnterCallback(g_window, GlfwCallbacks::cursorEnterCallback);
-    glfwSetCursorPosCallback(g_window, GlfwCallbacks::cursorPositionCallback);
-    glfwSetMouseButtonCallback(g_window, GlfwCallbacks::mouseButtonCallback);
-    glfwSetScrollCallback(g_window, GlfwCallbacks::scrollCallback);
-    glfwSetKeyCallback(g_window, GlfwCallbacks::keyCallback);
-    glfwSetCharCallback(g_window, GlfwCallbacks::charCallback);
+    g_previous_cursorenterfun = glfwSetCursorEnterCallback(g_window, GlfwCallbacks::cursorEnterCallback);
+    g_previous_cursorposfun   = glfwSetCursorPosCallback(g_window, GlfwCallbacks::cursorPositionCallback);
+    g_previous_mousebuttonfun = glfwSetMouseButtonCallback(g_window, GlfwCallbacks::mouseButtonCallback);
+    g_previous_scrollfun      = glfwSetScrollCallback(g_window, GlfwCallbacks::scrollCallback);
+    g_previous_keyfun         = glfwSetKeyCallback(g_window, GlfwCallbacks::keyCallback);
+    g_previous_charfun        = glfwSetCharCallback(g_window, GlfwCallbacks::charCallback);
 }
 
 void moControlShutdown()
 {
-    glfwSetCursorEnterCallback(g_window, nullptr);
-    glfwSetCursorPosCallback(g_window, nullptr);
-    glfwSetMouseButtonCallback(g_window, nullptr);
-    glfwSetScrollCallback(g_window, nullptr);
-    glfwSetKeyCallback(g_window, nullptr);
-    glfwSetCharCallback(g_window, nullptr);
+    glfwSetCursorEnterCallback(g_window, g_previous_cursorenterfun);
+    glfwSetCursorPosCallback  (g_window, g_previous_cursorposfun  );
+    glfwSetMouseButtonCallback(g_window, g_previous_mousebuttonfun);
+    glfwSetScrollCallback     (g_window, g_previous_scrollfun     );
+    glfwSetKeyCallback        (g_window, g_previous_keyfun        );
+    glfwSetCharCallback       (g_window, g_previous_charfun       );
     g_window = nullptr;
+    g_previous_cursorenterfun = nullptr;
+    g_previous_cursorposfun   = nullptr;
+    g_previous_mousebuttonfun = nullptr;
+    g_previous_scrollfun      = nullptr;
+    g_previous_keyfun         = nullptr;
+    g_previous_charfun        = nullptr;
 }
 
 void moCreateMouselook(const MoMouselookCreateInfo *pCreateInfo, MoMouselook *pMouselook)
