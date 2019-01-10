@@ -77,7 +77,7 @@ namespace GlfwCallbacks
 }
 
 struct MoMouselook_T
-    : public GlfwCallbacks::IMouse
+    : GlfwCallbacks::IMouse
 {
     virtual void cursorPositionAction(void *, double xpos, double ypos) override
     {
@@ -86,18 +86,40 @@ struct MoMouselook_T
             *yaw += (float)xpos - previousX;
             *pitch += (float)ypos - previousY;
         }
-
         previousX = xpos;
         previousY = ypos;
         once = true;
     }
-
     virtual void mouseLost() override { once = false; }
 
-    float *yaw, *pitch;
-    float previousX, previousY;
+    float *yaw, *pitch, previousX, previousY;
     bool once;
 };
+
+struct MoStrafer_T
+    : GlfwCallbacks::IKeyboard
+{
+    virtual void keyAction(void *, int key, int, int action, int) override
+    {
+        if (action == GLFW_PRESS)
+        {
+            if (key == keyW) *w = true;
+            if (key == keyA) *a = true;
+            if (key == keyS) *s = true;
+            if (key == keyD) *d = true;
+        }
+        if (action == GLFW_RELEASE)
+        {
+            if (key == keyW) *w = false;
+            if (key == keyA) *a = false;
+            if (key == keyS) *s = false;
+            if (key == keyD) *d = false;
+        }
+    }
+    bool *w,*a,*s,*d;
+    int keyW,keyA,keyS,keyD;
+};
+
 
 void moControlInit(MoControlInitInfo *pInfo)
 {
@@ -137,7 +159,6 @@ void moCreateMouselook(const MoMouselookCreateInfo *pCreateInfo, MoMouselook *pM
     *mouselook = {};
     mouselook->pitch = pCreateInfo->pPitch;
     mouselook->yaw = pCreateInfo->pYaw;
-
     GlfwCallbacks::mice.push_back(mouselook);
 }
 
@@ -147,12 +168,40 @@ void moResetMouselook(MoMouselook mouselook)
     mouselook->once = false;
 }
 
-
 void moDestroyMouselook(MoMouselook mouselook)
 {
     GlfwCallbacks::mice.erase(std::remove(GlfwCallbacks::mice.begin(), GlfwCallbacks::mice.end(), mouselook));
-
     delete mouselook;
+}
+
+void moCreateStrafer(const MoStraferCreateInfo* pCreateInfo, MoStrafer* pStrafer)
+{
+    assert(pCreateInfo->pForward != nullptr && "w cannot be null.");
+    assert(pCreateInfo->pLeft != nullptr && "a cannot be null.");
+    assert(pCreateInfo->pBackward != nullptr && "s cannot be null.");
+    assert(pCreateInfo->pRight != nullptr && "d cannot be null.");
+
+    MoStrafer strafer = *pStrafer = new MoStrafer_T();
+    *strafer = {};
+    strafer->w = pCreateInfo->pForward;
+    strafer->a = pCreateInfo->pLeft;
+    strafer->s = pCreateInfo->pBackward;
+    strafer->d = pCreateInfo->pRight;
+    strafer->keyW = pCreateInfo->keyForward;
+    strafer->keyA = pCreateInfo->keyLeft;
+    strafer->keyS = pCreateInfo->keyBackward;
+    strafer->keyD = pCreateInfo->keyRight;
+    if (strafer->keyW == 0) strafer->keyW = GLFW_KEY_W;
+    if (strafer->keyA == 0) strafer->keyW = GLFW_KEY_A;
+    if (strafer->keyS == 0) strafer->keyW = GLFW_KEY_S;
+    if (strafer->keyD == 0) strafer->keyW = GLFW_KEY_D;
+    GlfwCallbacks::keyboards.push_back(strafer);
+}
+
+void moDestroyStrafer(MoStrafer strafer)
+{
+    GlfwCallbacks::keyboards.erase(std::remove(GlfwCallbacks::keyboards.begin(), GlfwCallbacks::keyboards.end(), strafer));
+    delete strafer;
 }
 
 /*

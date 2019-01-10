@@ -56,7 +56,7 @@ static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f,-1.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 1.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
-static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 1920 / 1080.f, 0.1f, 1000.f, pos_z, zero_to_one));
+static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
 static float3   light_position = { 3.0f, 0.0f, 15.0f };
 static MoMouselook mouselook;
@@ -110,10 +110,27 @@ int main(int argc, char** argv)
 
     // Initialization
     {
+        int width, height;
+
         glfwSetErrorCallback(glfw_error_callback);
         glfwInit();
+#ifdef _DEBUG
+        width = 1920 / 2;
+        height = 1080 / 2;
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        window = glfwCreateWindow(1920 / 2, 1080 / 2, "Graphics Previewer", nullptr, nullptr);
+        window = glfwCreateWindow(width, height, "Graphics Previewer", nullptr, nullptr);
+#else
+        {
+            const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+            width = mode->width;
+            height = mode->height;
+        }
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        window = glfwCreateWindow(width, height, "Graphics Previewer", nullptr, nullptr);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, width, height, GLFW_DONT_CARE);
+#endif
         glfwSetKeyCallback(window, glfwKeyCallback);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
 
@@ -134,7 +151,7 @@ int main(int argc, char** argv)
         vk_check_result(err);
 
         // Create Framebuffers
-        int width = 0, height = 0;
+        width = height = 0;
         while (width == 0 || height == 0)
         {
             glfwGetFramebufferSize(window, &width, &height);

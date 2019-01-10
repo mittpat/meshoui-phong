@@ -2,74 +2,6 @@
 
 #include <cstdint>
 
-// vector types, can be declared as your own so long as memory alignment is respected
-#if !defined(MO_SKIP_VEC_TYPES) && !defined(MO_VEC_TYPES_DEFINED)
-#define MO_VEC_TYPES_DEFINED
-typedef union MoUInt3 {
-    struct {
-        uint32_t x;
-        uint32_t y;
-        uint32_t z;
-    };
-    uint32_t data[3];
-} MoUInt3;
-
-typedef union MoUInt3x3 {
-    struct {
-        MoUInt3 x;
-        MoUInt3 y;
-        MoUInt3 z;
-    };
-    uint32_t data[9];
-} MoUInt3x3;
-
-typedef union MoFloat2 {
-    struct {
-        float x;
-        float y;
-    };
-    float data[2];
-} MoFloat2;
-
-typedef union MoFloat3 {
-    struct {
-        float x;
-        float y;
-        float z;
-    };
-    float data[3];
-} MoFloat3;
-
-typedef union MoFloat3x3 {
-    struct {
-        MoFloat3 x;
-        MoFloat3 y;
-        MoFloat3 z;
-    };
-    float data[9];
-} MoFloat3x3;
-
-typedef union MoFloat4 {
-    struct {
-        float x;
-        float y;
-        float z;
-        float w;
-    };
-    float data[4];
-} MoFloat4;
-
-typedef union MoFloat4x4 {
-    struct {
-        MoFloat4 x;
-        MoFloat4 y;
-        MoFloat4 z;
-        MoFloat4 w;
-    };
-    float data[16];
-} MoFloat4x4;
-#endif
-
 typedef struct GLFWwindow GLFWwindow;
 
 // you must call moInit(MoControlInitInfo), typically when starting your application
@@ -83,7 +15,19 @@ typedef struct MoMouselookCreateInfo {
     float *pPitch;
 } MoMouselookCreateInfo;
 
+typedef struct MoStraferCreateInfo {
+    bool *pForward;
+    bool *pLeft;
+    bool *pBackward;
+    bool *pRight;
+    int keyForward;
+    int keyLeft;
+    int keyBackward;
+    int keyRight;
+} MoStraferCreateInfo;
+
 typedef struct MoMouselook_T* MoMouselook;
+typedef struct MoStrafer_T* MoStrafer;
 
 // init control system
 void moControlInit(MoControlInitInfo* pInfo);
@@ -94,10 +38,17 @@ void moControlShutdown();
 // create a new Mouselook
 void moCreateMouselook(const MoMouselookCreateInfo* pCreateInfo, MoMouselook* pMouselook);
 
+// reset mouselook to 0
 void moResetMouselook(MoMouselook mouselook);
 
 // free Mouselook
 void moDestroyMouselook(MoMouselook mouselook);
+
+// create new strafing controls
+void moCreateStrafer(const MoStraferCreateInfo* pCreateInfo, MoStrafer* pStrafer);
+
+// free strafing controls
+void moDestroyStrafer(MoStrafer strafer);
 
 /*
 ------------------------------------------------------------------------------
