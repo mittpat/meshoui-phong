@@ -58,10 +58,23 @@ static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 1920 / 1080.f, 0.1f, 1000.f, pos_z, zero_to_one));
 static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
-static float4x4 camera_altitude_matrix = identity;
-static float4x4 camera_azimuth_matrix = identity;
-static float4x4 model_matrix = identity;
 static float3   light_position = { 3.0f, 0.0f, 15.0f };
+static MoMouselook mouselook;
+
+static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
+{
+    if (action == GLFW_PRESS)
+    {
+        if (key == GLFW_KEY_ESCAPE)
+        {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+        else if (key == GLFW_KEY_R)
+        {
+            moResetMouselook(mouselook);
+        }
+    }
+}
 
 int main(int argc, char** argv)
 {
@@ -101,6 +114,7 @@ int main(int argc, char** argv)
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window = glfwCreateWindow(1920 / 2, 1080 / 2, "Graphics Previewer", nullptr, nullptr);
+        glfwSetKeyCallback(window, glfwKeyCallback);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
 
         // Create Vulkan instance
@@ -309,16 +323,15 @@ int main(int argc, char** argv)
     }
 
     // Controls init
-    MoMouselook mouselook;
+    float yaw, pitch; yaw = pitch = 0.f;
     {
         MoControlInitInfo initInfo = {};
         initInfo.pWindow = window;
         moControlInit(&initInfo);
 
         MoMouselookCreateInfo createInfo = {};
-        createInfo.pAltitude = (MoFloat4x4*)&camera_altitude_matrix;
-        createInfo.pAzimuth = (MoFloat4x4*)&camera_azimuth_matrix;
-        createInfo.scale = 0.001f;
+        createInfo.pPitch = &pitch;
+        createInfo.pYaw = &yaw;
         moCreateMouselook(&createInfo, &mouselook);
     }
 
@@ -327,6 +340,8 @@ int main(int argc, char** argv)
     {
         glfwPollEvents();
 
+        float4x4 camera_azimuth_matrix = rotation_matrix(rotation_quat({0.f,-1.f,0.f}, yaw * 0.01f));
+        float4x4 camera_altitude_matrix = rotation_matrix(rotation_quat({-1.f,0.f,0.f}, pitch * 0.01f));
         float4x4 camera_matrix_frame = mul(camera_matrix, mul(camera_azimuth_matrix, camera_altitude_matrix));
 
         // Frame begin

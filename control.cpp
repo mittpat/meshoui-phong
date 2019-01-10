@@ -76,26 +76,6 @@ namespace GlfwCallbacks
     }
 }
 
-static float MoPI = 355/113.0f;
-static constexpr MoFloat3 qxdir(const MoFloat4 & q) { return {q.w*q.w+q.x*q.x-q.y*q.y-q.z*q.z, (q.x*q.y+q.z*q.w)*2, (q.z*q.x-q.y*q.w)*2}; }
-static constexpr MoFloat3 qydir(const MoFloat4 & q) { return {(q.x*q.y-q.z*q.w)*2, q.w*q.w-q.x*q.x+q.y*q.y-q.z*q.z, (q.y*q.z+q.x*q.w)*2}; }
-static constexpr MoFloat3 qzdir(const MoFloat4 & q) { return {(q.z*q.x+q.y*q.w)*2, (q.y*q.z-q.x*q.w)*2, q.w*q.w-q.x*q.x-q.y*q.y+q.z*q.z}; }
-static constexpr MoFloat4 rotation_quat(const MoFloat3 & axis, float angle)
-{
-    const auto a = std::sin(angle/2);
-    return {axis.x*a,axis.y*a,axis.z*a,std::cos(angle/2)};
-}
-static constexpr MoFloat4x4 rotation_matrix(const MoFloat4 & rotation)
-{
-    const auto a = qxdir(rotation);
-    const auto b = qydir(rotation);
-    const auto c = qzdir(rotation);
-    return {a.x,a.y,a.z,0.f,
-            b.x,b.y,b.z,0.f,
-            c.x,c.y,c.z,0.f,
-            0.f,0.f,0.f,1.f};
-}
-
 struct MoMouselook_T
     : public GlfwCallbacks::IMouse
 {
@@ -103,14 +83,8 @@ struct MoMouselook_T
     {
         if (once)
         {
-            const float deltaX = (float)xpos - previousX;
-            const float deltaY = (float)ypos - previousY;
-
-            yaw += deltaX * scale * MoPI;
-            pitch += deltaY * scale * MoPI/2;
-
-            *azimuth = rotation_matrix(rotation_quat(MoFloat3{0.f,-1.f,0.f}, float(yaw)));
-            *altitude = rotation_matrix(rotation_quat(MoFloat3{-1.f,0.f,0.f}, float(pitch)));
+            *yaw += (float)xpos - previousX;
+            *pitch += (float)ypos - previousY;
         }
 
         previousX = xpos;
@@ -120,9 +94,8 @@ struct MoMouselook_T
 
     virtual void mouseLost() override { once = false; }
 
-    MoFloat4x4 *altitude;
-    MoFloat4x4 *azimuth;
-    float previousX, previousY, yaw, pitch, scale;
+    float *yaw, *pitch;
+    float previousX, previousY;
     bool once;
 };
 
@@ -157,17 +130,23 @@ void moControlShutdown()
 
 void moCreateMouselook(const MoMouselookCreateInfo *pCreateInfo, MoMouselook *pMouselook)
 {
-    assert(pCreateInfo->pAltitude != nullptr && "Altitude matrix cannot be null.");
-    assert(pCreateInfo->pAzimuth != nullptr && "Azimuth matrix cannot be null.");
+    assert(pCreateInfo->pYaw != nullptr && "Yaw pointer cannot be null.");
+    assert(pCreateInfo->pPitch != nullptr && "Pitch pointer cannot be null.");
 
     MoMouselook mouselook = *pMouselook = new MoMouselook_T();
     *mouselook = {};
-    mouselook->altitude = pCreateInfo->pAltitude;
-    mouselook->azimuth = pCreateInfo->pAzimuth;
-    mouselook->scale = pCreateInfo->scale;
+    mouselook->pitch = pCreateInfo->pPitch;
+    mouselook->yaw = pCreateInfo->pYaw;
 
     GlfwCallbacks::mice.push_back(mouselook);
 }
+
+void moResetMouselook(MoMouselook mouselook)
+{
+    mouselook->previousX = mouselook->previousY = *mouselook->yaw = *mouselook->pitch = 0.f;
+    mouselook->once = false;
+}
+
 
 void moDestroyMouselook(MoMouselook mouselook)
 {

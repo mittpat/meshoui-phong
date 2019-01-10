@@ -79,9 +79,8 @@ typedef struct MoControlInitInfo {
 } MoInitControlInfo;
 
 typedef struct MoMouselookCreateInfo {
-    MoFloat4x4 *pAltitude;
-    MoFloat4x4 *pAzimuth;
-    float       scale;
+    float *pYaw;
+    float *pPitch;
 } MoMouselookCreateInfo;
 
 typedef struct MoMouselook_T* MoMouselook;
@@ -94,6 +93,8 @@ void moControlShutdown();
 
 // create a new Mouselook
 void moCreateMouselook(const MoMouselookCreateInfo* pCreateInfo, MoMouselook* pMouselook);
+
+void moResetMouselook(MoMouselook mouselook);
 
 // free Mouselook
 void moDestroyMouselook(MoMouselook mouselook);
