@@ -222,6 +222,7 @@ typedef struct MoInitInfo {
     VkSwapchainKHR               swapChainKHR;
     VkRenderPass                 renderPass;
     VkExtent2D                   extent;
+    VkBool32                     flipTexcoords;
     const VkAllocationCallbacks* pAllocator;
     void                         (*pCheckVkResultFn)(VkResult err);
 } MoInitInfo;
@@ -233,27 +234,25 @@ typedef struct MoMeshCreateInfo {
     uint32_t        vertexCount;
 } MoMeshCreateInfo;
 
+typedef struct MoTextureInfo {
+    const uint8_t* pData;
+    VkDeviceSize   dataSize;
+    VkExtent2D     extent;
+    VkFilter       filter;
+    // 0 or VK_FORMAT_R8G8B8A8_UNORM for uncompressed
+    VkFormat       format;
+} MoTextureInfo;
+
 typedef struct MoMaterialCreateInfo {
     MoFloat4       colorAmbient;
     MoFloat4       colorDiffuse;
     MoFloat4       colorSpecular;
     MoFloat4       colorEmissive;
-    // VK_FORMAT_R8G8B8A8_UNORM
-    const uint8_t* pTextureAmbient;
-    VkExtent2D     textureAmbientExtent;
-    VkFilter       textureAmbientFilter;
-    const uint8_t* pTextureDiffuse;
-    VkExtent2D     textureDiffuseExtent;
-    VkFilter       textureDiffuseFilter;
-    const uint8_t* pTextureNormal;
-    VkExtent2D     textureNormalExtent;
-    VkFilter       textureNormalFilter;
-    const uint8_t* pTextureSpecular;
-    VkExtent2D     textureSpecularExtent;
-    VkFilter       textureSpecularFilter;
-    const uint8_t* pTextureEmissive;
-    VkExtent2D     textureEmissiveExtent;
-    VkFilter       textureEmissiveFilter;
+    MoTextureInfo  textureAmbient;
+    MoTextureInfo  textureDiffuse;
+    MoTextureInfo  textureNormal;
+    MoTextureInfo  textureSpecular;
+    MoTextureInfo  textureEmissive;
 } MoMaterialCreateInfo;
 
 typedef struct MoPipelineCreateInfo {
