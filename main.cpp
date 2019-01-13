@@ -351,14 +351,33 @@ int main(int argc, char** argv)
         createInfo.pYaw = &yaw;
         moCreateMouselook(&createInfo, &mouselook);
     }
+    MoStrafer strafer;
+    bool w, a, s, d; w = a = s = d = false;
+    {
+        MoStraferCreateInfo createInfo = {};
+        createInfo.pForward  = &w;
+        createInfo.pLeft     = &a;
+        createInfo.pBackward = &s;
+        createInfo.pRight    = &d;
+        moCreateStrafer(&createInfo, &strafer);
+    }
 
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
+        // Camera control
         float4x4 camera_azimuth_matrix = rotation_matrix(rotation_quat({0.f,-1.f,0.f}, yaw * 0.01f));
         float4x4 camera_altitude_matrix = rotation_matrix(rotation_quat({-1.f,0.f,0.f}, pitch * 0.01f));
+        float4 forward = mul(camera_azimuth_matrix, float4(0,0,1,0));
+        float4 right = mul(camera_azimuth_matrix,   float4(1,0,0,0));
+        float4 linearVelocity = {};
+        if (w) linearVelocity.z = -3.3f;
+        if (a) linearVelocity.x = -3.3f;
+        if (s) linearVelocity.z = 3.3f;
+        if (d) linearVelocity.x = 3.3f;
+        camera_matrix.w += 0.016f * (linearVelocity.z * forward) + 0.016f * (linearVelocity.x * right);
         float4x4 camera_matrix_frame = mul(camera_matrix, mul(camera_azimuth_matrix, camera_altitude_matrix));
 
         // Frame begin
@@ -411,6 +430,7 @@ int main(int argc, char** argv)
     }
 
     // Controls cleanup
+    moDestroyStrafer(strafer);
     moDestroyMouselook(mouselook);
     moControlShutdown();
 

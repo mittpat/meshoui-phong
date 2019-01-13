@@ -192,9 +192,9 @@ void moCreateStrafer(const MoStraferCreateInfo* pCreateInfo, MoStrafer* pStrafer
     strafer->keyS = pCreateInfo->keyBackward;
     strafer->keyD = pCreateInfo->keyRight;
     if (strafer->keyW == 0) strafer->keyW = GLFW_KEY_W;
-    if (strafer->keyA == 0) strafer->keyW = GLFW_KEY_A;
-    if (strafer->keyS == 0) strafer->keyW = GLFW_KEY_S;
-    if (strafer->keyD == 0) strafer->keyW = GLFW_KEY_D;
+    if (strafer->keyA == 0) strafer->keyA = GLFW_KEY_A;
+    if (strafer->keyS == 0) strafer->keyS = GLFW_KEY_S;
+    if (strafer->keyD == 0) strafer->keyD = GLFW_KEY_D;
     GlfwCallbacks::keyboards.push_back(strafer);
 }
 

@@ -680,7 +680,7 @@ static void deleteBuffer(MoDevice device, MoImageBuffer imageBuffer)
     delete imageBuffer;
 }
 
-static void generateTexture(MoImageBuffer *pImageBuffer, const MoTextureInfo & textureInfo, MoFloat4 fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
+static void generateTexture(MoImageBuffer *pImageBuffer, const MoTextureInfo &textureInfo, const MoFloat4 &fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
 {
     VkFormat format = textureInfo.format == VK_FORMAT_UNDEFINED ? VK_FORMAT_R8G8B8A8_UNORM : textureInfo.format;
     unsigned width = textureInfo.extent.width, height = textureInfo.extent.height;
