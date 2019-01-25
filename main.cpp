@@ -258,7 +258,7 @@ int main(int argc, char** argv)
             MoVertexFormatCreateInfo createInfo = {};
             createInfo.pAttributes = attributes.data();
             createInfo.attributeCount = (uint32_t)attributes.size();
-            createInfo.pIndices = (uint8_t*)&colladaMesh->pTriangles->data[0];
+            createInfo.pIndices = (const uint8_t*)&colladaMesh->pTriangles->data[0];
             createInfo.indexCount = colladaMesh->triangleCount*3*createInfo.attributeCount;
             createInfo.indexTypeSize = sizeof(uint32_t);
             createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
