@@ -22,17 +22,17 @@ namespace GlfwCallbacks
     {
     public:
         virtual ~IKeyboard() {}
-        virtual void keyAction(void* /*window*/, int /*key*/, int /*scancode*/, int /*action*/, int /*mods*/) {}
-        virtual void charAction(void* /*window*/, unsigned int /*c*/) {}
+        virtual void keyAction(GLFWwindow* /*window*/, int /*key*/, int /*scancode*/, int /*action*/, int /*mods*/) {}
+        virtual void charAction(GLFWwindow* /*window*/, unsigned int /*c*/) {}
     };
 
     class IMouse
     {
     public:
         virtual ~IMouse() {}
-        virtual void cursorPositionAction(void* /*window*/, double /*xpos*/, double /*ypos*/) {}
-        virtual void mouseButtonAction(void* /*window*/, int /*button*/, int /*action*/, int /*mods*/) {}
-        virtual void scrollAction(void* /*window*/, double /*xoffset*/, double /*yoffset*/) {}
+        virtual void cursorPositionAction(GLFWwindow* /*window*/, double /*xpos*/, double /*ypos*/) {}
+        virtual void mouseButtonAction(GLFWwindow* /*window*/, int /*button*/, int /*action*/, int /*mods*/) {}
+        virtual void scrollAction(GLFWwindow* /*window*/, double /*xoffset*/, double /*yoffset*/) {}
         virtual void mouseLost() {}
     };
 
@@ -79,16 +79,25 @@ namespace GlfwCallbacks
 struct MoMouselook_T
     : GlfwCallbacks::IMouse
 {
-    virtual void cursorPositionAction(void *, double xpos, double ypos) override
+    virtual void cursorPositionAction(GLFWwindow* window, double xpos, double ypos) override
     {
-        if (once)
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
         {
-            *yaw += (float)xpos - previousX;
-            *pitch += (float)ypos - previousY;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            if (once)
+            {
+                *yaw += (float)xpos - previousX;
+                *pitch += (float)ypos - previousY;
+            }
+            previousX = xpos;
+            previousY = ypos;
+            once = true;
         }
-        previousX = xpos;
-        previousY = ypos;
-        once = true;
+        else
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            mouseLost();
+        }
     }
     virtual void mouseLost() override { once = false; }
 
@@ -99,7 +108,7 @@ struct MoMouselook_T
 struct MoStrafer_T
     : GlfwCallbacks::IKeyboard
 {
-    virtual void keyAction(void *, int key, int, int action, int) override
+    virtual void keyAction(GLFWwindow *, int key, int, int action, int) override
     {
         if (action == GLFW_PRESS)
         {

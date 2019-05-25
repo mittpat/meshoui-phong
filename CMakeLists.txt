@@ -18,6 +18,7 @@ add_subdirectory(3rdparty)
 add_executable(meshouiview main.cpp 
     collada.h collada.cpp
     control.h control.cpp
+    dome.h
     phong.h phong.cpp
     vertexformat.h vertexformat.cpp)
 

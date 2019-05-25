@@ -8,6 +8,7 @@
 
 #include "collada.h"
 #include "control.h"
+#include "dome.h"
 #include "phong.h"
 #include "vertexformat.h"
 
@@ -58,7 +59,7 @@ static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
-static float3   light_position = { 3.0f, 0.0f, 15.0f };
+static float3   light_position = { -300.0f, 300.0f, -150.0f };
 static MoMouselook mouselook;
 
 static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
@@ -339,6 +340,27 @@ int main(int argc, char** argv)
             drawables.push_back(Drawable{translation_matrix(float3{ dis(gen), dis(gen), dis(gen) }), meshes.back(), materials.back()});
     }
 
+    // Dome
+    MoMesh sphereMesh;
+    moDemoSphere(&sphereMesh);
+    MoMaterial domeMaterial;
+    {
+        MoMaterialCreateInfo materialInfo = {};
+        materialInfo.colorAmbient = { 0.4f, 0.5f, 0.75f, 1.0f };
+        materialInfo.colorDiffuse = { 0.7f, 0.45f, 0.1f, 1.0f };
+        moCreateMaterial(&materialInfo, &domeMaterial);
+    }
+    MoPipeline domePipeline;
+    {
+        MoPipelineCreateInfo pipelineCreateInfo = {};
+        pipelineCreateInfo.pVertexShader = mo_dome_glsl_shader_vert_spv;
+        pipelineCreateInfo.vertexShaderSize = sizeof(mo_dome_glsl_shader_vert_spv);
+        pipelineCreateInfo.pFragmentShader = mo_dome_glsl_shader_frag_spv;
+        pipelineCreateInfo.fragmentShaderSize = sizeof(mo_dome_glsl_shader_frag_spv);
+        pipelineCreateInfo.flags = MO_PIPELINE_FEATURE_NONE;
+        moCreatePipeline(&pipelineCreateInfo, &domePipeline);
+    }
+
     // Controls init
     float yaw, pitch; yaw = pitch = 0.f;
     {
@@ -383,7 +405,27 @@ int main(int argc, char** argv)
         // Frame begin
         VkSemaphore imageAcquiredSemaphore;
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
-        moNewFrame(frameIndex);
+        moPipelineOverride(domePipeline);
+        moBegin(frameIndex);
+        {
+            MoUniform uni = {};
+            (float3&)uni.light = light_position;
+            (float3&)uni.camera = camera_matrix_frame.w.xyz();
+            moSetLight(&uni);
+        }
+        {
+            MoPushConstant pmv = {};
+            (float4x4&)pmv.projection = proj_matrix;
+            (float4x4&)pmv.view = mul(inverse(mul(camera_azimuth_matrix, camera_altitude_matrix)), rotation_matrix(rotation_quat(normalize(float3(-1.0f, -1.0f, 0.0f)), 355.0f/113.0f / 32.0f)));
+            {
+                (float4x4&)pmv.model = identity;
+                moSetPMV(&pmv);
+                moBindMaterial(domeMaterial);
+                moDrawMesh(sphereMesh);
+            }
+        }
+        moPipelineOverride();
+        moBegin(frameIndex);
         {
             MoUniform uni = {};
             (float3&)uni.light = light_position;
@@ -434,9 +476,14 @@ int main(int argc, char** argv)
     moDestroyMouselook(mouselook);
     moControlShutdown();
 
+    // Dome
+    moDestroyPipeline(domePipeline);
+    moDestroyMaterial(domeMaterial);
+
     // Meshoui cleanup
     for (MoMaterial material : materials)
         moDestroyMaterial(material);
+    moDestroyMesh(sphereMesh);
     for (MoMesh mesh : meshes)
         moDestroyMesh(mesh);
 

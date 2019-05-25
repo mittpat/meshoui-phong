@@ -495,6 +495,7 @@ static MoSwapChain                  g_SwapChain     = VK_NULL_HANDLE;
 static VkInstance                   g_Instance      = VK_NULL_HANDLE;
 static VkPipelineCache              g_PipelineCache = VK_NULL_HANDLE;
 static MoPipeline                   g_Pipeline      = VK_NULL_HANDLE;
+static MoPipeline                   g_StashedPipeline = VK_NULL_HANDLE;
 static uint32_t                     g_FrameIndex = 0;
 static const VkAllocationCallbacks* g_Allocator     = VK_NULL_HANDLE;
 
@@ -1123,6 +1124,8 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
             pCreateInfo->pCheckVkResultFn(err);
         }
     }
+
+    swapChain->clearColor = pCreateInfo->clearColor;
 }
 
 void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapChain)
@@ -1306,7 +1309,7 @@ void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore 
         info.framebuffer = swapChain->images[*pFrameIndex].front;
         info.renderArea.extent = swapChain->extent;
         VkClearValue clearValue[2] = {};
-        clearValue[0].color = {{1.0f, 1.0f, 1.0f, 1.0f}};
+        clearValue[0].color = {{swapChain->clearColor.x, swapChain->clearColor.y, swapChain->clearColor.z, swapChain->clearColor.w}};
         clearValue[1].depthStencil = {1.0f, 0};
         info.pClearValues = clearValue;
         info.clearValueCount = 2;
@@ -1416,7 +1419,7 @@ void moInit(MoInitInfo *pInfo)
     g_Allocator = pInfo->pAllocator;
 
     MoPipelineCreateInfo pipelineCreateInfo = {};
-
+    pipelineCreateInfo.flags = MO_PIPELINE_FEATURE_DEFAULT;
     pipelineCreateInfo.pVertexShader = glsl_shader_vert_spv;
     pipelineCreateInfo.vertexShaderSize = sizeof(glsl_shader_vert_spv);
     if (pInfo->flipTexcoords)
@@ -1606,7 +1609,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     VkPipelineRasterizationStateCreateInfo raster_info = {};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_info.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster_info.cullMode = pCreateInfo->flags & MO_PIPELINE_FEATURE_BACKFACE_CULLING ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
     raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_info.lineWidth = 1.0f;
 
@@ -1626,8 +1629,8 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
 
     VkPipelineDepthStencilStateCreateInfo depth_info = {};
     depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_info.depthTestEnable = VK_TRUE;
-    depth_info.depthWriteEnable = VK_TRUE;
+    depth_info.depthTestEnable = pCreateInfo->flags & MO_PIPELINE_FEATURE_DEPTH_TEST ? VK_TRUE : VK_FALSE;
+    depth_info.depthWriteEnable = pCreateInfo->flags & MO_PIPELINE_FEATURE_DEPTH_WRITE ? VK_TRUE : VK_FALSE;
     depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
     depth_info.depthBoundsTestEnable = VK_FALSE;
     depth_info.stencilTestEnable = VK_FALSE;
@@ -1802,12 +1805,28 @@ void moDestroyMaterial(MoMaterial material)
     delete material;
 }
 
-void moNewFrame(uint32_t frameIndex)
+void moBegin(uint32_t frameIndex)
 {
     g_FrameIndex = frameIndex;
     auto & frame = g_SwapChain->frames[g_FrameIndex];
     vkCmdBindPipeline(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipeline);
     vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 0, 1, &g_Pipeline->descriptorSet[g_FrameIndex], 0, nullptr);
+}
+
+void moPipelineOverride(MoPipeline pipeline)
+{
+    if (pipeline == VK_NULL_HANDLE)
+    {
+        if (g_StashedPipeline != VK_NULL_HANDLE)
+            g_Pipeline = g_StashedPipeline;
+        g_StashedPipeline = VK_NULL_HANDLE;
+    }
+    else
+    {
+        if (g_StashedPipeline == VK_NULL_HANDLE)
+            g_StashedPipeline = g_Pipeline;
+        g_Pipeline = pipeline;
+    }
 }
 
 void moSetPMV(const MoPushConstant* pProjectionModelView)
@@ -1877,8 +1896,7 @@ void moDemoCube(MoMesh *pMesh)
 
     std::vector<uint32_t> indices;
     std::vector<MoVertex> vertices;
-#define INDICES_COUNT_FROM_ONE
-#ifdef INDICES_COUNT_FROM_ONE
+//INDICES_COUNT_FROM_ONE
     for (const auto & triangle : cube_triangles)
     {
         vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
@@ -1886,14 +1904,6 @@ void moDemoCube(MoMesh *pMesh)
         vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
     }
     for (uint32_t & index : indices) { --index; }
-#else
-    for (const auto & triangle : cube_triangles)
-    {
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x], cube_texcoords[triangle.y.x], cube_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y], cube_texcoords[triangle.y.y], cube_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z], cube_texcoords[triangle.y.z], cube_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-    }
-#endif
     for (uint32_t index = 0; index < indices.size(); index+=3)
     {
         MoVertex &v1 = vertices[indices[index+0]];
@@ -1905,8 +1915,6 @@ void moDemoCube(MoMesh *pMesh)
         const MoFloat3 edge2 = v3.position - v1.position;
         v1.normal = v2.normal = v3.normal = normalize(cross(edge1, edge2));
 
-#define GENERATE_TANGENTS
-#ifdef GENERATE_TANGENTS
         const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
         const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
         float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
@@ -1923,7 +1931,124 @@ void moDemoCube(MoMesh *pMesh)
             v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
             v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
         }
-#endif
+    }
+
+    MoMeshCreateInfo meshInfo = {};
+    meshInfo.indexCount = (uint32_t)indices.size();
+    meshInfo.pIndices = indices.data();
+    meshInfo.vertexCount = (uint32_t)vertices.size();
+    meshInfo.pVertices = vertices.data();
+    moCreateMesh(&meshInfo, pMesh);
+}
+
+void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<MoFloat3> & sphere_positions, std::vector<uint32_t> & sphere_indices)
+{
+    sphere_positions.push_back({0.0f, 1.0f, 0.0f});
+    for (uint32_t j = 0; j < parallels - 1; ++j)
+    {
+        float const polar = 355.0f/113.0f * float(j+1) / float(parallels);
+        float const sp = std::sin(polar);
+        float const cp = std::cos(polar);
+        for (uint32_t i = 0; i < meridians; ++i)
+        {
+            float const azimuth = 2.0f * 355.0f/113.0f * float(i) / float(meridians);
+            float const sa = std::sin(azimuth);
+            float const ca = std::cos(azimuth);
+            float const x = sp * ca;
+            float const y = cp;
+            float const z = sp * sa;
+            sphere_positions.push_back({x, y, z});
+        }
+    }
+    sphere_positions.push_back({0.0f, -1.0f, 0.0f});
+
+    for (uint32_t i = 0; i < meridians; ++i)
+    {
+        uint32_t const a = i + 1;
+        uint32_t const b = (i + 1) % meridians + 1;
+        sphere_indices.emplace_back(0);
+        sphere_indices.emplace_back(b);
+        sphere_indices.emplace_back(a);
+    }
+
+    for (uint32_t j = 0; j < parallels - 2; ++j)
+    {
+        uint32_t aStart = j * meridians + 1;
+        uint32_t bStart = (j + 1) * meridians + 1;
+        for (uint32_t i = 0; i < meridians; ++i)
+        {
+            const uint32_t a = aStart + i;
+            const uint32_t a1 = aStart + (i + 1) % meridians;
+            const uint32_t b = bStart + i;
+            const uint32_t b1 = bStart + (i + 1) % meridians;
+            sphere_indices.emplace_back(a);
+            sphere_indices.emplace_back(a1);
+            sphere_indices.emplace_back(b1);
+
+            sphere_indices.emplace_back(a);
+            sphere_indices.emplace_back(b1);
+            sphere_indices.emplace_back(b);
+        }
+    }
+
+    for (uint32_t i = 0; i < meridians; ++i)
+    {
+        uint32_t const a = i + meridians * (parallels - 2) + 1;
+        uint32_t const b = (i + 1) % meridians + meridians * (parallels - 2) + 1;
+        sphere_indices.emplace_back(sphere_positions.size() - 1);
+        sphere_indices.emplace_back(a);
+        sphere_indices.emplace_back(b);
+    }
+}
+
+void moDemoSphere(MoMesh *pMesh)
+{
+    static MoFloat2 sphere_texcoords[] = { 0.0f, 0.0f };
+    std::vector<MoFloat3> sphere_positions;
+    std::vector<uint32_t> sphere_indices;
+    moUVSphere(64, 32, sphere_positions, sphere_indices);
+    const std::vector<MoFloat3> & sphere_normals = sphere_positions;
+
+    std::vector<MoUInt3x3> sphere_triangles;
+    for (uint32_t i = 0; i < sphere_indices.size(); i+=3)
+    {
+        sphere_triangles.push_back({MoUInt3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]},
+                                    MoUInt3{0,0,0},
+                                    MoUInt3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]}});
+    }
+
+    std::vector<uint32_t> indices;
+    std::vector<MoVertex> vertices;
+    for (const auto & triangle : sphere_triangles)
+    {
+        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.x], sphere_texcoords[triangle.y.x], sphere_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.y], sphere_texcoords[triangle.y.y], sphere_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.z], sphere_texcoords[triangle.y.z], sphere_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+    }
+    for (uint32_t index = 0; index < indices.size(); index+=3)
+    {
+        MoVertex &v1 = vertices[indices[index+0]];
+        MoVertex &v2 = vertices[indices[index+1]];
+        MoVertex &v3 = vertices[indices[index+2]];
+
+        const MoFloat3 edge1 = v2.position - v1.position;
+        const MoFloat3 edge2 = v3.position - v1.position;
+        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
+        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
+        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (f != 0.f)
+        {
+            f = 1.0f / f;
+
+            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
+            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
+        }
     }
 
     MoMeshCreateInfo meshInfo = {};

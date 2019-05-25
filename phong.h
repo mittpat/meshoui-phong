@@ -137,6 +137,7 @@ typedef struct MoSwapChainCreateInfo {
     VkSurfaceKHR                 surface;
     VkSurfaceFormatKHR           surfaceFormat;
     VkExtent2D                   extent;
+    MoFloat4                     clearColor;
     VkBool32                     vsync;
     const VkAllocationCallbacks* pAllocator;
     void                       (*pCheckVkResultFn)(VkResult err);
@@ -170,6 +171,7 @@ typedef struct MoSwapChain_T {
     VkSwapchainKHR  swapChainKHR;
     VkRenderPass    renderPass;
     VkExtent2D      extent;
+    MoFloat4        clearColor;
 }* MoSwapChain;
 
 typedef struct MoMesh_T {
@@ -255,11 +257,22 @@ typedef struct MoMaterialCreateInfo {
     MoTextureInfo  textureEmissive;
 } MoMaterialCreateInfo;
 
+typedef enum MoPipelineFeature {
+    MO_PIPELINE_FEATURE_NONE             = 0,
+    MO_PIPELINE_FEATURE_BACKFACE_CULLING = 0b0001,
+    MO_PIPELINE_FEATURE_DEPTH_TEST       = 0b0010,
+    MO_PIPELINE_FEATURE_DEPTH_WRITE      = 0b0100,
+    MO_PIPELINE_FEATURE_DEFAULT          = MO_PIPELINE_FEATURE_BACKFACE_CULLING | MO_PIPELINE_FEATURE_DEPTH_TEST | MO_PIPELINE_FEATURE_DEPTH_WRITE,
+    MO_PIPELINE_FEATURE_MAX_ENUM         = 0x7FFFFFFF
+} MoPipelineFeature;
+typedef VkFlags MoPipelineCreateFlags;
+
 typedef struct MoPipelineCreateInfo {
-    const uint32_t* pVertexShader;
-    uint32_t        vertexShaderSize;
-    const uint32_t* pFragmentShader;
-    uint32_t        fragmentShaderSize;
+    const uint32_t*       pVertexShader;
+    uint32_t              vertexShaderSize;
+    const uint32_t*       pFragmentShader;
+    uint32_t              fragmentShaderSize;
+    MoPipelineCreateFlags flags;
 } MoPipelineCreateInfo;
 
 typedef struct MoPushConstant {
@@ -303,10 +316,13 @@ void moInit(MoInitInfo* pInfo);
 // free default phong pipeline and clear global handles
 void moShutdown();
 
-// you can't really use another pipeline than the default phong pipeline in this header version, there's no reason to call this function
+// use this function to create a different pipeline than the default
 void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipeline);
 
-// idem
+// override the default pipeline, the default is restored when called with null
+void moPipelineOverride(MoPipeline pipeline = VK_NULL_HANDLE);
+
+// destroy a pipeline other than the default
 void moDestroyPipeline(MoPipeline pipeline);
 
 // upload a new mesh to the GPU and return a handle
@@ -321,8 +337,8 @@ void moCreateMaterial(const MoMaterialCreateInfo* pCreateInfo, MoMaterial* pMate
 // free a material
 void moDestroyMaterial(MoMaterial material);
 
-// start a new frame by binding the default phong pipeline
-void moNewFrame(uint32_t frameIndex);
+// start a new frame against the current pipeline
+void moBegin(uint32_t frameIndex);
 
 // set view's projection and view matrices, and the mesh's model matrix (as a push constant)
 void moSetPMV(const MoPushConstant* pProjectionModelView);
@@ -341,6 +357,9 @@ void moDefaultMaterial(MoMaterial* pMaterial);
 
 // create a demo mesh
 void moDemoCube(MoMesh* pMesh);
+
+// create a demo mesh
+void moDemoSphere(MoMesh *pMesh);
 
 // create a demo material
 void moDemoMaterial(MoMaterial* pMaterial);
