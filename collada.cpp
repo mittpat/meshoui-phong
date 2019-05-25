@@ -1,9 +1,11 @@
 #include "collada.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
 #include <functional>
 #include <pugixml.hpp>
+#include <vector>
 
 namespace DAE
 {

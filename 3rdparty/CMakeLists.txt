@@ -9,11 +9,12 @@ set(GLFW_VULKAN_STATIC OFF CACHE BOOL "Use the Vulkan loader statically linked i
 add_subdirectory(glfw)
 
 # linalg
-add_custom_target(linalg SOURCES linalg/linalg.h)
+add_library(linalg INTERFACE)
+target_include_directories(linalg INTERFACE linalg)
 
 # lodepng
 add_library(lodepng lodepng/lodepng.h lodepng/lodepng.cpp)
-target_link_libraries(lodepng)
+target_include_directories(lodepng PUBLIC lodepng)
 install(TARGETS lodepng
                 RUNTIME DESTINATION bin COMPONENT libraries
                 LIBRARY DESTINATION lib COMPONENT libraries
@@ -21,7 +22,7 @@ install(TARGETS lodepng
 
 # nv_dds
 add_library(nv_dds nv_dds/nv_dds.h nv_dds/nv_dds.cpp)
-target_link_libraries(nv_dds)
+target_include_directories(nv_dds PUBLIC nv_dds)
 install(TARGETS nv_dds
                 RUNTIME DESTINATION bin COMPONENT libraries
                 LIBRARY DESTINATION lib COMPONENT libraries
@@ -29,7 +30,7 @@ install(TARGETS nv_dds
 
 # pugixml
 add_library(pugixml pugixml/src/pugiconfig.hpp pugixml/src/pugixml.hpp pugixml/src/pugixml.cpp)
-target_link_libraries(pugixml)
+target_include_directories(pugixml PUBLIC pugixml/src)
 install(TARGETS pugixml
                 RUNTIME DESTINATION bin COMPONENT libraries
                 LIBRARY DESTINATION lib COMPONENT libraries
