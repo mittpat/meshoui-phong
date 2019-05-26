@@ -9,6 +9,7 @@
 #include "collada.h"
 #include "control.h"
 #include "dome.h"
+#include "gui.h"
 #include "phong.h"
 #include "vertexformat.h"
 
@@ -79,7 +80,7 @@ static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int a
 
 int main(int argc, char** argv)
 {
-#ifdef _DEBUG
+#ifndef NDEBUG
     moTestCollada();
     moTestVertexFormat();
 #endif
@@ -115,7 +116,7 @@ int main(int argc, char** argv)
 
         glfwSetErrorCallback(glfw_error_callback);
         glfwInit();
-#ifdef _DEBUG
+#ifndef NDEBUG
         width = 1920 / 2;
         height = 1080 / 2;
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -139,7 +140,7 @@ int main(int argc, char** argv)
         {
             MoInstanceCreateInfo createInfo = {};
             createInfo.pExtensions = glfwGetRequiredInstanceExtensions(&createInfo.extensionsCount);
-#ifdef _DEBUG
+#ifndef NDEBUG
             createInfo.debugReport = VK_TRUE;
             createInfo.pDebugReportCallback = vk_debug_report;
 #endif
@@ -188,6 +189,28 @@ int main(int argc, char** argv)
             createInfo.pCheckVkResultFn = vk_check_result;
             moCreateSwapChain(&createInfo, &swapChain);
         }
+    }
+
+    // imgui initialization
+    {
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = instance;
+        init_info.PhysicalDevice = device->physicalDevice;
+        init_info.Device = device->device;
+        init_info.QueueFamily = device->queueFamily;
+        init_info.Queue = device->queue;
+        init_info.PipelineCache = pipelineCache;
+        init_info.DescriptorPool = device->descriptorPool;
+        init_info.Allocator = allocator;
+        init_info.MinImageCount = 2;
+        init_info.ImageCount = 2;
+        init_info.CheckVkResultFn = device->pCheckVkResultFn;
+
+        // Use any command queue
+        VkCommandPool commandPool = swapChain->frames[frameIndex].pool;
+        VkCommandBuffer commandBuffer = swapChain->frames[frameIndex].buffer;
+
+        moGUIInit(window, device->device, swapChain->renderPass, commandPool, commandBuffer, device->queue, &init_info);
     }
 
     // Meshoui initialization
@@ -445,6 +468,8 @@ int main(int argc, char** argv)
             }
         }
 
+        moGUIDraw(swapChain->frames[frameIndex].buffer);
+
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
@@ -486,6 +511,9 @@ int main(int argc, char** argv)
     moDestroyMesh(sphereMesh);
     for (MoMesh mesh : meshes)
         moDestroyMesh(mesh);
+
+    // imgui cleanup
+    moGUIShutdown();
 
     // Cleanup
     moShutdown();

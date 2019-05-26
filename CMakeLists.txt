@@ -10,11 +10,12 @@ add_executable(meshouiview main.cpp
     collada.h collada.cpp
     control.h control.cpp
     dome.h
+    gui.h gui.cpp
     phong.h phong.cpp
     vertexformat.h vertexformat.cpp)
 
 if(NOT MSVC)
-    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds stdc++fs linalg)
+    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw imgui linalg lodepng nv_dds pugixml stdc++fs)
 else()
-    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw pugixml lodepng nv_dds linalg)
+    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw imgui linalg lodepng nv_dds pugixml)
 endif()
