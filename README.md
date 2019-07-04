@@ -1,6 +1,6 @@
 # meshouivk - Simple Collada parser and viewer
 
-![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/vulkan/meshoui/resources/screenshot.png)
+![sample viewer_output](https://raw.githubusercontent.com/mittpat/meshoui/master/screenshot.png)
 
 Compiling
 -------
