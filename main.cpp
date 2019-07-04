@@ -11,14 +11,8 @@
 
 #include <linalg.h>
 
-#include <cstdio>
-#include <cstdlib>
 #include <experimental/filesystem>
 #include <functional>
-#include <fstream>
-#include <map>
-#include <random>
-#include <streambuf>
 #include <vector>
 
 #include <assimp/Importer.hpp>
