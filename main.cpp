@@ -56,11 +56,11 @@ static constexpr float degreesToRadians(float angle)
     return angle * 3.14159265359f / 180.0f;
 }
 
-static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
-                                { 0.0f,-1.0f, 0.0f, 0.0f },
-                                { 0.0f, 0.0f, 1.0f, 0.0f },
-                                { 0.0f, 0.0f, 0.0f, 1.0f } };
-static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
+static float4x4 correction_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
+                                      { 0.0f,-1.0f, 0.0f, 0.0f },
+                                      { 0.0f, 0.0f, 1.0f, 0.0f },
+                                      { 0.0f, 0.0f, 0.0f, 1.0f } };
+static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 
 static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
 {
@@ -315,7 +315,7 @@ int main(int argc, char** argv)
             glfwWaitEvents();
         }
 
-        proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
+        projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
         // Create device
         {
@@ -425,8 +425,8 @@ int main(int argc, char** argv)
             view.w = float4(0,0,0,1);
 
             MoPushConstant pmv = {};
-            pmv.projection = proj_matrix;
-            pmv.view = mul(view, rotation_matrix(rotation_quat(normalize(float3(-1.0f, -1.0f, 0.0f)), 355.0f/113.0f / 32.0f)));
+            pmv.projection = projection_matrix;
+            pmv.view = view;
             {
                 pmv.model = identity;
                 moSetPMV(&pmv);
@@ -444,7 +444,7 @@ int main(int argc, char** argv)
         }
         {
             MoPushConstant pmv = {};
-            pmv.projection = proj_matrix;
+            pmv.projection = projection_matrix;
             pmv.view = inverse(camera.model);
             std::function<void(const MoNode &, const float4x4 &)> draw = [&](const MoNode & node, const float4x4 & model)
             {
@@ -476,7 +476,7 @@ int main(int argc, char** argv)
             }
 
             // in case the window was resized
-            proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
+            projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
             MoSwapChainRecreateInfo recreateInfo = {};
             recreateInfo.surface = surface;
