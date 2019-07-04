@@ -1,89 +1,6 @@
 #pragma once
 
-#include <cstdint>
-
-// vector types, can be declared as your own so long as memory alignment is respected
-#if !defined(MO_SKIP_VEC_TYPES) && !defined(MO_VEC_TYPES_DEFINED)
-#define MO_VEC_TYPES_DEFINED
-typedef union MoUInt3 {
-    struct {
-        uint32_t x;
-        uint32_t y;
-        uint32_t z;
-    };
-    uint32_t data[3];
-} MoUInt3;
-
-typedef union MoUInt3x3 {
-    struct {
-        MoUInt3 x;
-        MoUInt3 y;
-        MoUInt3 z;
-    };
-    uint32_t data[9];
-} MoUInt3x3;
-
-typedef union MoFloat2 {
-    struct {
-        float x;
-        float y;
-    };
-    float data[2];
-} MoFloat2;
-
-typedef union MoFloat3 {
-    struct {
-        float x;
-        float y;
-        float z;
-    };
-    float data[3];
-} MoFloat3;
-
-typedef union MoFloat3x3 {
-    struct {
-        MoFloat3 x;
-        MoFloat3 y;
-        MoFloat3 z;
-    };
-    float data[9];
-} MoFloat3x3;
-
-typedef union MoFloat4 {
-    struct {
-        float x;
-        float y;
-        float z;
-        float w;
-    };
-    float data[4];
-} MoFloat4;
-
-typedef union MoFloat4x4 {
-    struct {
-        MoFloat4 x;
-        MoFloat4 y;
-        MoFloat4 z;
-        MoFloat4 w;
-    };
-    float data[16];
-} MoFloat4x4;
-#endif
-
-// vertex type, can be declared as your own so long as memory alignment is respected
-#if !defined(MO_SKIP_VERTEX_TYPE) && !defined(MO_VERTEX_TYPE_DEFINED)
-#define MO_VERTEX_TYPE_DEFINED
-typedef union MoVertex {
-    struct {
-        MoFloat3 position;
-        MoFloat2 texcoord;
-        MoFloat3 normal;
-        MoFloat3 tangent;
-        MoFloat3 bitangent;
-    };
-    float data[14];
-} MoVertex;
-#endif
+#include <linalg.h>
 
 #include <vulkan/vulkan.h>
 
@@ -137,7 +54,7 @@ typedef struct MoSwapChainCreateInfo {
     VkSurfaceKHR                 surface;
     VkSurfaceFormatKHR           surfaceFormat;
     VkExtent2D                   extent;
-    MoFloat4                     clearColor;
+    linalg::aliases::float4                     clearColor;
     VkBool32                     vsync;
     const VkAllocationCallbacks* pAllocator;
     void                       (*pCheckVkResultFn)(VkResult err);
@@ -171,13 +88,18 @@ typedef struct MoSwapChain_T {
     VkSwapchainKHR  swapChainKHR;
     VkRenderPass    renderPass;
     VkExtent2D      extent;
-    MoFloat4        clearColor;
+    linalg::aliases::float4 clearColor;
 }* MoSwapChain;
 
 typedef struct MoMesh_T {
-    MoDeviceBuffer vertexBuffer;
+    MoDeviceBuffer verticesBuffer;
+    MoDeviceBuffer textureCoordsBuffer;
+    MoDeviceBuffer normalsBuffer;
+    MoDeviceBuffer tangentsBuffer;
+    MoDeviceBuffer bitangentsBuffer;
     MoDeviceBuffer indexBuffer;
     uint32_t indexBufferSize;
+    uint32_t vertexCount;
 }* MoMesh;
 
 typedef struct MoMaterial_T {
@@ -230,10 +152,14 @@ typedef struct MoInitInfo {
 } MoInitInfo;
 
 typedef struct MoMeshCreateInfo {
-    const uint32_t* pIndices;
-    uint32_t        indexCount;
-    const MoVertex* pVertices;
-    uint32_t        vertexCount;
+    const uint32_t*          pIndices;
+    uint32_t                 indexCount;
+    linalg::aliases::float3* pVertices;
+    linalg::aliases::float2* pTextureCoords;
+    linalg::aliases::float3* pNormals;
+    linalg::aliases::float3* pTangents;
+    linalg::aliases::float3* pBitangents;
+    uint32_t                 vertexCount;
 } MoMeshCreateInfo;
 
 typedef struct MoTextureInfo {
@@ -246,10 +172,10 @@ typedef struct MoTextureInfo {
 } MoTextureInfo;
 
 typedef struct MoMaterialCreateInfo {
-    MoFloat4       colorAmbient;
-    MoFloat4       colorDiffuse;
-    MoFloat4       colorSpecular;
-    MoFloat4       colorEmissive;
+    linalg::aliases::float4 colorAmbient;
+    linalg::aliases::float4 colorDiffuse;
+    linalg::aliases::float4 colorSpecular;
+    linalg::aliases::float4 colorEmissive;
     MoTextureInfo  textureAmbient;
     MoTextureInfo  textureDiffuse;
     MoTextureInfo  textureNormal;
@@ -276,14 +202,14 @@ typedef struct MoPipelineCreateInfo {
 } MoPipelineCreateInfo;
 
 typedef struct MoPushConstant {
-    MoFloat4x4 model;
-    MoFloat4x4 view;
-    MoFloat4x4 projection;
+    linalg::aliases::float4x4 model;
+    linalg::aliases::float4x4 view;
+    linalg::aliases::float4x4 projection;
 } MoPushConstant;
 
 typedef struct MoUniform {
-    alignas(16) MoFloat3 camera;
-    alignas(16) MoFloat3 light;
+    alignas(16) linalg::aliases::float3 camera;
+    alignas(16) linalg::aliases::float3 light;
 } MoUniform;
 
 // you can create a VkInstance using moCreateInstance(MoInstanceCreateInfo)
@@ -356,13 +282,16 @@ void moDrawMesh(MoMesh mesh);
 void moDefaultMaterial(MoMaterial* pMaterial);
 
 // create a demo mesh
-void moDemoCube(MoMesh* pMesh);
+void moDemoCube(MoMesh* pMesh, const linalg::aliases::float3 & halfExtents = linalg::aliases::float3(1.0f, 1.0f, 1.0f));
 
 // create a demo mesh
 void moDemoSphere(MoMesh *pMesh);
 
 // create a demo material
 void moDemoMaterial(MoMaterial* pMaterial);
+
+// create a grid material
+void moGridMaterial(MoMaterial* pMaterial);
 
 /*
 ------------------------------------------------------------------------------

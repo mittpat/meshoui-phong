@@ -1,5 +1,7 @@
 #include "phong.h"
 
+#include <linalg.h>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -8,6 +10,9 @@
 #include <fstream>
 #include <numeric>
 #include <vector>
+
+using namespace linalg;
+using namespace linalg::aliases;
 
 // glsl_shader.vert, compiled with:
 // # glslangValidator -V -x -o glsl_shader.vert.u32 glsl_shader.vert
@@ -501,13 +506,6 @@ static const VkAllocationCallbacks* g_Allocator     = VK_NULL_HANDLE;
 
 template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
 
-static constexpr MoFloat3 operator * (const MoFloat3 & a, float b) { return {a.x*b,a.y*b,a.z*b}; }
-static constexpr MoFloat2 operator - (const MoFloat2 & a, const MoFloat2 & b) { return {a.x-b.x,a.y-b.y}; }
-static constexpr MoFloat3 operator - (const MoFloat3 & a, const MoFloat3 & b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
-static           float            dot(const MoFloat3 & a, const MoFloat3 & b) { return std::inner_product(&a.x, &a.x+3, &b.x, 0.0f); }
-static constexpr MoFloat3       cross(const MoFloat3 & a, const MoFloat3 & b) { return {a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x}; }
-static           MoFloat3   normalize(const MoFloat3 & a)                     { return a * (1.0f / std::sqrt(dot(a, a))); }
-
 static uint32_t memoryType(VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits)
 {
     VkPhysicalDeviceMemoryProperties prop;
@@ -681,7 +679,7 @@ static void deleteBuffer(MoDevice device, MoImageBuffer imageBuffer)
     delete imageBuffer;
 }
 
-static void generateTexture(MoImageBuffer *pImageBuffer, const MoTextureInfo &textureInfo, const MoFloat4 &fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
+static void generateTexture(MoImageBuffer *pImageBuffer, const MoTextureInfo &textureInfo, const float4 &fallbackColor, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
 {
     VkFormat format = textureInfo.format == VK_FORMAT_UNDEFINED ? VK_FORMAT_R8G8B8A8_UNORM : textureInfo.format;
     unsigned width = textureInfo.extent.width, height = textureInfo.extent.height;
@@ -1579,20 +1577,33 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     stage[1].module = frag_module;
     stage[1].pName = "main";
 
-    VkVertexInputBindingDescription binding_desc[1] = {};
-    binding_desc[0].stride = sizeof(MoVertex);
+    VkVertexInputBindingDescription binding_desc[5] = {};
+    binding_desc[0].binding = 0;
+    binding_desc[0].stride = sizeof(float3);
     binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding_desc[1].binding = 1;
+    binding_desc[1].stride = sizeof(float2);
+    binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding_desc[2].binding = 2;
+    binding_desc[2].stride = sizeof(float3);
+    binding_desc[2].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding_desc[3].binding = 3;
+    binding_desc[3].stride = sizeof(float3);
+    binding_desc[3].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding_desc[4].binding = 4;
+    binding_desc[4].stride = sizeof(float3);
+    binding_desc[4].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     std::vector<VkVertexInputAttributeDescription> attribute_desc;
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, position)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32_SFLOAT,    offsetof(MoVertex, texcoord)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, normal)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, tangent)});
-    attribute_desc.emplace_back(VkVertexInputAttributeDescription{uint32_t(attribute_desc.size()), binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MoVertex, bitangent)});
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{0, binding_desc[0].binding, VK_FORMAT_R32G32B32_SFLOAT, 0 });
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{1, binding_desc[1].binding, VK_FORMAT_R32G32_SFLOAT,    0 });
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{2, binding_desc[2].binding, VK_FORMAT_R32G32B32_SFLOAT, 0 });
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{3, binding_desc[3].binding, VK_FORMAT_R32G32B32_SFLOAT, 0 });
+    attribute_desc.emplace_back(VkVertexInputAttributeDescription{4, binding_desc[4].binding, VK_FORMAT_R32G32B32_SFLOAT, 0 });
 
     VkPipelineVertexInputStateCreateInfo vertex_info = {};
     vertex_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_info.vertexBindingDescriptionCount = 1;
+    vertex_info.vertexBindingDescriptionCount = (uint32_t)countof(binding_desc);
     vertex_info.pVertexBindingDescriptions = binding_desc;
     vertex_info.vertexAttributeDescriptionCount = (uint32_t)attribute_desc.size();
     vertex_info.pVertexAttributeDescriptions = attribute_desc.data();
@@ -1691,18 +1702,30 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
     *mesh = {};
 
     mesh->indexBufferSize = pCreateInfo->indexCount;
-    const VkDeviceSize vertex_size = pCreateInfo->vertexCount * sizeof(MoVertex);
+    mesh->vertexCount = pCreateInfo->vertexCount;
     const VkDeviceSize index_size = pCreateInfo->indexCount * sizeof(uint32_t);
-    createBuffer(g_Device, &mesh->vertexBuffer, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    createBuffer(g_Device, &mesh->verticesBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    createBuffer(g_Device, &mesh->textureCoordsBuffer, pCreateInfo->vertexCount * sizeof(float2), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    createBuffer(g_Device, &mesh->normalsBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    createBuffer(g_Device, &mesh->tangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    createBuffer(g_Device, &mesh->bitangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     createBuffer(g_Device, &mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    uploadBuffer(g_Device, mesh->vertexBuffer, vertex_size, pCreateInfo->pVertices);
+    uploadBuffer(g_Device, mesh->verticesBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pVertices);
+    uploadBuffer(g_Device, mesh->textureCoordsBuffer, pCreateInfo->vertexCount * sizeof(float2), pCreateInfo->pTextureCoords);
+    uploadBuffer(g_Device, mesh->normalsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pNormals);
+    uploadBuffer(g_Device, mesh->tangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pTangents);
+    uploadBuffer(g_Device, mesh->bitangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pBitangents);
     uploadBuffer(g_Device, mesh->indexBuffer, index_size, pCreateInfo->pIndices);
 }
 
 void moDestroyMesh(MoMesh mesh)
 {
     vkQueueWaitIdle(g_Device->queue);
-    deleteBuffer(g_Device, mesh->vertexBuffer);
+    deleteBuffer(g_Device, mesh->verticesBuffer);
+    deleteBuffer(g_Device, mesh->textureCoordsBuffer);
+    deleteBuffer(g_Device, mesh->normalsBuffer);
+    deleteBuffer(g_Device, mesh->tangentsBuffer);
+    deleteBuffer(g_Device, mesh->bitangentsBuffer);
     deleteBuffer(g_Device, mesh->indexBuffer);
     delete mesh;
 }
@@ -1712,6 +1735,9 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
     MoMaterial material = *pMaterial = new MoMaterial_T();
     *material = {};
 
+    VkResult err = vkDeviceWaitIdle(g_Device->device);
+    g_Device->pCheckVkResultFn(err);
+
     auto & frame = g_SwapChain->frames[g_FrameIndex];
     generateTexture(&material->ambientImage,  pCreateInfo->textureAmbient,  pCreateInfo->colorAmbient,  frame.pool, frame.buffer);
     generateTexture(&material->diffuseImage,  pCreateInfo->textureDiffuse,  pCreateInfo->colorDiffuse,  frame.pool, frame.buffer);
@@ -1719,7 +1745,6 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
     generateTexture(&material->emissiveImage, pCreateInfo->textureEmissive, pCreateInfo->colorEmissive, frame.pool, frame.buffer);
     generateTexture(&material->specularImage, pCreateInfo->textureSpecular, pCreateInfo->colorSpecular, frame.pool, frame.buffer);
 
-    VkResult err;
     {
         VkSamplerCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1841,9 +1866,19 @@ void moSetLight(const MoUniform* pLightAndCamera)
 
 void moDrawMesh(MoMesh mesh)
 {
-    VkDeviceSize offset = 0;
     auto & frame = g_SwapChain->frames[g_FrameIndex];
-    vkCmdBindVertexBuffers(frame.buffer, 0, 1, &mesh->vertexBuffer->buffer, &offset);
+
+    VkBuffer vertexBuffers[] = {mesh->verticesBuffer->buffer,
+                                mesh->textureCoordsBuffer->buffer,
+                                mesh->normalsBuffer->buffer,
+                                mesh->tangentsBuffer->buffer,
+                                mesh->bitangentsBuffer->buffer};
+    VkDeviceSize offsets[] = {0,
+                              0,
+                              0,
+                              0,
+                              0};
+    vkCmdBindVertexBuffers(frame.buffer, 0, 5, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(frame.buffer, mesh->indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdDrawIndexed(frame.buffer, mesh->indexBufferSize, 1, 0, 0, 0);
@@ -1865,83 +1900,93 @@ void moDefaultMaterial(MoMaterial *pMaterial)
     moCreateMaterial(&materialInfo, pMaterial);
 }
 
-
-void moDemoCube(MoMesh *pMesh)
+void moDemoCube(MoMesh *pMesh, const linalg::aliases::float3 & halfExtents)
 {
-    static MoFloat3 cube_positions[] = { { -1.0f, -1.0f, -1.0f },
-                                         { -1.0f, -1.0f,  1.0f },
-                                         { -1.0f,  1.0f, -1.0f },
-                                         { -1.0f,  1.0f,  1.0f },
-                                         { 1.0f, -1.0f, -1.0f },
-                                         { 1.0f, -1.0f,  1.0f },
-                                         { 1.0f,  1.0f, -1.0f },
-                                         { 1.0f,  1.0f,  1.0f } };
-    static MoFloat2 cube_texcoords[] = { { 1.0f, 0.0f },
-                                         { 0.0f, 1.0f },
-                                         { 0.0f, 0.0f },
-                                         { 1.0f, 1.0f } };
-    static MoFloat3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
-    static MoUInt3x3 cube_triangles[] = { { MoUInt3{ 2, 3, 1 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 4, 7, 3 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 8, 5, 7 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 6, 1, 5 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 7, 1, 3 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 4, 6, 8 }, MoUInt3{ 1, 2, 3 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 2, 4, 3 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 4, 8, 7 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 8, 6, 5 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 6, 2, 1 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 7, 5, 1 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } },
-                                          { MoUInt3{ 4, 2, 6 }, MoUInt3{ 1, 4, 2 }, MoUInt3{ 1, 1, 1 } } };
+    static float3 cube_positions[] = { { -halfExtents.x, -halfExtents.y, -halfExtents.z },
+                                       { -halfExtents.x, -halfExtents.y,  halfExtents.z },
+                                       { -halfExtents.x,  halfExtents.y, -halfExtents.z },
+                                       { -halfExtents.x,  halfExtents.y,  halfExtents.z },
+                                       {  halfExtents.x, -halfExtents.y, -halfExtents.z },
+                                       {  halfExtents.x, -halfExtents.y,  halfExtents.z },
+                                       {  halfExtents.x,  halfExtents.y, -halfExtents.z },
+                                       {  halfExtents.x,  halfExtents.y,  halfExtents.z } };
+    static float2 cube_texcoords[] = { { halfExtents.x, 0.0f },
+                                       { 0.0f, halfExtents.x },
+                                       { 0.0f, 0.0f },
+                                       { halfExtents.x, halfExtents.x } };
+    static float3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
+    static mat<unsigned,3,3> cube_triangles[] = { { uint3{ 2, 3, 1 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 7, 3 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 8, 5, 7 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 6, 1, 5 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 7, 1, 3 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 6, 8 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 2, 4, 3 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 8, 7 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 8, 6, 5 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 6, 2, 1 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 7, 5, 1 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 2, 6 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } } };
 
     std::vector<uint32_t> indices;
-    std::vector<MoVertex> vertices;
+    uint32_t vertexCount = 0;
+    std::vector<float3> vertexPositions;
+    std::vector<float2> vertexTexcoords;
+    std::vector<float3> vertexNormals;
+    std::vector<float3> vertexTangents;
+    std::vector<float3> vertexBitangents;
 //INDICES_COUNT_FROM_ONE
     for (const auto & triangle : cube_triangles)
     {
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.x - 1], cube_texcoords[triangle.y.x - 1], cube_normals[triangle.z.x - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.y - 1], cube_texcoords[triangle.y.y - 1], cube_normals[triangle.z.y - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
-        vertices.emplace_back(MoVertex{ cube_positions[triangle.x.z - 1], cube_texcoords[triangle.y.z - 1], cube_normals[triangle.z.z - 1], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size());
+        vertexPositions.push_back(cube_positions[triangle.x.x - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.x - 1]); vertexNormals.push_back(cube_normals[triangle.z.x - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
+        vertexPositions.push_back(cube_positions[triangle.x.y - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.y - 1]); vertexNormals.push_back(cube_normals[triangle.z.y - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
+        vertexPositions.push_back(cube_positions[triangle.x.z - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.z - 1]); vertexNormals.push_back(cube_normals[triangle.z.z - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
     }
     for (uint32_t & index : indices) { --index; }
     for (uint32_t index = 0; index < indices.size(); index+=3)
     {
-        MoVertex &v1 = vertices[indices[index+0]];
-        MoVertex &v2 = vertices[indices[index+1]];
-        MoVertex &v3 = vertices[indices[index+2]];
+        vertexCount += 3;
+
+        const uint32_t v1 = indices[index+0];
+        const uint32_t v2 = indices[index+1];
+        const uint32_t v3 = indices[index+2];
 
         //discardNormals
-        const MoFloat3 edge1 = v2.position - v1.position;
-        const MoFloat3 edge2 = v3.position - v1.position;
-        v1.normal = v2.normal = v3.normal = normalize(cross(edge1, edge2));
+        const float3 edge1 = vertexPositions[v2] - vertexPositions[v1];
+        const float3 edge2 = vertexPositions[v3] - vertexPositions[v1];
+        vertexNormals[v1] = vertexNormals[v2] = vertexNormals[v3] = normalize(cross(edge1, edge2));
 
-        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
-        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
+        const float2 deltaUV1 = vertexTexcoords[v2] - vertexTexcoords[v1];
+        const float2 deltaUV2 = vertexTexcoords[v3] - vertexTexcoords[v1];
         float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
         if (f != 0.f)
         {
             f = 1.0f / f;
 
-            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
-            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
+            vertexTangents[v1].x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            vertexTangents[v1].y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            vertexTangents[v1].z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            vertexTangents[v1] = vertexTangents[v2] = vertexTangents[v3] = normalize(vertexTangents[v1]);
+            vertexBitangents[v1].x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            vertexBitangents[v1].y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            vertexBitangents[v1].z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            vertexBitangents[v1] = vertexBitangents[v2] = vertexBitangents[v3] = normalize(vertexBitangents[v1]);
         }
     }
 
     MoMeshCreateInfo meshInfo = {};
     meshInfo.indexCount = (uint32_t)indices.size();
     meshInfo.pIndices = indices.data();
-    meshInfo.vertexCount = (uint32_t)vertices.size();
-    meshInfo.pVertices = vertices.data();
+    meshInfo.vertexCount = vertexCount;
+    meshInfo.pVertices = vertexPositions.data();
+    meshInfo.pTextureCoords = vertexTexcoords.data();
+    meshInfo.pNormals = vertexNormals.data();
+    meshInfo.pTangents = vertexTangents.data();
+    meshInfo.pBitangents = vertexBitangents.data();
     moCreateMesh(&meshInfo, pMesh);
 }
 
-void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<MoFloat3> & sphere_positions, std::vector<uint32_t> & sphere_indices)
+void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<float3> & sphere_positions, std::vector<uint32_t> & sphere_indices)
 {
     sphere_positions.push_back({0.0f, 1.0f, 0.0f});
     for (uint32_t j = 0; j < parallels - 1; ++j)
@@ -2003,59 +2048,71 @@ void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<MoFloat3> & 
 
 void moDemoSphere(MoMesh *pMesh)
 {
-    static MoFloat2 sphere_texcoords[] = { 0.0f, 0.0f };
-    std::vector<MoFloat3> sphere_positions;
+    static float2 sphere_texcoords[] = {{ 0.0f, 0.0f }};
+    std::vector<float3> sphere_positions;
     std::vector<uint32_t> sphere_indices;
     moUVSphere(64, 32, sphere_positions, sphere_indices);
-    const std::vector<MoFloat3> & sphere_normals = sphere_positions;
+    const std::vector<float3> & sphere_normals = sphere_positions;
 
-    std::vector<MoUInt3x3> sphere_triangles;
+    std::vector<mat<unsigned,3,3>> sphere_triangles;
     for (uint32_t i = 0; i < sphere_indices.size(); i+=3)
     {
-        sphere_triangles.push_back({MoUInt3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]},
-                                    MoUInt3{0,0,0},
-                                    MoUInt3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]}});
+        sphere_triangles.push_back({uint3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]},
+                                    uint3{0,0,0},
+                                    uint3{sphere_indices[i+0], sphere_indices[i+1], sphere_indices[i+2]}});
     }
 
     std::vector<uint32_t> indices;
-    std::vector<MoVertex> vertices;
+    uint32_t vertexCount = 0;
+    std::vector<float3> vertexPositions;
+    std::vector<float2> vertexTexcoords;
+    std::vector<float3> vertexNormals;
+    std::vector<float3> vertexTangents;
+    std::vector<float3> vertexBitangents;
+//INDICES_COUNT_FROM_ONE
     for (const auto & triangle : sphere_triangles)
     {
-        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.x], sphere_texcoords[triangle.y.x], sphere_normals[triangle.z.x], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.y], sphere_texcoords[triangle.y.y], sphere_normals[triangle.z.y], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
-        vertices.emplace_back(MoVertex{ sphere_positions[triangle.x.z], sphere_texcoords[triangle.y.z], sphere_normals[triangle.z.z], {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}); indices.push_back((uint32_t)vertices.size()-1);
+        vertexPositions.push_back(sphere_positions[triangle.x.x]);vertexTexcoords.push_back(sphere_texcoords[triangle.y.x]); vertexNormals.push_back(sphere_normals[triangle.z.x]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size() - 1);
+        vertexPositions.push_back(sphere_positions[triangle.x.y]); vertexTexcoords.push_back(sphere_texcoords[triangle.y.y]); vertexNormals.push_back(sphere_normals[triangle.z.y]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size() - 1);
+        vertexPositions.push_back(sphere_positions[triangle.x.z]); vertexTexcoords.push_back(sphere_texcoords[triangle.y.z]); vertexNormals.push_back(sphere_normals[triangle.z.z]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size() - 1);
     }
     for (uint32_t index = 0; index < indices.size(); index+=3)
     {
-        MoVertex &v1 = vertices[indices[index+0]];
-        MoVertex &v2 = vertices[indices[index+1]];
-        MoVertex &v3 = vertices[indices[index+2]];
+        vertexCount += 3;
 
-        const MoFloat3 edge1 = v2.position - v1.position;
-        const MoFloat3 edge2 = v3.position - v1.position;
-        const MoFloat2 deltaUV1 = v2.texcoord - v1.texcoord;
-        const MoFloat2 deltaUV2 = v3.texcoord - v1.texcoord;
+        const uint32_t v1 = indices[index+0];
+        const uint32_t v2 = indices[index+1];
+        const uint32_t v3 = indices[index+2];
+
+        const float3 edge1 = vertexPositions[v2] - vertexPositions[v1];
+        const float3 edge2 = vertexPositions[v3] - vertexPositions[v1];
+        const float2 deltaUV1 = vertexTexcoords[v2] - vertexTexcoords[v1];
+        const float2 deltaUV2 = vertexTexcoords[v3] - vertexTexcoords[v1];
         float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
         if (f != 0.f)
         {
             f = 1.0f / f;
 
-            v1.tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
-            v1.tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
-            v1.tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-            v1.tangent = v2.tangent = v3.tangent = normalize(v1.tangent);
-            v1.bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
-            v1.bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
-            v1.bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
-            v1.bitangent = v2.bitangent = v3.bitangent = normalize(v1.bitangent);
+            vertexTangents[v1].x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            vertexTangents[v1].y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            vertexTangents[v1].z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            vertexTangents[v1] = vertexTangents[v2] = vertexTangents[v3] = normalize(vertexTangents[v1]);
+            vertexBitangents[v1].x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            vertexBitangents[v1].y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            vertexBitangents[v1].z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            vertexBitangents[v1] = vertexBitangents[v2] = vertexBitangents[v3] = normalize(vertexBitangents[v1]);
         }
     }
 
     MoMeshCreateInfo meshInfo = {};
     meshInfo.indexCount = (uint32_t)indices.size();
     meshInfo.pIndices = indices.data();
-    meshInfo.vertexCount = (uint32_t)vertices.size();
-    meshInfo.pVertices = vertices.data();
+    meshInfo.vertexCount = vertexCount;
+    meshInfo.pVertices = vertexPositions.data();
+    meshInfo.pTextureCoords = vertexTexcoords.data();
+    meshInfo.pNormals = vertexNormals.data();
+    meshInfo.pTangents = vertexTangents.data();
+    meshInfo.pBitangents = vertexBitangents.data();
     moCreateMesh(&meshInfo, pMesh);
 }
 
@@ -2069,6 +2126,27 @@ void moDemoMaterial(MoMaterial *pMaterial)
                                    0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,0xff66b21d,
                                    0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3,0xff48f4fb,
                                    0xff48f4fb,0xff66b21d,0xfff9fb00,0xffa91f6c,0xffb98ef1,0xffb07279,0xff6091f7,0xff1a07e3};
+
+    MoMaterialCreateInfo materialInfo = {};
+    materialInfo.colorAmbient = { 0.2f, 0.2f, 0.2f, 1.0f };
+    materialInfo.colorDiffuse = { 0.64f, 0.64f, 0.64f, 1.0f };
+    materialInfo.colorSpecular = { 0.5f, 0.5f, 0.5f, 1.0f };
+    materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
+    materialInfo.textureDiffuse.pData = (uint8_t*)diffuse;
+    materialInfo.textureDiffuse.extent = { 8, 8 };
+    moCreateMaterial(&materialInfo, pMaterial);
+}
+
+void moGridMaterial(MoMaterial *pMaterial)
+{
+    const uint32_t diffuse[8*8] = {0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,
+                                   0xffffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff,0x00ffffff};
 
     MoMaterialCreateInfo materialInfo = {};
     materialInfo.colorAmbient = { 0.2f, 0.2f, 0.2f, 1.0f };

@@ -1,50 +1,40 @@
-# glfw
-set(FOO_BUILD_SHARED OFF CACHE BOOL "Build libfoo shared library")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries")
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build the GLFW example programs")
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build the GLFW test programs")
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "Build the GLFW documentation")
-set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target")
-set(GLFW_VULKAN_STATIC OFF CACHE BOOL "Use the Vulkan loader statically linked into application")
-add_subdirectory(glfw)
+# assimp
+set(BUILD_SHARED_LIBS OFF)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_COLLADA_IMPORTER TRUE)
+set(ASSIMP_BUILD_COLLADA_EXPORTER TRUE)
+set(BUILD_FRAMEWORK OFF)
+set(ASSIMP_DOUBLE_PRECISION OFF)
+set(ASSIMP_OPT_BUILD_PACKAGES OFF)
+set(ASSIMP_ANDROID_JNIIOSYSTEM OFF)
+set(ASSIMP_NO_EXPORT OFF)
+set(ASSIMP_BUILD_ZLIB ON)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "If the supplementary tools for Assimp are built in addition to the library.")
+set(ASSIMP_BUILD_SAMPLES OFF)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "If the test suite for Assimp is built in addition to the library.")
+set(ASSIMP_COVERALLS OFF)
+set(ASSIMP_WERROR OFF)
+set(ASSIMP_ASAN OFF)
+set(ASSIMP_UBSAN OFF)
+set(SYSTEM_IRRXML OFF)
+set(BUILD_DOCS OFF)
+set(INJECT_DEBUG_POSTFIX OFF)
+set(IGNORE_GIT_HASH ON)
+add_subdirectory(assimp)
+set_target_properties(assimp PROPERTIES COMPILE_FLAGS -g0)
+target_include_directories(assimp PUBLIC assimp/contrib)
 
-# imgui
-add_library(imgui
-    imgui/imconfig.h      imgui/imgui.h           imgui/examples/imgui_impl_glfw.cpp   imgui/imstb_textedit.h
-    imgui/imgui.cpp       imgui/imgui_internal.h  imgui/examples/imgui_impl_glfw.h     imgui/imstb_truetype.h
-    imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/examples/imgui_impl_vulkan.cpp
-    imgui/imgui_draw.cpp  imgui/imstb_rectpack.h  imgui/examples/imgui_impl_vulkan.h)
-target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR} imgui)
-target_compile_definitions(imgui PUBLIC -DIMGUI_IMPL_API=)
-install(TARGETS imgui
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)
+# glfw
+set(FOO_BUILD_SHARED OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(GLFW_BUILD_EXAMPLES OFF)
+set(GLFW_BUILD_TESTS OFF)
+set(GLFW_BUILD_DOCS OFF)
+set(GLFW_INSTALL OFF)
+set(GLFW_VULKAN_STATIC)
+add_subdirectory(glfw)
 
 # linalg
 add_library(linalg INTERFACE)
 target_include_directories(linalg INTERFACE linalg)
-
-# lodepng
-add_library(lodepng lodepng/lodepng.h lodepng/lodepng.cpp)
-target_include_directories(lodepng PUBLIC lodepng)
-install(TARGETS lodepng
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)
-
-# nv_dds
-add_library(nv_dds nv_dds/nv_dds.h nv_dds/nv_dds.cpp)
-target_include_directories(nv_dds PUBLIC nv_dds)
-install(TARGETS nv_dds
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)
-
-# pugixml
-add_library(pugixml pugixml/src/pugiconfig.hpp pugixml/src/pugixml.hpp pugixml/src/pugixml.cpp)
-target_include_directories(pugixml PUBLIC pugixml/src)
-install(TARGETS pugixml
-                RUNTIME DESTINATION bin COMPONENT libraries
-                LIBRARY DESTINATION lib COMPONENT libraries
-                ARCHIVE DESTINATION lib/static COMPONENT libraries)

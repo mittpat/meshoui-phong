@@ -6,26 +6,31 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "collada.h"
-#include "control.h"
 #include "dome.h"
-#include "gui.h"
 #include "phong.h"
-#include "vertexformat.h"
 
 #include <linalg.h>
-#include <lodepng.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <experimental/filesystem>
 #include <functional>
 #include <fstream>
+#include <map>
 #include <random>
 #include <streambuf>
 #include <vector>
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image/stb_image.h>
+
 namespace std { namespace filesystem = experimental::filesystem; }
+using namespace linalg;
+using namespace linalg::aliases;
 
 static void glfw_error_callback(int, const char* description)
 {
@@ -51,17 +56,11 @@ static constexpr float degreesToRadians(float angle)
     return angle * 3.14159265359f / 180.0f;
 }
 
-using namespace linalg;
-using namespace linalg::aliases;
-
 static float4x4 corr_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                 { 0.0f,-1.0f, 0.0f, 0.0f },
                                 { 0.0f, 0.0f, 1.0f, 0.0f },
                                 { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 proj_matrix = mul(corr_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
-static float4x4 camera_matrix = translation_matrix(float3{ 3.0f, 0.0f, 15.0f });
-static float3   light_position = { -300.0f, 300.0f, -150.0f };
-static MoMouselook mouselook;
 
 static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
 {
@@ -71,35 +70,189 @@ static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int a
         {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
-        else if (key == GLFW_KEY_R)
+    }
+}
+
+static void glfwMouseCallback(GLFWwindow */*window*/, int button, int action, int /*mods*/)
+{
+    if (action == GLFW_PRESS)
+    {
+        if (button == GLFW_MOUSE_BUTTON_LEFT)
         {
-            moResetMouselook(mouselook);
+            // move the camera
         }
+    }
+}
+
+struct MoLight
+{
+    std::string name;
+    float4x4    model;
+};
+
+struct MoCamera
+{
+    std::string name;
+    float4x4    model;
+};
+
+struct MoNode
+{
+    std::string         name;
+    float4x4            model;
+    MoMesh              mesh;
+    MoMaterial          material;
+    std::vector<MoNode> children;
+};
+
+struct MoHandles
+{
+    std::vector<MoMaterial> materials;
+    std::vector<MoMesh>     meshes;
+};
+
+void moDestroyHandles(MoHandles & handles)
+{
+    for (auto material : handles.materials)
+        moDestroyMaterial(material);
+    for (auto mesh : handles.meshes)
+        moDestroyMesh(mesh);
+}
+
+void parseNodes(const aiScene * scene, const std::vector<MoMaterial> & materials,
+                const std::vector<MoMesh> & meshes, aiNode * node, std::vector<MoNode> & nodes)
+{
+    nodes.push_back({node->mName.C_Str(), transpose(float4x4((float*)&node->mTransformation)),
+                     nullptr, nullptr, {}});
+    for (uint32_t i = 0; i < node->mNumMeshes; ++i)
+    {
+        nodes.back().children.push_back({scene->mMeshes[node->mMeshes[i]]->mName.C_Str(), identity,
+                                    meshes[node->mMeshes[i]],
+                                    materials[scene->mMeshes[node->mMeshes[i]]->mMaterialIndex],
+                                    {}});
+    }
+
+    for (uint32_t i = 0; i < node->mNumChildren; ++i)
+    {
+        parseNodes(scene, materials, meshes, node->mChildren[i], nodes.back().children);
+    }
+}
+
+void load(const std::string & filename, MoHandles & handles, std::vector<MoNode> & nodes)
+{
+    if (!filename.empty() && std::filesystem::exists(filename))
+    {
+        Assimp::Importer importer;
+        const aiScene * scene = importer.ReadFile(filename, aiProcess_Debone | aiProcessPreset_TargetRealtime_Fast);
+        std::filesystem::path parentdirectory = std::filesystem::path(filename).parent_path();
+
+        std::vector<MoMaterial> materials(scene->mNumMaterials);
+        for (uint32_t materialIdx = 0; materialIdx < scene->mNumMaterials; ++materialIdx)
+        {
+            auto* material = scene->mMaterials[materialIdx];
+
+            MoMaterialCreateInfo materialInfo = {};
+            std::vector<std::pair<const char*, float4*>> colorMappings =
+               {{std::array<const char*,3>{AI_MATKEY_COLOR_AMBIENT}[0], &materialInfo.colorAmbient},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_DIFFUSE}[0], &materialInfo.colorDiffuse},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_SPECULAR}[0], &materialInfo.colorSpecular},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_EMISSIVE}[0], &materialInfo.colorEmissive}};
+            for (auto mapping : colorMappings)
+            {
+                aiColor3D color(0.f,0.f,0.f);
+                scene->mMaterials[materialIdx]->Get(mapping.first, 0, 0, color);
+                *mapping.second = {color.r, color.g, color.b, 1.0f};
+            }
+
+            std::vector<std::pair<aiTextureType, MoTextureInfo*>> textureMappings =
+                {{aiTextureType_AMBIENT, &materialInfo.textureAmbient},
+                {aiTextureType_DIFFUSE, &materialInfo.textureDiffuse},
+                {aiTextureType_SPECULAR, &materialInfo.textureSpecular},
+                {aiTextureType_EMISSIVE, &materialInfo.textureEmissive},
+                {aiTextureType_NORMALS, &materialInfo.textureNormal}};
+            for (auto mapping : textureMappings)
+            {
+                aiString path;
+                if (AI_SUCCESS == material->GetTexture(mapping.first, 0, &path))
+                {
+                    std::filesystem::path filename = parentdirectory / path.C_Str();
+                    if (std::filesystem::exists(filename))
+                    {
+                        int x, y, n;
+                        mapping.second->pData = stbi_load(filename.c_str(), &x, &y, &n, STBI_rgb_alpha);
+                        mapping.second->extent = {(uint32_t)x, (uint32_t)y};
+                    }
+                }
+            }
+            moCreateMaterial(&materialInfo, &materials[materialIdx]);
+            handles.materials.push_back(materials[materialIdx]);
+        }
+
+        std::vector<MoMesh> meshes(scene->mNumMeshes);
+        for (uint32_t meshIdx = 0; meshIdx < scene->mNumMeshes; ++meshIdx)
+        {
+            const auto* mesh = scene->mMeshes[meshIdx];
+
+            std::vector<uint32_t> indices;
+            for (uint32_t faceIdx = 0; faceIdx < mesh->mNumFaces; ++faceIdx)
+            {
+                const auto* face = &mesh->mFaces[faceIdx];
+                switch(face->mNumIndices)
+                {
+                case 1:
+                    break;
+                case 2:
+                    break;
+                case 3:
+                {
+                    for(uint32_t numIndex = 0; numIndex < face->mNumIndices; numIndex++)
+                    {
+                        indices.push_back(face->mIndices[numIndex]);
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+
+            std::vector<float3> vertices, normals, tangents, bitangents;
+            std::vector<float2> textureCoords;
+            vertices.resize(mesh->mNumVertices);
+            textureCoords.resize(mesh->mNumVertices);
+            normals.resize(mesh->mNumVertices);
+            tangents.resize(mesh->mNumVertices);
+            bitangents.resize(mesh->mNumVertices);
+            for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex)
+            {
+                vertices[vertexIndex] = float3((float*)&mesh->mVertices[vertexIndex]);
+                if (mesh->HasTextureCoords(0)) { textureCoords[vertexIndex] = float2((float*)&mesh->mTextureCoords[0][vertexIndex]); }
+                if (mesh->mNormals) { normals[vertexIndex] = float3((float*)&mesh->mNormals[vertexIndex]); }
+                if (mesh->mTangents) { tangents[vertexIndex] = float3((float*)&mesh->mTangents[vertexIndex]); }
+                if (mesh->mBitangents) { bitangents[vertexIndex] = float3((float*)&mesh->mBitangents[vertexIndex]); }
+            }
+
+            MoMeshCreateInfo meshInfo = {};
+            meshInfo.indexCount = mesh->mNumFaces * 3;
+            meshInfo.pIndices = indices.data();
+            meshInfo.vertexCount = mesh->mNumVertices;
+            meshInfo.pVertices = vertices.data();
+            meshInfo.pTextureCoords = textureCoords.data();
+            meshInfo.pNormals = normals.data();
+            meshInfo.pTangents = tangents.data();
+            meshInfo.pBitangents = bitangents.data();
+            moCreateMesh(&meshInfo, &meshes[meshIdx]);
+            handles.meshes.push_back(meshes[meshIdx]);
+        }
+
+        nodes.push_back({std::filesystem::canonical(filename).c_str(), identity,
+                         nullptr, nullptr, {}});
+        parseNodes(scene, materials, meshes, scene->mRootNode, nodes.back().children);
     }
 }
 
 int main(int argc, char** argv)
 {
-#ifndef NDEBUG
-    moTestCollada();
-    moTestVertexFormat();
-#endif
-    const char * filename = nullptr;
-    if (argc > 1)
-    {
-        filename = argv[1];
-        if (std::filesystem::path(filename).extension() != ".dae" || !std::filesystem::exists(filename))
-        {
-            printf("Usage: meshouiview [options] file          \n"
-                   "Options:                                   \n"
-                   "  --help Display this information.         \n"
-                   "                                           \n"
-                   "For bug reporting instructions, please see:\n"
-                   "<https://github.com/mittpat/meshoui>.      \n");
-            return 0;
-        }
-    }
-
     GLFWwindow*                  window = nullptr;
     VkInstance                   instance = VK_NULL_HANDLE;
     MoDevice                     device = VK_NULL_HANDLE;
@@ -134,6 +287,7 @@ int main(int argc, char** argv)
         glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, width, height, GLFW_DONT_CARE);
 #endif
         glfwSetKeyCallback(window, glfwKeyCallback);
+        glfwSetMouseButtonCallback(window, glfwMouseCallback);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
 
         // Create Vulkan instance
@@ -191,28 +345,6 @@ int main(int argc, char** argv)
         }
     }
 
-    // imgui initialization
-    {
-        ImGui_ImplVulkan_InitInfo init_info = {};
-        init_info.Instance = instance;
-        init_info.PhysicalDevice = device->physicalDevice;
-        init_info.Device = device->device;
-        init_info.QueueFamily = device->queueFamily;
-        init_info.Queue = device->queue;
-        init_info.PipelineCache = pipelineCache;
-        init_info.DescriptorPool = device->descriptorPool;
-        init_info.Allocator = allocator;
-        init_info.MinImageCount = 2;
-        init_info.ImageCount = 2;
-        init_info.CheckVkResultFn = device->pCheckVkResultFn;
-
-        // Use any command queue
-        VkCommandPool commandPool = swapChain->frames[frameIndex].pool;
-        VkCommandBuffer commandBuffer = swapChain->frames[frameIndex].buffer;
-
-        moGUIInit(window, device->device, swapChain->renderPass, commandPool, commandBuffer, device->queue, &init_info);
-    }
-
     // Meshoui initialization
     {
         MoInitInfo initInfo = {};
@@ -233,135 +365,16 @@ int main(int argc, char** argv)
         initInfo.extent = swapChain->extent;
         initInfo.pAllocator = allocator;
         initInfo.pCheckVkResultFn = device->pCheckVkResultFn;
+        initInfo.flipTexcoords = VK_FALSE;//TRUE;
         moInit(&initInfo);
     }
 
-    struct Drawable {
-        float4x4   model;
-        MoMesh     mesh;
-        MoMaterial material;
-    };
-    // reference only
-    std::vector<Drawable> drawables;
-    // owning
-    std::vector<MoMesh> meshes;
-    // owning
-    std::vector<MoMaterial> materials;
+    MoHandles handles;
+    MoNode root{"__root", identity, nullptr, nullptr, {}};
+    MoCamera camera{"__default_camera", translation_matrix(float3{0.0f, 0.0f, 50.0f})};
+    MoLight light{"__default_light", translation_matrix(float3{-300.0f, 300.0f, 150.0f})};
 
-    if (filename != nullptr)
-    {
-        MoColladaData collada;
-
-        // the file
-        {
-            std::ifstream fileStream(filename);
-            std::string contents((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
-            MoColladaDataCreateInfo createInfo;
-            createInfo.pContents = contents.data();
-            moCreateColladaData(&createInfo, &collada);
-        }
-
-        // meshes
-        for (uint32_t i = 0; i < collada->meshCount; ++i)
-        {
-            MoColladaMesh colladaMesh = collada->pMeshes[i];
-
-            MoVertexFormat vertexFormat;
-
-            std::vector<MoVertexAttribute> attributes(3);
-            attributes[0].pAttribute = &colladaMesh->pVertices->data[0];
-            attributes[0].attributeCount = colladaMesh->vertexCount;
-            attributes[0].componentCount = 3;
-            attributes[1].pAttribute = &colladaMesh->pTexcoords->data[0];
-            attributes[1].attributeCount = colladaMesh->texcoordCount;
-            attributes[1].componentCount = 2;
-            attributes[2].pAttribute = &colladaMesh->pNormals->data[0];
-            attributes[2].attributeCount = colladaMesh->normalCount;
-            attributes[2].componentCount = 3;
-
-            MoVertexFormatCreateInfo createInfo = {};
-            createInfo.pAttributes = attributes.data();
-            createInfo.attributeCount = (uint32_t)attributes.size();
-            createInfo.pIndices = (const uint8_t*)&colladaMesh->pTriangles->data[0];
-            createInfo.indexCount = colladaMesh->triangleCount*3*createInfo.attributeCount;
-            createInfo.indexTypeSize = sizeof(uint32_t);
-            createInfo.flags = MO_VERTEX_FORMAT_INDICES_COUNT_FROM_ONE_BIT | MO_VERTEX_FORMAT_INDICES_PER_ATTRIBUTE_BIT | MO_VERTEX_FORMAT_GENERATE_TANGENTS_BIT;
-            moCreateVertexFormat(&createInfo, &vertexFormat);
-
-            MoMeshCreateInfo meshInfo = {};
-            meshInfo.indexCount = vertexFormat->indexCount;
-            meshInfo.pIndices = vertexFormat->pIndices;
-            meshInfo.vertexCount = vertexFormat->vertexCount;
-            meshInfo.pVertices = vertexFormat->pVertices;
-
-            MoMesh mesh;
-            moCreateMesh(&meshInfo, &mesh);
-            colladaMesh->userData = mesh;
-            meshes.push_back(mesh);
-
-            moDestroyVertexFormat(vertexFormat);
-        }
-
-        // materials
-        std::filesystem::path parentdirectory = std::filesystem::path(filename).parent_path();
-        materials.push_back({}); materials.back() = {}; moDefaultMaterial(&materials.back());
-        for (uint32_t i = 0; i < collada->materialCount; ++i)
-        {
-            MoColladaMaterial colladaMaterial = collada->pMaterials[i];
-
-            MoMaterialCreateInfo materialInfo = {};
-            (MoFloat3&)materialInfo.colorAmbient  = colladaMaterial->colorAmbient ; materialInfo.colorAmbient.w  = 1.0f;
-            (MoFloat3&)materialInfo.colorDiffuse  = colladaMaterial->colorDiffuse ; materialInfo.colorDiffuse.w  = 1.0f;
-            (MoFloat3&)materialInfo.colorSpecular = colladaMaterial->colorSpecular; materialInfo.colorSpecular.w = 1.0f;
-            (MoFloat3&)materialInfo.colorEmissive = colladaMaterial->colorEmissive; materialInfo.colorEmissive.w = 1.0f;
-
-            std::vector<uint8_t> dataDiffuse, dataNormal, dataSpecular, dataEmissive;
-            if (colladaMaterial->filenameDiffuse  && std::filesystem::exists(parentdirectory / colladaMaterial->filenameDiffuse )) { lodepng::decode(dataDiffuse , materialInfo.textureDiffuse.extent.width, materialInfo.textureDiffuse.extent.height  , (parentdirectory / colladaMaterial->filenameDiffuse ).u8string()); materialInfo.textureDiffuse.pData  = dataDiffuse.data (); }
-            if (colladaMaterial->filenameNormal   && std::filesystem::exists(parentdirectory / colladaMaterial->filenameNormal  )) { lodepng::decode(dataNormal  , materialInfo.textureNormal.extent.width, materialInfo.textureNormal.extent.height    , (parentdirectory / colladaMaterial->filenameNormal  ).u8string()); materialInfo.textureNormal.pData   = dataNormal.data  (); }
-            if (colladaMaterial->filenameSpecular && std::filesystem::exists(parentdirectory / colladaMaterial->filenameSpecular)) { lodepng::decode(dataSpecular, materialInfo.textureSpecular.extent.width, materialInfo.textureSpecular.extent.height, (parentdirectory / colladaMaterial->filenameSpecular).u8string()); materialInfo.textureSpecular.pData = dataSpecular.data(); }
-            if (colladaMaterial->filenameEmissive && std::filesystem::exists(parentdirectory / colladaMaterial->filenameEmissive)) { lodepng::decode(dataEmissive, materialInfo.textureEmissive.extent.width, materialInfo.textureEmissive.extent.height, (parentdirectory / colladaMaterial->filenameEmissive).u8string()); materialInfo.textureEmissive.pData = dataEmissive.data(); }
-
-            MoMaterial material = {};
-            moCreateMaterial(&materialInfo, &material);
-            colladaMaterial->userData = material;
-            materials.push_back(material);
-        }
-
-        // flatten transforms of node tree
-        for (uint32_t i = 0; i < collada->nodeCount; ++i)
-        {
-            std::function<void(MoColladaNode, float4x4)> recurse = [&](MoColladaNode currentNode, float4x4 transform)
-            {
-                for (uint32_t j = 0; j < currentNode->nodeCount; ++j)
-                {
-                    MoColladaNode child = currentNode->pNodes[j];
-                    recurse(child, mul(transform, (float4x4&)child->transform));
-                }
-                if (currentNode->mesh != nullptr)
-                {
-                    if (currentNode->material != nullptr) { drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData, (MoMaterial)currentNode->material->userData}); }
-                    else                                  { drawables.push_back(Drawable{transform, (MoMesh)currentNode->mesh->userData, materials[0]}); }
-                }
-            };
-            MoColladaNode colladaNode = collada->pNodes[i];
-            recurse(colladaNode, (float4x4&)colladaNode->transform);
-        }
-
-        moDestroyColladaData(collada);
-    }
-
-    // Demo
-    if (meshes.empty())
-    {
-        meshes.push_back({}); meshes.back() = {}; moDemoCube(&meshes.back());
-        materials.push_back({}); materials.back() = {}; moDemoMaterial(&materials.back());
-
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dis(-10.0f, 10.0f);
-        for (uint32_t i = 0; i < 16; ++i)
-            drawables.push_back(Drawable{translation_matrix(float3{ dis(gen), dis(gen), dis(gen) }), meshes.back(), materials.back()});
-    }
+    std::filesystem::path fileToLoad = "teapot.dae";
 
     // Dome
     MoMesh sphereMesh;
@@ -384,64 +397,38 @@ int main(int argc, char** argv)
         moCreatePipeline(&pipelineCreateInfo, &domePipeline);
     }
 
-    // Controls init
-    float yaw, pitch; yaw = pitch = 0.f;
-    {
-        MoControlInitInfo initInfo = {};
-        initInfo.pWindow = window;
-        moControlInit(&initInfo);
-
-        MoMouselookCreateInfo createInfo = {};
-        createInfo.pPitch = &pitch;
-        createInfo.pYaw = &yaw;
-        moCreateMouselook(&createInfo, &mouselook);
-    }
-    MoStrafer strafer;
-    bool w, a, s, d; w = a = s = d = false;
-    {
-        MoStraferCreateInfo createInfo = {};
-        createInfo.pForward  = &w;
-        createInfo.pLeft     = &a;
-        createInfo.pBackward = &s;
-        createInfo.pRight    = &d;
-        moCreateStrafer(&createInfo, &strafer);
-    }
-
     // Main loop
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
-        // Camera control
-        float4x4 camera_azimuth_matrix = rotation_matrix(rotation_quat({0.f,-1.f,0.f}, yaw * 0.01f));
-        float4x4 camera_altitude_matrix = rotation_matrix(rotation_quat({-1.f,0.f,0.f}, pitch * 0.01f));
-        float4 forward = mul(camera_azimuth_matrix, float4(0,0,1,0));
-        float4 right = mul(camera_azimuth_matrix,   float4(1,0,0,0));
-        float4 linearVelocity = {};
-        if (w) linearVelocity.z = -3.3f;
-        if (a) linearVelocity.x = -3.3f;
-        if (s) linearVelocity.z = 3.3f;
-        if (d) linearVelocity.x = 3.3f;
-        camera_matrix.w += 0.016f * (linearVelocity.z * forward) + 0.016f * (linearVelocity.x * right);
-        float4x4 camera_matrix_frame = mul(camera_matrix, mul(camera_azimuth_matrix, camera_altitude_matrix));
+        if (!fileToLoad.empty())
+        {
+            load(fileToLoad, handles, root.children);
+            fileToLoad = "";
+        }
 
         // Frame begin
         VkSemaphore imageAcquiredSemaphore;
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
         moPipelineOverride(domePipeline);
         moBegin(frameIndex);
+
         {
             MoUniform uni = {};
-            (float3&)uni.light = light_position;
-            (float3&)uni.camera = camera_matrix_frame.w.xyz();
+            uni.light = light.model.w.xyz();
+            uni.camera = camera.model.w.xyz();
             moSetLight(&uni);
         }
         {
+            float4x4 view = inverse(camera.model);
+            view.w = float4(0,0,0,1);
+
             MoPushConstant pmv = {};
-            (float4x4&)pmv.projection = proj_matrix;
-            (float4x4&)pmv.view = mul(inverse(mul(camera_azimuth_matrix, camera_altitude_matrix)), rotation_matrix(rotation_quat(normalize(float3(-1.0f, -1.0f, 0.0f)), 355.0f/113.0f / 32.0f)));
+            pmv.projection = proj_matrix;
+            pmv.view = mul(view, rotation_matrix(rotation_quat(normalize(float3(-1.0f, -1.0f, 0.0f)), 355.0f/113.0f / 32.0f)));
             {
-                (float4x4&)pmv.model = identity;
+                pmv.model = identity;
                 moSetPMV(&pmv);
                 moBindMaterial(domeMaterial);
                 moDrawMesh(sphereMesh);
@@ -451,24 +438,30 @@ int main(int argc, char** argv)
         moBegin(frameIndex);
         {
             MoUniform uni = {};
-            (float3&)uni.light = light_position;
-            (float3&)uni.camera = camera_matrix_frame.w.xyz();
+            uni.light = light.model.w.xyz();
+            uni.camera = camera.model.w.xyz();
             moSetLight(&uni);
         }
         {
             MoPushConstant pmv = {};
-            (float4x4&)pmv.projection = proj_matrix;
-            (float4x4&)pmv.view = inverse(camera_matrix_frame);
-            for (const auto & drawable : drawables)
+            pmv.projection = proj_matrix;
+            pmv.view = inverse(camera.model);
+            std::function<void(const MoNode &, const float4x4 &)> draw = [&](const MoNode & node, const float4x4 & model)
             {
-                (float4x4&)pmv.model = drawable.model;
-                moSetPMV(&pmv);
-                moBindMaterial(drawable.material);
-                moDrawMesh(drawable.mesh);
-            }
+                if (node.material && node.mesh)
+                {
+                    moBindMaterial(node.material);
+                    pmv.model = model;
+                    moSetPMV(&pmv);
+                    moDrawMesh(node.mesh);
+                }
+                for (const MoNode & child : node.children)
+                {
+                    draw(child, mul(model, child.model));
+                }
+            };
+            draw(root, root.model);
         }
-
-        moGUIDraw(swapChain->frames[frameIndex].buffer);
 
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
@@ -496,24 +489,13 @@ int main(int argc, char** argv)
         vk_check_result(err);
     }
 
-    // Controls cleanup
-    moDestroyStrafer(strafer);
-    moDestroyMouselook(mouselook);
-    moControlShutdown();
-
     // Dome
     moDestroyPipeline(domePipeline);
     moDestroyMaterial(domeMaterial);
 
     // Meshoui cleanup
-    for (MoMaterial material : materials)
-        moDestroyMaterial(material);
+    moDestroyHandles(handles);
     moDestroyMesh(sphereMesh);
-    for (MoMesh mesh : meshes)
-        moDestroyMesh(mesh);
-
-    // imgui cleanup
-    moGUIShutdown();
 
     // Cleanup
     moShutdown();
@@ -530,3 +512,45 @@ int main(int argc, char** argv)
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+
+/*
+------------------------------------------------------------------------------
+This software is available under 2 licenses -- choose whichever you prefer.
+------------------------------------------------------------------------------
+ALTERNATIVE A - MIT License
+Copyright (c) 2018 Patrick Pelletier
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+------------------------------------------------------------------------------
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+------------------------------------------------------------------------------
+*/

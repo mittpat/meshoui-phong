@@ -1,21 +1,23 @@
-cmake_minimum_required(VERSION 3.0.0)
-project(meshoui VERSION 0.1.0)
+cmake_minimum_required(VERSION 3.10.0)
+project(meshoui VERSION 0.2.0)
 
 find_package(Vulkan REQUIRED)
 
-add_definitions(-DNV_DDS_NO_GL_SUPPORT)
 add_subdirectory(3rdparty)
 
-add_executable(meshouiview main.cpp 
-    collada.h collada.cpp
-    control.h control.cpp
+add_executable(meshouiview
+    main.cpp
     dome.h
-    gui.h gui.cpp
-    phong.h phong.cpp
-    vertexformat.h vertexformat.cpp)
+    phong.h phong.cpp)
 
 if(NOT MSVC)
-    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw imgui linalg lodepng nv_dds pugixml stdc++fs)
+    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} assimp glfw linalg stdc++fs)
 else()
-    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} glfw imgui linalg lodepng nv_dds pugixml)
+    target_link_libraries(meshouiview ${Vulkan_LIBRARIES} assimp glfw linalg)
 endif()
+
+add_custom_command(TARGET meshouiview POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy
+                       ${CMAKE_CURRENT_SOURCE_DIR}/teapot.dae
+                       $<TARGET_FILE_DIR:meshouiview>/teapot.dae
+                   )
