@@ -146,7 +146,6 @@ typedef struct MoInitInfo {
     VkSwapchainKHR               swapChainKHR;
     VkRenderPass                 renderPass;
     VkExtent2D                   extent;
-    VkBool32                     flipTexcoords;
     const VkAllocationCallbacks* pAllocator;
     void                         (*pCheckVkResultFn)(VkResult err);
 } MoInitInfo;

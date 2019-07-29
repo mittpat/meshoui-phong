@@ -35,6 +35,77 @@ set(GLFW_INSTALL OFF)
 set(GLFW_VULKAN_STATIC)
 add_subdirectory(glfw)
 
+# glslang
+function(compile_glsl binaries)
+  if(NOT TARGET glslangValidator)
+    message(STATUS "Info: glslangValidator not found. Will use cached spir-v files")
+  endif()
+
+  if(NOT ARGN)
+    message(SEND_ERROR "Error: compile_glsl() called without any glsl files")
+    return()
+  endif()
+
+  # clear output list
+  set(${binaries})
+
+  # generate from each input .frag/.vert file
+  foreach(FIL ${ARGN})
+    get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
+    get_filename_component(FIL_NAME ${FIL} NAME_WE)
+    get_filename_component(FIL_DIR ${FIL} DIRECTORY)
+
+    if (NOT DEFINED glslang_output_dir)
+      set(glslang_output_dir "${FIL_DIR}")
+    endif()
+    add_custom_target(glslang_make_output_dir_${FIL_NAME} COMMAND ${CMAKE_COMMAND} -E make_directory ${glslang_output_dir})
+
+    #vertex
+    set(binary "${glslang_output_dir}/${FIL_NAME}.vert.spv")
+    list(APPEND ${binaries} "${binary}")
+
+    if(TARGET glslangValidator)
+      add_custom_command(
+        OUTPUT "${binary}"
+        COMMAND glslangValidator
+        ARGS -V
+             -e main
+             -S vert
+             -DCOMPILING_VERTEX
+             -o ${binary}
+             ${ABS_FIL}
+        DEPENDS ${ABS_FIL} glslangValidator glslang_make_output_dir_${FIL_NAME}
+        COMMENT "Running glslangValidator on ${FIL_NAME}"
+        VERBATIM)
+    endif()
+
+    #fragment
+    set(binary "${glslang_output_dir}/${FIL_NAME}.frag.spv")
+    list(APPEND ${binaries} "${binary}")
+
+    if(TARGET glslangValidator)
+      add_custom_command(
+        OUTPUT "${binary}"
+        COMMAND glslangValidator
+        ARGS -V
+             -e main
+             -S frag
+             -DCOMPILING_FRAGMENT
+             -o ${binary}
+             ${ABS_FIL}
+        DEPENDS ${ABS_FIL} glslangValidator glslang_make_output_dir_${FIL_NAME}
+        COMMENT "Running glslangValidator on ${FIL_NAME}"
+        VERBATIM)
+    endif()
+  endforeach()
+
+  set_source_files_properties(${${binaries}} PROPERTIES GENERATED TRUE)
+  set(${binaries} ${${binaries}} PARENT_SCOPE)
+endfunction()
+
+set(ENABLE_HLSL OFF CACHE BOOL "Enables HLSL input support")
+add_subdirectory(glslang)
+
 # linalg
 add_library(linalg INTERFACE)
 target_include_directories(linalg INTERFACE linalg)

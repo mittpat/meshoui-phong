@@ -6,7 +6,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "dome.h"
 #include "phong.h"
 
 #include <linalg.h>
@@ -21,6 +20,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
+
+#include <fstream>
 
 namespace std { namespace filesystem = experimental::filesystem; }
 using namespace linalg;
@@ -45,16 +46,17 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_report(VkDebugReportFlagsEXT, VkD
     return VK_FALSE;
 }
 
-static constexpr float degreesToRadians(float angle)
+#define MoPI (355.f/113)
+static constexpr float moDegreesToRadians(float angle)
 {
-    return angle * 3.14159265359f / 180.0f;
+    return angle * MoPI / 180.0f;
 }
 
 static float4x4 correction_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                       { 0.0f,-1.0f, 0.0f, 0.0f },
                                       { 0.0f, 0.0f, 1.0f, 0.0f },
                                       { 0.0f, 0.0f, 0.0f, 1.0f } };
-static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
+static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 
 static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
 {
@@ -263,6 +265,7 @@ int main(int argc, char** argv)
 
         glfwSetErrorCallback(glfw_error_callback);
         glfwInit();
+#undef NDEBUG
 #ifndef NDEBUG
         width = 1920 / 2;
         height = 1080 / 2;
@@ -309,7 +312,7 @@ int main(int argc, char** argv)
             glfwWaitEvents();
         }
 
-        projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
+        projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
         // Create device
         {
@@ -359,13 +362,12 @@ int main(int argc, char** argv)
         initInfo.extent = swapChain->extent;
         initInfo.pAllocator = allocator;
         initInfo.pCheckVkResultFn = device->pCheckVkResultFn;
-        initInfo.flipTexcoords = VK_FALSE;//TRUE;
         moInit(&initInfo);
     }
 
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
-    MoCamera camera{"__default_camera", translation_matrix(float3{0.0f, 0.0f, 50.0f})};
+    MoCamera camera{"__default_camera", translation_matrix(float3{0.0f, 10.0f, 30.0f})};
     MoLight light{"__default_light", translation_matrix(float3{-300.0f, 300.0f, 150.0f})};
 
     std::filesystem::path fileToLoad = "teapot.dae";
@@ -383,10 +385,20 @@ int main(int argc, char** argv)
     MoPipeline domePipeline;
     {
         MoPipelineCreateInfo pipelineCreateInfo = {};
-        pipelineCreateInfo.pVertexShader = mo_dome_glsl_shader_vert_spv;
-        pipelineCreateInfo.vertexShaderSize = sizeof(mo_dome_glsl_shader_vert_spv);
-        pipelineCreateInfo.pFragmentShader = mo_dome_glsl_shader_frag_spv;
-        pipelineCreateInfo.fragmentShaderSize = sizeof(mo_dome_glsl_shader_frag_spv);
+        std::vector<char> mo_dome_shader_vert_spv;
+        {
+            std::ifstream fileStream("dome.vert.spv", std::ifstream::binary);
+            mo_dome_shader_vert_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        }
+        std::vector<char> mo_dome_shader_frag_spv;
+        {
+            std::ifstream fileStream("dome.frag.spv", std::ifstream::binary);
+            mo_dome_shader_frag_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+        }
+        pipelineCreateInfo.pVertexShader = (std::uint32_t*)mo_dome_shader_vert_spv.data();
+        pipelineCreateInfo.vertexShaderSize = mo_dome_shader_vert_spv.size();
+        pipelineCreateInfo.pFragmentShader = (std::uint32_t*)mo_dome_shader_frag_spv.data();
+        pipelineCreateInfo.fragmentShaderSize = mo_dome_shader_frag_spv.size();
         pipelineCreateInfo.flags = MO_PIPELINE_FEATURE_NONE;
         moCreatePipeline(&pipelineCreateInfo, &domePipeline);
     }
@@ -470,7 +482,7 @@ int main(int argc, char** argv)
             }
 
             // in case the window was resized
-            projection_matrix = mul(correction_matrix, perspective_matrix(degreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
+            projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
             MoSwapChainRecreateInfo recreateInfo = {};
             recreateInfo.surface = surface;
