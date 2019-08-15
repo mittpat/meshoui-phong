@@ -55,7 +55,7 @@ layout(set = 1, binding = 4) uniform sampler2D uniformTextureEmissive;
 
 void main()
 {
-    vec2 texcoord = vec2(inData.texcoord.s, 1.0 - inData.texcoord.t);
+    vec2 texcoord = vec2(inData.texcoord.s, inData.texcoord.t);
     vec4 textureAmbient = texture(uniformTextureAmbient, texcoord);
     vec4 textureDiffuse = texture(uniformTextureDiffuse, texcoord);
     fragment = vec4(textureAmbient.rgb * textureDiffuse.rgb, textureDiffuse.a);

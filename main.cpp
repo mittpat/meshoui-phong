@@ -58,26 +58,115 @@ static float4x4 correction_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                       { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 
+struct MoInputs
+{
+    bool up;
+    bool down;
+    bool left;
+    bool right;
+    bool forward;
+    bool backward;
+    bool leftButton;
+    bool rightButton;
+    double xpos, ypos;
+    double dxpos, dypos;
+};
+
 static void glfwKeyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/)
 {
+    MoInputs* inputs = (MoInputs*)glfwGetWindowUserPointer(window);
     if (action == GLFW_PRESS)
     {
-        if (key == GLFW_KEY_ESCAPE)
+        switch (key)
         {
+        case GLFW_KEY_ESCAPE:
             glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+        case GLFW_KEY_Q:
+            inputs->up = true;
+            break;
+        case GLFW_KEY_E:
+            inputs->down = true;
+            break;
+        case GLFW_KEY_W:
+            inputs->forward = true;
+            break;
+        case GLFW_KEY_A:
+            inputs->left = true;
+            break;
+        case GLFW_KEY_S:
+            inputs->backward = true;
+            break;
+        case GLFW_KEY_D:
+            inputs->right = true;
+            break;
+        }
+    }
+    if (action == GLFW_RELEASE)
+    {
+        switch (key)
+        {
+        case GLFW_KEY_Q:
+            inputs->up = false;
+            break;
+        case GLFW_KEY_E:
+            inputs->down = false;
+            break;
+        case GLFW_KEY_W:
+            inputs->forward = false;
+            break;
+        case GLFW_KEY_A:
+            inputs->left = false;
+            break;
+        case GLFW_KEY_S:
+            inputs->backward = false;
+            break;
+        case GLFW_KEY_D:
+            inputs->right = false;
+            break;
         }
     }
 }
 
-static void glfwMouseCallback(GLFWwindow */*window*/, int button, int action, int /*mods*/)
+static void glfwMouseCallback(GLFWwindow *window, int button, int action, int /*mods*/)
 {
+    MoInputs* inputs = (MoInputs*)glfwGetWindowUserPointer(window);
     if (action == GLFW_PRESS)
     {
-        if (button == GLFW_MOUSE_BUTTON_LEFT)
+        switch (button)
         {
-            // move the camera
+        case GLFW_MOUSE_BUTTON_LEFT:
+            inputs->leftButton = true;
+            break;
+        case GLFW_MOUSE_BUTTON_RIGHT:
+            inputs->rightButton = true;
+            break;
         }
     }
+    else if (action == GLFW_RELEASE)
+    {
+        switch (button)
+        {
+        case GLFW_MOUSE_BUTTON_LEFT:
+            inputs->leftButton = false;
+            break;
+        case GLFW_MOUSE_BUTTON_RIGHT:
+            inputs->rightButton = false;
+            break;
+        }
+    }
+}
+
+static void glfwPollMouse(GLFWwindow *window)
+{
+    MoInputs* inputs = (MoInputs*)glfwGetWindowUserPointer(window);
+
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+    inputs->dxpos = xpos - inputs->xpos;
+    inputs->dypos = ypos - inputs->ypos;
+    inputs->xpos = xpos;
+    inputs->ypos = ypos;
 }
 
 struct MoLight
@@ -89,7 +178,14 @@ struct MoLight
 struct MoCamera
 {
     std::string name;
-    float4x4    model;
+    float3      position;
+    float       pitch, yaw;
+    float4x4    model()
+    {
+        float3 right = mul(rotation_matrix(rotation_quat({0.f,-1.f,0.f}, yaw)), {1.f,0.f,0.f,0.f}).xyz();
+
+        return mul(translation_matrix(position), mul(rotation_matrix(rotation_quat(right, pitch)), rotation_matrix(rotation_quat({0.f,-1.f,0.f}, yaw))));
+    }
 };
 
 struct MoNode
@@ -259,6 +355,8 @@ int main(int argc, char** argv)
     VkPipelineCache              pipelineCache = VK_NULL_HANDLE;
     const VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 
+    MoInputs                     inputs = {};
+
     // Initialization
     {
         int width, height;
@@ -283,6 +381,8 @@ int main(int argc, char** argv)
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, width, height, GLFW_DONT_CARE);
 #endif
+        glfwGetCursorPos(window, &inputs.xpos, &inputs.ypos);
+        glfwSetWindowUserPointer(window, &inputs);
         glfwSetKeyCallback(window, glfwKeyCallback);
         glfwSetMouseButtonCallback(window, glfwMouseCallback);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
@@ -367,8 +467,8 @@ int main(int argc, char** argv)
 
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
-    MoCamera camera{"__default_camera", translation_matrix(float3{0.0f, 10.0f, 30.0f})};
-    MoLight light{"__default_light", translation_matrix(float3{-300.0f, 300.0f, 150.0f})};
+    MoCamera camera{"__default_camera", {0.f, 10.f, 30.f}, 0.f, 0.f};
+    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f})};
 
     std::filesystem::path fileToLoad = "teapot.dae";
 
@@ -407,11 +507,30 @@ int main(int argc, char** argv)
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+        glfwPollMouse(window);
 
         if (!fileToLoad.empty())
         {
             load(fileToLoad, handles, root.children);
             fileToLoad = "";
+        }
+
+        {
+            const float speed = 0.5f;
+            float3 forward = mul(camera.model(), {0.f,0.f,-1.f,0.f}).xyz();
+            float3 up = mul(camera.model(), {0.f,1.f,0.f,0.f}).xyz();
+            float3 right = mul(camera.model(), {1.f,0.f,0.f,0.f}).xyz();
+            if (inputs.up) camera.position += up * speed;
+            if (inputs.down) camera.position -= up * speed;
+            if (inputs.forward) camera.position += forward * speed;
+            if (inputs.backward) camera.position -= forward * speed;
+            if (inputs.left) camera.position -= right * speed;
+            if (inputs.right) camera.position += right * speed;
+            if (inputs.leftButton)
+            {
+                camera.yaw += inputs.dxpos * 0.005;
+                camera.pitch -= inputs.dypos * 0.005;
+            }
         }
 
         // Frame begin
@@ -423,11 +542,11 @@ int main(int argc, char** argv)
         {
             MoUniform uni = {};
             uni.light = light.model.w.xyz();
-            uni.camera = camera.model.w.xyz();
+            uni.camera = camera.position;
             moSetLight(&uni);
         }
         {
-            float4x4 view = inverse(camera.model);
+            float4x4 view = inverse(camera.model());
             view.w = float4(0,0,0,1);
 
             MoPushConstant pmv = {};
@@ -445,13 +564,13 @@ int main(int argc, char** argv)
         {
             MoUniform uni = {};
             uni.light = light.model.w.xyz();
-            uni.camera = camera.model.w.xyz();
+            uni.camera = camera.model().w.xyz();
             moSetLight(&uni);
         }
         {
             MoPushConstant pmv = {};
             pmv.projection = projection_matrix;
-            pmv.view = inverse(camera.model);
+            pmv.view = inverse(camera.model());
             std::function<void(const MoNode &, const float4x4 &)> draw = [&](const MoNode & node, const float4x4 & model)
             {
                 if (node.material && node.mesh)
