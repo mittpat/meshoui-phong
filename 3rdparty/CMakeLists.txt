@@ -22,7 +22,6 @@ set(BUILD_DOCS OFF)
 set(INJECT_DEBUG_POSTFIX OFF)
 set(IGNORE_GIT_HASH ON)
 add_subdirectory(assimp)
-set_target_properties(assimp PROPERTIES COMPILE_FLAGS -g0)
 target_include_directories(assimp PUBLIC assimp/contrib)
 
 # glfw
@@ -109,3 +108,8 @@ add_subdirectory(glslang)
 # linalg
 add_library(linalg INTERFACE)
 target_include_directories(linalg INTERFACE linalg)
+
+# meshoui-ray
+set(MESHOUIRAY_ASSIMP_ENABLED false)
+set(MESHOUIRAY_LINALG_ENABLED false)
+add_subdirectory(meshouiray)

@@ -46,6 +46,7 @@ layout(std140, binding = 0) uniform Block
 {
     uniform vec3 viewPosition;
     uniform vec3 lightPosition;
+    uniform float lightPower;
 } uniformData;
 layout(set = 1, binding = 0) uniform sampler2D uniformTextureAmbient;
 layout(set = 1, binding = 1) uniform sampler2D uniformTextureDiffuse;
@@ -72,7 +73,7 @@ void main()
 
         float specularFactor = pow(max(dot(eyeDirection_worldspace, reflectDirection_worldspace), 0.0), 8.0);
         vec4 textureSpecular = texture(uniformTextureSpecular, texcoord);
-        fragment += vec4(diffuseFactor * textureDiffuse.rgb + specularFactor * textureSpecular.rgb, 0.0);
+        fragment += vec4(uniformData.lightPower * diffuseFactor * textureDiffuse.rgb + specularFactor * textureSpecular.rgb, 0.0);
     }
 }
 #endif

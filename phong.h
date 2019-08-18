@@ -208,7 +208,7 @@ typedef struct MoPushConstant {
 
 typedef struct MoUniform {
     alignas(16) linalg::aliases::float3 camera;
-    alignas(16) linalg::aliases::float3 light;
+    alignas(16) linalg::aliases::float4 light;
 } MoUniform;
 
 // you can create a VkInstance using moCreateInstance(MoInstanceCreateInfo)
@@ -282,6 +282,9 @@ void moDefaultMaterial(MoMaterial* pMaterial);
 
 // create a demo mesh
 void moDemoCube(MoMesh* pMesh, const linalg::aliases::float3 & halfExtents = linalg::aliases::float3(1.0f, 1.0f, 1.0f));
+
+// create a demo plane
+void moDemoPlane(MoMesh* pMesh, const linalg::aliases::float2 & halfExtents = linalg::aliases::float2(1.0f, 1.0f));
 
 // create a demo mesh
 void moDemoSphere(MoMesh *pMesh);

@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 
 #include "phong.h"
+#include <lightmap.h>
 
 #include <linalg.h>
 
@@ -173,6 +174,7 @@ struct MoLight
 {
     std::string name;
     float4x4    model;
+    float       power;
 };
 
 struct MoCamera
@@ -234,51 +236,11 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
 {
     if (!filename.empty() && std::filesystem::exists(filename))
     {
+        std::vector<MoTextureSample> output(256*256, {0,0,0,0});
+
         Assimp::Importer importer;
         const aiScene * scene = importer.ReadFile(filename, aiProcess_Debone | aiProcessPreset_TargetRealtime_Fast);
         std::filesystem::path parentdirectory = std::filesystem::path(filename).parent_path();
-
-        std::vector<MoMaterial> materials(scene->mNumMaterials);
-        for (uint32_t materialIdx = 0; materialIdx < scene->mNumMaterials; ++materialIdx)
-        {
-            auto* material = scene->mMaterials[materialIdx];
-
-            MoMaterialCreateInfo materialInfo = {};
-            std::vector<std::pair<const char*, float4*>> colorMappings =
-               {{std::array<const char*,3>{AI_MATKEY_COLOR_AMBIENT}[0], &materialInfo.colorAmbient},
-                {std::array<const char*,3>{AI_MATKEY_COLOR_DIFFUSE}[0], &materialInfo.colorDiffuse},
-                {std::array<const char*,3>{AI_MATKEY_COLOR_SPECULAR}[0], &materialInfo.colorSpecular},
-                {std::array<const char*,3>{AI_MATKEY_COLOR_EMISSIVE}[0], &materialInfo.colorEmissive}};
-            for (auto mapping : colorMappings)
-            {
-                aiColor3D color(0.f,0.f,0.f);
-                scene->mMaterials[materialIdx]->Get(mapping.first, 0, 0, color);
-                *mapping.second = {color.r, color.g, color.b, 1.0f};
-            }
-
-            std::vector<std::pair<aiTextureType, MoTextureInfo*>> textureMappings =
-                {{aiTextureType_AMBIENT, &materialInfo.textureAmbient},
-                {aiTextureType_DIFFUSE, &materialInfo.textureDiffuse},
-                {aiTextureType_SPECULAR, &materialInfo.textureSpecular},
-                {aiTextureType_EMISSIVE, &materialInfo.textureEmissive},
-                {aiTextureType_NORMALS, &materialInfo.textureNormal}};
-            for (auto mapping : textureMappings)
-            {
-                aiString path;
-                if (AI_SUCCESS == material->GetTexture(mapping.first, 0, &path))
-                {
-                    std::filesystem::path filename = parentdirectory / path.C_Str();
-                    if (std::filesystem::exists(filename))
-                    {
-                        int x, y, n;
-                        mapping.second->pData = stbi_load(filename.c_str(), &x, &y, &n, STBI_rgb_alpha);
-                        mapping.second->extent = {(uint32_t)x, (uint32_t)y};
-                    }
-                }
-            }
-            moCreateMaterial(&materialInfo, &materials[materialIdx]);
-            handles.materials.push_back(materials[materialIdx]);
-        }
 
         std::vector<MoMesh> meshes(scene->mNumMeshes);
         for (uint32_t meshIdx = 0; meshIdx < scene->mNumMeshes; ++meshIdx)
@@ -335,6 +297,77 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
             meshInfo.pBitangents = bitangents.data();
             moCreateMesh(&meshInfo, &meshes[meshIdx]);
             handles.meshes.push_back(meshes[meshIdx]);
+
+            {
+                MoTriangleList triangleList;
+                moCreateTriangleList(mesh, &triangleList);
+
+                MoLightmapCreateInfo info = {};
+                info.nullColor = {127,127,127,255};
+                info.width = 256;
+                info.height = 256;
+                info.flipY = 1;
+                info.ambiantLightingSampleCount = 128;
+                info.ambiantLightingPower = 1.0f;
+                info.ambiantOcclusionDistance = 1.f;
+                info.directionalLightingSampleCount = 32;
+                info.pDirectionalLightSources = nullptr;
+                info.directionalLightSourceCount = 0;
+                info.pointLightingSampleCount = 32;
+                info.pPointLightSources = nullptr;
+                info.pointLightSourceCount = 0;
+                moGenerateLightMap(triangleList, output.data(), &info);
+                moDestroyTriangleList(triangleList);
+            }
+        }
+
+        std::vector<MoMaterial> materials(scene->mNumMaterials);
+        for (uint32_t materialIdx = 0; materialIdx < scene->mNumMaterials; ++materialIdx)
+        {
+            auto* material = scene->mMaterials[materialIdx];
+
+            MoMaterialCreateInfo materialInfo = {};
+            std::vector<std::pair<const char*, float4*>> colorMappings =
+               {{std::array<const char*,3>{AI_MATKEY_COLOR_AMBIENT}[0], &materialInfo.colorAmbient},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_DIFFUSE}[0], &materialInfo.colorDiffuse},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_SPECULAR}[0], &materialInfo.colorSpecular},
+                {std::array<const char*,3>{AI_MATKEY_COLOR_EMISSIVE}[0], &materialInfo.colorEmissive}};
+            for (auto mapping : colorMappings)
+            {
+                aiColor3D color(0.f,0.f,0.f);
+                scene->mMaterials[materialIdx]->Get(mapping.first, 0, 0, color);
+                *mapping.second = {color.r, color.g, color.b, 1.0f};
+            }
+
+            std::vector<std::pair<aiTextureType, MoTextureInfo*>> textureMappings =
+                {{aiTextureType_AMBIENT, &materialInfo.textureAmbient},
+                {aiTextureType_DIFFUSE, &materialInfo.textureDiffuse},
+                {aiTextureType_SPECULAR, &materialInfo.textureSpecular},
+                {aiTextureType_EMISSIVE, &materialInfo.textureEmissive},
+                {aiTextureType_NORMALS, &materialInfo.textureNormal}};
+            for (auto mapping : textureMappings)
+            {
+                auto t = material->GetTextureCount(mapping.first);
+                aiString path;
+                if (AI_SUCCESS == material->GetTexture(mapping.first, 0, &path))
+                {
+                    std::filesystem::path filename = parentdirectory / path.C_Str();
+                    if (std::filesystem::exists(filename))
+                    {
+                        int x, y, n;
+                        mapping.second->pData = stbi_load(filename.c_str(), &x, &y, &n, STBI_rgb_alpha);
+                        mapping.second->extent = {(uint32_t)x, (uint32_t)y};
+                    }
+                }
+            }
+
+            // AO
+            materialInfo.textureAmbient.pData = (const uint8_t*)output.data();
+            materialInfo.textureAmbient.extent = {256,256};
+            materialInfo.textureAmbient.filter = VK_FILTER_LINEAR;
+
+            moCreateMaterial(&materialInfo, &materials[materialIdx]);
+            handles.materials.push_back(materials[materialIdx]);
         }
 
         nodes.push_back({std::filesystem::canonical(filename).c_str(), identity,
@@ -468,7 +501,7 @@ int main(int argc, char** argv)
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
     MoCamera camera{"__default_camera", {0.f, 10.f, 30.f}, 0.f, 0.f};
-    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f})};
+    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f}), 0.6f};
 
     std::filesystem::path fileToLoad = "teapot.dae";
 
@@ -541,7 +574,7 @@ int main(int argc, char** argv)
 
         {
             MoUniform uni = {};
-            uni.light = light.model.w.xyz();
+            uni.light = float4(light.model.w.xyz(), light.power);
             uni.camera = camera.position;
             moSetLight(&uni);
         }
@@ -563,7 +596,7 @@ int main(int argc, char** argv)
         moBegin(frameIndex);
         {
             MoUniform uni = {};
-            uni.light = light.model.w.xyz();
+            uni.light = float4(light.model.w.xyz(), light.power);
             uni.camera = camera.model().w.xyz();
             moSetLight(&uni);
         }

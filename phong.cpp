@@ -1508,6 +1508,11 @@ void moDemoCube(MoMesh *pMesh, const linalg::aliases::float3 & halfExtents)
     moCreateMesh(&meshInfo, pMesh);
 }
 
+void moDemoPlane(MoMesh *pMesh, const float2 &halfExtents)
+{
+
+}
+
 void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<float3> & sphere_positions, std::vector<uint32_t> & sphere_indices)
 {
     sphere_positions.push_back({0.0f, 1.0f, 0.0f});

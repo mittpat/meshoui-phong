@@ -10,3 +10,6 @@
 [submodule "3rdparty/glslang"]
 	path = 3rdparty/glslang
 	url = https://github.com/KhronosGroup/glslang.git
+[submodule "3rdparty/meshouiray"]
+	path = 3rdparty/meshouiray
+	url = https://github.com/mittpat/meshoui-ray
