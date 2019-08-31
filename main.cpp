@@ -22,6 +22,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
+#include <iostream>
 #include <fstream>
 
 namespace std { namespace filesystem = experimental::filesystem; }
@@ -304,19 +305,19 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
 
                 MoLightmapCreateInfo info = {};
                 info.nullColor = {127,127,127,255};
-                info.width = 256;
-                info.height = 256;
+                info.size = {256,256};
                 info.flipY = 1;
-                info.ambiantLightingSampleCount = 128;
-                info.ambiantLightingPower = 1.0f;
-                info.ambiantOcclusionDistance = 1.f;
+                info.despeckle = 1;
+                info.ambientLightingSampleCount = 512;
+                info.ambientLightingPower = 1.0f;
+                info.ambientOcclusionDistance = 1.f;
                 info.directionalLightingSampleCount = 32;
                 info.pDirectionalLightSources = nullptr;
                 info.directionalLightSourceCount = 0;
                 info.pointLightingSampleCount = 32;
                 info.pPointLightSources = nullptr;
                 info.pointLightSourceCount = 0;
-                moGenerateLightMap(triangleList, output.data(), &info);
+                moGenerateLightMap(triangleList, output.data(), &info, &std::cout);
                 moDestroyTriangleList(triangleList);
             }
         }
@@ -501,7 +502,7 @@ int main(int argc, char** argv)
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
     MoCamera camera{"__default_camera", {0.f, 10.f, 30.f}, 0.f, 0.f};
-    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f}), 0.6f};
+    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f}), 0.f};
 
     std::filesystem::path fileToLoad = "teapot.dae";
 
