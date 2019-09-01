@@ -299,10 +299,10 @@ void moDrawMesh(MoMesh mesh);
 void moDefaultMaterial(MoMaterial* pMaterial);
 
 // create a demo mesh
-void moDemoCube(MoMesh* pMesh, const linalg::aliases::float3 & halfExtents = linalg::aliases::float3(1.0f, 1.0f, 1.0f));
+void moDemoCube(MoMesh* pMesh, const linalg::aliases::float3 & halfExtents = linalg::aliases::float3(0.5, 0.5, 0.5f));
 
 // create a demo plane
-void moDemoPlane(MoMesh* pMesh, const linalg::aliases::float2 & halfExtents = linalg::aliases::float2(1.0f, 1.0f));
+void moDemoPlane(MoMesh* pMesh, const linalg::aliases::float2 & halfExtents = linalg::aliases::float2(0.5f, 0.5f));
 
 // create a demo mesh
 void moDemoSphere(MoMesh *pMesh);

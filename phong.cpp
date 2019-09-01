@@ -1531,10 +1531,10 @@ void moDemoCube(MoMesh *pMesh, const linalg::aliases::float3 & halfExtents)
                                        {  halfExtents.x, -halfExtents.y,  halfExtents.z },
                                        {  halfExtents.x,  halfExtents.y, -halfExtents.z },
                                        {  halfExtents.x,  halfExtents.y,  halfExtents.z } };
-    static float2 cube_texcoords[] = { { halfExtents.x, 0.0f },
-                                       { 0.0f, halfExtents.x },
+    static float2 cube_texcoords[] = { { 2 * halfExtents.x, 0.0f },
+                                       { 0.0f, 2 * halfExtents.x },
                                        { 0.0f, 0.0f },
-                                       { halfExtents.x, halfExtents.x } };
+                                       { 2 * halfExtents.x, 2 * halfExtents.x } };
     static float3 cube_normals[] = { { 0.0f, 1.0f, 0.0f } };
     static mat<unsigned,3,3> cube_triangles[] = { { uint3{ 2, 3, 1 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
                                                   { uint3{ 4, 7, 3 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
@@ -1609,7 +1609,88 @@ void moDemoCube(MoMesh *pMesh, const linalg::aliases::float3 & halfExtents)
 
 void moDemoPlane(MoMesh *pMesh, const float2 &halfExtents)
 {
+    static float3 cube_positions[] = { { -halfExtents.x, -halfExtents.y, 0 },
+                                       { -halfExtents.x, -halfExtents.y, 0 },
+                                       { -halfExtents.x,  halfExtents.y, 0 },
+                                       { -halfExtents.x,  halfExtents.y, 0 },
+                                       {  halfExtents.x, -halfExtents.y, 0 },
+                                       {  halfExtents.x, -halfExtents.y, 0 },
+                                       {  halfExtents.x,  halfExtents.y, 0 },
+                                       {  halfExtents.x,  halfExtents.y, 0 } };
+    static float2 cube_texcoords[] = { { 2 * halfExtents.x, 0.0f },
+                                       { 0.0f, 2 * halfExtents.x },
+                                       { 0.0f, 0.0f },
+                                       { 2 * halfExtents.x, 2 * halfExtents.x } };
+    static float3 cube_normals[] = { { 0.0f, 0.0f, 1.0f } };
+    static mat<unsigned,3,3> cube_triangles[] = { //{ uint3{ 2, 3, 1 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 4, 7, 3 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 8, 5, 7 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 6, 1, 5 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 7, 1, 3 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 6, 8 }, uint3{ 1, 2, 3 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 2, 4, 3 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 4, 8, 7 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 8, 6, 5 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 6, 2, 1 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  //{ uint3{ 7, 5, 1 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } },
+                                                  { uint3{ 4, 2, 6 }, uint3{ 1, 4, 2 }, uint3{ 1, 1, 1 } } };
 
+    std::vector<uint32_t> indices;
+    uint32_t vertexCount = 0;
+    std::vector<float3> vertexPositions;
+    std::vector<float2> vertexTexcoords;
+    std::vector<float3> vertexNormals;
+    std::vector<float3> vertexTangents;
+    std::vector<float3> vertexBitangents;
+//INDICES_COUNT_FROM_ONE
+    for (const auto & triangle : cube_triangles)
+    {
+        vertexPositions.push_back(cube_positions[triangle.x.x - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.x - 1]); vertexNormals.push_back(cube_normals[triangle.z.x - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
+        vertexPositions.push_back(cube_positions[triangle.x.y - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.y - 1]); vertexNormals.push_back(cube_normals[triangle.z.y - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
+        vertexPositions.push_back(cube_positions[triangle.x.z - 1]); vertexTexcoords.push_back(cube_texcoords[triangle.y.z - 1]); vertexNormals.push_back(cube_normals[triangle.z.z - 1]); vertexTangents.push_back({1.0f, 0.0f, 0.0f}); vertexBitangents.push_back({0.0f, 0.0f, 1.0f}); indices.push_back((uint32_t)vertexPositions.size());
+    }
+    for (uint32_t & index : indices) { --index; }
+    for (uint32_t index = 0; index < indices.size(); index+=3)
+    {
+        vertexCount += 3;
+
+        const uint32_t v1 = indices[index+0];
+        const uint32_t v2 = indices[index+1];
+        const uint32_t v3 = indices[index+2];
+
+        //discardNormals
+        const float3 edge1 = vertexPositions[v2] - vertexPositions[v1];
+        const float3 edge2 = vertexPositions[v3] - vertexPositions[v1];
+        vertexNormals[v1] = vertexNormals[v2] = vertexNormals[v3] = normalize(cross(edge1, edge2));
+
+        const float2 deltaUV1 = vertexTexcoords[v2] - vertexTexcoords[v1];
+        const float2 deltaUV2 = vertexTexcoords[v3] - vertexTexcoords[v1];
+        float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (f != 0.f)
+        {
+            f = 1.0f / f;
+
+            vertexTangents[v1].x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            vertexTangents[v1].y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            vertexTangents[v1].z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            vertexTangents[v1] = vertexTangents[v2] = vertexTangents[v3] = normalize(vertexTangents[v1]);
+            vertexBitangents[v1].x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            vertexBitangents[v1].y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            vertexBitangents[v1].z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            vertexBitangents[v1] = vertexBitangents[v2] = vertexBitangents[v3] = normalize(vertexBitangents[v1]);
+        }
+    }
+
+    MoMeshCreateInfo meshInfo = {};
+    meshInfo.indexCount = (uint32_t)indices.size();
+    meshInfo.pIndices = indices.data();
+    meshInfo.vertexCount = vertexCount;
+    meshInfo.pVertices = vertexPositions.data();
+    meshInfo.pTextureCoords = vertexTexcoords.data();
+    meshInfo.pNormals = vertexNormals.data();
+    meshInfo.pTangents = vertexTangents.data();
+    meshInfo.pBitangents = vertexBitangents.data();
+    moCreateMesh(&meshInfo, pMesh);
 }
 
 void moUVSphere(uint32_t meridians, uint32_t parallels, std::vector<float3> & sphere_positions, std::vector<uint32_t> & sphere_indices)

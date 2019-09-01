@@ -62,7 +62,7 @@ static float4x4 correction_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                       { 0.0f, 0.0f, 1.0f, 0.0f },
                                       { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
-
+static float4x4 orthographic_matrix = mul(correction_matrix, frustum_matrix(-0.5f, 0.5f, -0.5f, 0.5f, 1.0f, 1000.f, neg_z, zero_to_one));
 #ifndef MO_HEADLESS
 struct MoInputs
 {
@@ -525,6 +525,13 @@ int main(int argc, char** argv)
 
     std::filesystem::path fileToLoad = "teapot.dae";
 
+
+    // Rect
+    MoMesh rectMesh;
+    moDemoPlane(&rectMesh);
+    MoMaterial rectMaterial;
+    moDemoMaterial(&rectMaterial);
+
     // Dome
     MoMesh sphereMesh;
     moDemoSphere(&sphereMesh);
@@ -623,7 +630,7 @@ int main(int argc, char** argv)
             uni.camera = camera.model().w.xyz();
             moSetLight(&uni);
         }
-        {
+        /*{
             MoPushConstant pmv = {};
             pmv.projection = projection_matrix;
             pmv.view = inverse(camera.model());
@@ -642,6 +649,17 @@ int main(int argc, char** argv)
                 }
             };
             draw(root, root.model);
+        }*/
+        {
+            camera = {"__default_camera", {0.f, 0.f, 1.f}, 0.f, 0.f};
+
+            MoPushConstant pmv = {};
+            pmv.projection = orthographic_matrix;
+            pmv.view = inverse(camera.model());
+            pmv.model = identity;
+            moSetPMV(&pmv);
+            moBindMaterial(rectMaterial);
+            moDrawMesh(rectMesh);
         }
 
         // Frame end
