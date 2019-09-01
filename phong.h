@@ -4,7 +4,11 @@
 
 #include <vulkan/vulkan.h>
 
+#ifndef MO_HEADLESS
 #define MO_FRAME_COUNT 2
+#else
+#define MO_FRAME_COUNT 1
+#endif
 #define MO_PROGRAM_DESC_LAYOUT 0
 #define MO_MATERIAL_DESC_LAYOUT 1
 
@@ -61,16 +65,24 @@ typedef struct MoSwapChainCreateInfo {
 } MoSwapChainCreateInfo;
 
 typedef struct MoSwapChainRecreateInfo {
+#ifndef MO_HEADLESS
     VkSurfaceKHR       surface;
     VkSurfaceFormatKHR surfaceFormat;
+#endif
     VkExtent2D         extent;
+#ifndef MO_HEADLESS
     VkBool32           vsync;
+#endif
 } MoSwapChainRecreateInfo;
 
 typedef struct MoSwapBuffer {
     VkImage       back;
     VkImageView   view;
     VkFramebuffer front;
+#ifndef MO_HEADLESS
+#else
+    VkDeviceMemory memory;
+#endif
 } MoSwapBuffer;
 
 typedef struct MoCommandBuffer {
@@ -85,7 +97,9 @@ typedef struct MoSwapChain_T {
     MoSwapBuffer    images[MO_FRAME_COUNT];
     MoCommandBuffer frames[MO_FRAME_COUNT];
     MoImageBuffer   depthBuffer;
+#ifndef MO_HEADLESS
     VkSwapchainKHR  swapChainKHR;
+#endif
     VkRenderPass    renderPass;
     VkExtent2D      extent;
     linalg::aliases::float4 clearColor;
@@ -143,7 +157,9 @@ typedef struct MoInitInfo {
     const MoCommandBuffer*       pSwapChainCommandBuffers;
     uint32_t                     swapChainCommandBufferCount;
     MoImageBuffer                depthBuffer;
+#ifndef MO_HEADLESS
     VkSwapchainKHR               swapChainKHR;
+#endif
     VkRenderPass                 renderPass;
     VkExtent2D                   extent;
     const VkAllocationCallbacks* pAllocator;
@@ -228,7 +244,9 @@ void moDestroyDevice(MoDevice device);
 // you can create a VkSwapchain using moCreateSwapChain(MoSwapChainCreateInfo)
 // but you do not have to; use moInit(MoInitInfo) to work off an existing swap chain
 void moCreateSwapChain(MoSwapChainCreateInfo* pCreateInfo, MoSwapChain* pSwapChain);
+#ifndef MO_HEADLESS
 void moRecreateSwapChain(MoSwapChainRecreateInfo* pCreateInfo, MoSwapChain swapChain);
+#endif
 void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore);
 VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore);
 

@@ -417,6 +417,7 @@ void moCreateDevice(MoDeviceCreateInfo *pCreateInfo, MoDevice *pDevice)
         pCreateInfo->pCheckVkResultFn(err);
     }
 
+#ifndef MO_HEADLESS
     // Check for WSI support
     VkBool32 res;
     vkGetPhysicalDeviceSurfaceSupportKHR(device->physicalDevice, device->queueFamily, pCreateInfo->surface, &res);
@@ -461,6 +462,10 @@ void moCreateDevice(MoDeviceCreateInfo *pCreateInfo, MoDevice *pDevice)
             }
         }
     }
+#else
+    pCreateInfo->pSurfaceFormat->format = VK_FORMAT_B8G8R8A8_UNORM;
+    pCreateInfo->pSurfaceFormat->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+#endif
 
     device->pCheckVkResultFn = pCreateInfo->pCheckVkResultFn;
 }
@@ -517,6 +522,7 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
 
     // Create image buffers
     {
+#ifndef MO_HEADLESS
         VkSwapchainCreateInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = pCreateInfo->surface;
@@ -555,10 +561,63 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
         VkImage backBuffer[MO_FRAME_COUNT] = {};
         err = vkGetSwapchainImagesKHR(pCreateInfo->device->device, swapChain->swapChainKHR, &backBufferCount, backBuffer);
         pCreateInfo->pCheckVkResultFn(err);
-
+#else
+        swapChain->extent = pCreateInfo->extent;
+#endif
         for (uint32_t i = 0; i < countof(swapChain->images); ++i)
         {
+#ifndef MO_HEADLESS
             swapChain->images[i].back = backBuffer[i];
+#else
+            VkResult err;
+            {
+                VkImageCreateInfo info = {};
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                info.imageType = VK_IMAGE_TYPE_2D;
+                info.format = pCreateInfo->surfaceFormat.format;
+                info.extent = {pCreateInfo->extent.width, pCreateInfo->extent.height, 1};
+                info.mipLevels = 1;
+                info.arrayLayers = 1;
+                info.samples = VK_SAMPLE_COUNT_1_BIT;
+                info.tiling = VK_IMAGE_TILING_OPTIMAL;
+                info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                err = vkCreateImage(pCreateInfo->device->device, &info, pCreateInfo->pAllocator, &swapChain->images[i].back);
+                pCreateInfo->device->pCheckVkResultFn(err);
+            }
+            {
+                VkMemoryRequirements req;
+                vkGetImageMemoryRequirements(pCreateInfo->device->device, swapChain->images[i].back, &req);
+                VkMemoryAllocateInfo alloc_info = {};
+                alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                alloc_info.allocationSize = req.size;
+                alloc_info.memoryTypeIndex = memoryType(pCreateInfo->device->physicalDevice, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
+                err = vkAllocateMemory(pCreateInfo->device->device, &alloc_info, pCreateInfo->pAllocator, &swapChain->images[i].memory);
+                pCreateInfo->device->pCheckVkResultFn(err);
+                err = vkBindImageMemory(pCreateInfo->device->device, swapChain->images[i].back, swapChain->images[i].memory, 0);
+                pCreateInfo->device->pCheckVkResultFn(err);
+            }
+            /*
+            {
+                VkImageViewCreateInfo view_info = {};
+                view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                view_info.image = swapChain->images[i].back;
+                view_info.format = pCreateInfo->surfaceFormat.format;
+                view_info.components.r = VK_COMPONENT_SWIZZLE_R;
+                view_info.components.g = VK_COMPONENT_SWIZZLE_G;
+                view_info.components.b = VK_COMPONENT_SWIZZLE_B;
+                view_info.components.a = VK_COMPONENT_SWIZZLE_A;
+                view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                view_info.subresourceRange.baseMipLevel = 0;
+                view_info.subresourceRange.levelCount = 1;
+                view_info.subresourceRange.baseArrayLayer = 0;
+                view_info.subresourceRange.layerCount = 1;
+                view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                err = vkCreateImageView(pCreateInfo->device->device, &view_info, nullptr, &swapChain->images[i].view);
+                pCreateInfo->device->pCheckVkResultFn(err);
+            }*/
+#endif
         }
     }
 
@@ -571,7 +630,11 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
         attachment[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+#ifndef MO_HEADLESS
         attachment[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+#else
+        attachment[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+#endif
         attachment[1].format = VK_FORMAT_D16_UNORM;
         attachment[1].samples = VK_SAMPLE_COUNT_1_BIT;
         attachment[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -645,7 +708,7 @@ void moCreateSwapChain(MoSwapChainCreateInfo *pCreateInfo, MoSwapChain *pSwapCha
 
     swapChain->clearColor = pCreateInfo->clearColor;
 }
-
+#ifndef MO_HEADLESS
 void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapChain)
 {
     VkResult err;
@@ -795,11 +858,11 @@ void moRecreateSwapChain(MoSwapChainRecreateInfo *pCreateInfo, MoSwapChain swapC
         }
     }
 }
-
+#endif
 void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore *pImageAcquiredSemaphore)
 {
     VkResult err;
-
+#ifndef MO_HEADLESS
     *pImageAcquiredSemaphore = swapChain->frames[*pFrameIndex].acquired;
     {
         err = vkAcquireNextImageKHR(g_Device->device, swapChain->swapChainKHR, UINT64_MAX, *pImageAcquiredSemaphore, VK_NULL_HANDLE, pFrameIndex);
@@ -811,6 +874,9 @@ void moBeginSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphore 
         err = vkResetFences(g_Device->device, 1, &swapChain->frames[*pFrameIndex].fence);
         g_Device->pCheckVkResultFn(err);
     }
+#else
+    pImageAcquiredSemaphore = nullptr;
+#endif
     {
         err = vkResetCommandPool(g_Device->device, swapChain->frames[*pFrameIndex].pool, 0);
         g_Device->pCheckVkResultFn(err);
@@ -847,9 +913,11 @@ VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphor
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+#ifndef MO_HEADLESS
         info.waitSemaphoreCount = 1;
         info.pWaitSemaphores = pImageAcquiredSemaphore;
         info.pWaitDstStageMask = &wait_stage;
+#endif
         info.commandBufferCount = 1;
         info.pCommandBuffers = &swapChain->frames[*pFrameIndex].buffer;
         info.signalSemaphoreCount = 1;
@@ -857,10 +925,25 @@ VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphor
 
         VkResult err = vkEndCommandBuffer(swapChain->frames[*pFrameIndex].buffer);
         g_Device->pCheckVkResultFn(err);
+
+#ifndef MO_HEADLESS
+#else
+        err = vkResetFences(g_Device->device, 1, &swapChain->frames[*pFrameIndex].fence);
+        g_Device->pCheckVkResultFn(err);
+#endif
+
         err = vkQueueSubmit(g_Device->queue, 1, &info, swapChain->frames[*pFrameIndex].fence);
         g_Device->pCheckVkResultFn(err);
+#ifndef MO_HEADLESS
+#else
+        err = vkWaitForFences(g_Device->device, 1, &swapChain->frames[*pFrameIndex].fence, VK_TRUE, UINT64_MAX);    // wait indefinitely instead of periodically checking
+        g_Device->pCheckVkResultFn(err);
+        err = vkResetFences(g_Device->device, 1, &swapChain->frames[*pFrameIndex].fence);
+        g_Device->pCheckVkResultFn(err);
+        return err;
+#endif
     }
-
+#ifndef MO_HEADLESS
     VkPresentInfoKHR info = {};
     info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     info.waitSemaphoreCount = 1;
@@ -869,6 +952,7 @@ VkResult moEndSwapChain(MoSwapChain swapChain, uint32_t *pFrameIndex, VkSemaphor
     info.pSwapchains = &swapChain->swapChainKHR;
     info.pImageIndices = pFrameIndex;
     return vkQueuePresentKHR(g_Device->queue, &info);
+#endif
 }
 
 void moDestroySwapChain(MoDevice device, MoSwapChain pSwapChain)
@@ -891,9 +975,16 @@ void moDestroySwapChain(MoDevice device, MoSwapChain pSwapChain)
     {
         vkDestroyImageView(device->device, pSwapChain->images[i].view, g_Allocator);
         vkDestroyFramebuffer(device->device, pSwapChain->images[i].front, g_Allocator);
+#ifndef MO_HEADLESS
+#else
+        vkDestroyImage(device->device, pSwapChain->images[i].back, g_Allocator);
+        vkFreeMemory(device->device, pSwapChain->images[i].memory, g_Allocator);
+#endif
     }
     vkDestroyRenderPass(device->device, pSwapChain->renderPass, g_Allocator);
+#ifndef MO_HEADLESS
     vkDestroySwapchainKHR(device->device, pSwapChain->swapChainKHR, g_Allocator);
+#endif
 }
 
 void moInit(MoInitInfo *pInfo)
@@ -917,7 +1008,9 @@ void moInit(MoInitInfo *pInfo)
     g_SwapChain = new MoSwapChain_T;
     *g_SwapChain = {};
     g_SwapChain->depthBuffer = pInfo->depthBuffer;
+#ifndef MO_HEADLESS
     g_SwapChain->swapChainKHR = pInfo->swapChainKHR;
+#endif
     g_SwapChain->renderPass = pInfo->renderPass;
     g_SwapChain->extent = pInfo->extent;
     for (uint32_t i = 0; i < pInfo->swapChainCommandBufferCount; ++i)
@@ -933,6 +1026,10 @@ void moInit(MoInitInfo *pInfo)
         g_SwapChain->images[i].back = pInfo->pSwapChainSwapBuffers[i].back;
         g_SwapChain->images[i].view = pInfo->pSwapChainSwapBuffers[i].view;
         g_SwapChain->images[i].front = pInfo->pSwapChainSwapBuffers[i].front;
+#ifndef MO_HEADLESS
+#else
+        g_SwapChain->images[i].memory = pInfo->pSwapChainSwapBuffers[i].memory;
+#endif
     }
     g_Allocator = pInfo->pAllocator;
 
@@ -966,7 +1063,9 @@ void moShutdown()
     g_Device->queueFamily = -1;
     g_Device->queue = VK_NULL_HANDLE;
     g_Device->memoryAlignment = 256;
+#ifndef MO_HEADLESS
     g_SwapChain->swapChainKHR = VK_NULL_HANDLE;
+#endif
     g_SwapChain->renderPass = VK_NULL_HANDLE;
     g_SwapChain->extent = {0, 0};
 //    g_SwapChain->frames = {};

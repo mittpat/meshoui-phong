@@ -12,6 +12,9 @@ add_executable(meshouiview
     phong.h phong.cpp
     ${shaders})
 
+# run headless and same output to disk
+target_compile_definitions(meshouiview PRIVATE MO_HEADLESS)
+
 if(NOT MSVC)
     target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg stdc++fs)
 else()

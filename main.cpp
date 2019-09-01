@@ -3,8 +3,10 @@
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
 
+#ifndef MO_HEADLESS
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#endif
 
 #include "phong.h"
 #include <lightmap.h>
@@ -29,11 +31,12 @@ namespace std { namespace filesystem = experimental::filesystem; }
 using namespace linalg;
 using namespace linalg::aliases;
 
+#ifndef MO_HEADLESS
 static void glfw_error_callback(int, const char* description)
 {
     printf("GLFW Error: %s\n", description);
 }
-
+#endif
 static void vk_check_result(VkResult err)
 {
     if (err == 0) return;
@@ -60,6 +63,7 @@ static float4x4 correction_matrix = { { 1.0f, 0.0f, 0.0f, 0.0f },
                                       { 0.0f, 0.0f, 0.0f, 1.0f } };
 static float4x4 projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), 16/9.f, 0.1f, 1000.f, pos_z, zero_to_one));
 
+#ifndef MO_HEADLESS
 struct MoInputs
 {
     bool up;
@@ -170,6 +174,7 @@ static void glfwPollMouse(GLFWwindow *window)
     inputs->xpos = xpos;
     inputs->ypos = ypos;
 }
+#endif
 
 struct MoLight
 {
@@ -299,6 +304,7 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
             moCreateMesh(&meshInfo, &meshes[meshIdx]);
             handles.meshes.push_back(meshes[meshIdx]);
 
+#if 0
             {
                 MoTriangleList triangleList;
                 moCreateTriangleList(mesh, &triangleList);
@@ -320,6 +326,7 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
                 moGenerateLightMap(triangleList, output.data(), &info, &std::cout);
                 moDestroyTriangleList(triangleList);
             }
+#endif
         }
 
         std::vector<MoMaterial> materials(scene->mNumMaterials);
@@ -379,7 +386,9 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
 
 int main(int argc, char** argv)
 {
+#ifndef MO_HEADLESS
     GLFWwindow*                  window = nullptr;
+#endif
     VkInstance                   instance = VK_NULL_HANDLE;
     MoDevice                     device = VK_NULL_HANDLE;
     MoSwapChain                  swapChain = VK_NULL_HANDLE;
@@ -388,19 +397,21 @@ int main(int argc, char** argv)
     uint32_t                     frameIndex = 0;
     VkPipelineCache              pipelineCache = VK_NULL_HANDLE;
     const VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
-
+#ifndef MO_HEADLESS
     MoInputs                     inputs = {};
-
+#endif
     // Initialization
     {
         int width, height;
-
-        glfwSetErrorCallback(glfw_error_callback);
-        glfwInit();
 #undef NDEBUG
 #ifndef NDEBUG
         width = 1920 / 2;
         height = 1080 / 2;
+#endif
+#ifndef MO_HEADLESS
+        glfwSetErrorCallback(glfw_error_callback);
+        glfwInit();
+#ifndef NDEBUG
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window = glfwCreateWindow(width, height, "Graphics Previewer", nullptr, nullptr);
 #else
@@ -420,11 +431,13 @@ int main(int argc, char** argv)
         glfwSetKeyCallback(window, glfwKeyCallback);
         glfwSetMouseButtonCallback(window, glfwMouseCallback);
         if (!glfwVulkanSupported()) printf("GLFW: Vulkan Not Supported\n");
-
+#endif
         // Create Vulkan instance
         {
             MoInstanceCreateInfo createInfo = {};
+#ifndef MO_HEADLESS
             createInfo.pExtensions = glfwGetRequiredInstanceExtensions(&createInfo.extensionsCount);
+#endif
 #ifndef NDEBUG
             createInfo.debugReport = VK_TRUE;
             createInfo.pDebugReportCallback = vk_debug_report;
@@ -434,7 +447,9 @@ int main(int argc, char** argv)
         }
 
         // Create Window Surface
-        VkResult err = glfwCreateWindowSurface(instance, window, allocator, &surface);
+        VkResult err = VK_SUCCESS;
+#ifndef MO_HEADLESS
+        err = glfwCreateWindowSurface(instance, window, allocator, &surface);
         vk_check_result(err);
 
         // Create Framebuffers
@@ -445,7 +460,7 @@ int main(int argc, char** argv)
             glfwPostEmptyEvent();
             glfwWaitEvents();
         }
-
+#endif
         projection_matrix = mul(correction_matrix, perspective_matrix(moDegreesToRadians(75.f), width / float(height), 0.1f, 1000.f, neg_z, zero_to_one));
 
         // Create device
@@ -486,12 +501,16 @@ int main(int argc, char** argv)
         initInfo.queue = device->queue;
         initInfo.pipelineCache = pipelineCache;
         initInfo.descriptorPool = device->descriptorPool;
+#ifndef MO_HEADLESS
         initInfo.pSwapChainSwapBuffers = swapChain->images;
         initInfo.swapChainSwapBufferCount = MO_FRAME_COUNT;
+#endif
         initInfo.pSwapChainCommandBuffers = swapChain->frames;
         initInfo.swapChainCommandBufferCount = MO_FRAME_COUNT;
         initInfo.depthBuffer = swapChain->depthBuffer;
+#ifndef MO_HEADLESS
         initInfo.swapChainKHR = swapChain->swapChainKHR;
+#endif
         initInfo.renderPass = swapChain->renderPass;
         initInfo.extent = swapChain->extent;
         initInfo.pAllocator = allocator;
@@ -538,17 +557,20 @@ int main(int argc, char** argv)
     }
 
     // Main loop
+#ifndef MO_HEADLESS
     while (!glfwWindowShouldClose(window))
+#endif
     {
+#ifndef MO_HEADLESS
         glfwPollEvents();
         glfwPollMouse(window);
-
+#endif
         if (!fileToLoad.empty())
         {
             load(fileToLoad, handles, root.children);
             fileToLoad = "";
         }
-
+#ifndef MO_HEADLESS
         {
             const float speed = 0.5f;
             float3 forward = mul(camera.model(), {0.f,0.f,-1.f,0.f}).xyz();
@@ -566,7 +588,7 @@ int main(int argc, char** argv)
                 camera.pitch -= inputs.dypos * 0.005;
             }
         }
-
+#endif
         // Frame begin
         VkSemaphore imageAcquiredSemaphore;
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
@@ -624,6 +646,7 @@ int main(int argc, char** argv)
 
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
+#ifndef MO_HEADLESS
         if (err == VK_ERROR_OUT_OF_DATE_KHR)
         {
             int width = 0, height = 0;
@@ -645,8 +668,220 @@ int main(int argc, char** argv)
             moRecreateSwapChain(&recreateInfo, swapChain);
             err = VK_SUCCESS;
         }
+#endif
         vk_check_result(err);
     }
+
+
+
+#ifndef MO_HEADLESS
+#else
+    const char* imagedata = {};
+    {
+        auto memoryType = [](VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits) -> uint32_t
+        {
+            VkPhysicalDeviceMemoryProperties prop;
+            vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
+            for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
+                if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
+                    return i;
+            return 0xFFFFFFFF;
+        };
+
+        // Create the linear tiled destination image to copy to and to read the memory from
+        VkImageCreateInfo imgCreateInfo = {};
+        imgCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imgCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        imgCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imgCreateInfo.extent.width = swapChain->extent.width;
+        imgCreateInfo.extent.height = swapChain->extent.height;
+        imgCreateInfo.extent.depth = 1;
+        imgCreateInfo.arrayLayers = 1;
+        imgCreateInfo.mipLevels = 1;
+        imgCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imgCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imgCreateInfo.tiling = VK_IMAGE_TILING_LINEAR;
+        imgCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        // Create the image
+        VkImage dstImage;
+        VkResult err = vkCreateImage(device->device, &imgCreateInfo, nullptr, &dstImage);
+        device->pCheckVkResultFn(err);
+        // Create memory to back up the image
+        VkMemoryRequirements memRequirements;
+        VkMemoryAllocateInfo memAllocInfo = {};
+        memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        VkDeviceMemory dstImageMemory;
+        vkGetImageMemoryRequirements(device->device, dstImage, &memRequirements);
+        memAllocInfo.allocationSize = memRequirements.size;
+        // Memory must be host visible to copy from
+        memAllocInfo.memoryTypeIndex = memoryType(device->physicalDevice, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memRequirements.memoryTypeBits);
+        err = vkAllocateMemory(device->device, &memAllocInfo, nullptr, &dstImageMemory);
+        device->pCheckVkResultFn(err);
+        err = vkBindImageMemory(device->device, dstImage, dstImageMemory, 0);
+        device->pCheckVkResultFn(err);
+
+        // Do the actual blit from the offscreen image to our host visible destination image
+        VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
+        cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufAllocateInfo.commandPool = swapChain->frames[0].pool;
+        cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufAllocateInfo.commandBufferCount = 1;
+        VkCommandBuffer copyCmd;
+        err = vkAllocateCommandBuffers(device->device, &cmdBufAllocateInfo, &copyCmd);
+        device->pCheckVkResultFn(err);
+        VkCommandBufferBeginInfo cmdBufInfo = {};
+        cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        err = vkBeginCommandBuffer(copyCmd, &cmdBufInfo);
+        device->pCheckVkResultFn(err);
+
+        auto insertImageMemoryBarrier = [](
+            VkCommandBuffer cmdbuffer,
+            VkImage image,
+            VkAccessFlags srcAccessMask,
+            VkAccessFlags dstAccessMask,
+            VkImageLayout oldImageLayout,
+            VkImageLayout newImageLayout,
+            VkPipelineStageFlags srcStageMask,
+            VkPipelineStageFlags dstStageMask,
+            VkImageSubresourceRange subresourceRange)
+        {
+            VkImageMemoryBarrier imageMemoryBarrier = {};
+            imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageMemoryBarrier.srcAccessMask = srcAccessMask;
+            imageMemoryBarrier.dstAccessMask = dstAccessMask;
+            imageMemoryBarrier.oldLayout = oldImageLayout;
+            imageMemoryBarrier.newLayout = newImageLayout;
+            imageMemoryBarrier.image = image;
+            imageMemoryBarrier.subresourceRange = subresourceRange;
+
+            vkCmdPipelineBarrier(
+                cmdbuffer,
+                srcStageMask,
+                dstStageMask,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &imageMemoryBarrier);
+        };
+
+        // Transition destination image to transfer destination layout
+        insertImageMemoryBarrier(
+            copyCmd,
+            dstImage,
+            0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+        // colorAttachment.image is already in VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, and does not need to be transitioned
+
+        VkImageCopy imageCopyRegion{};
+        imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.srcSubresource.layerCount = 1;
+        imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.dstSubresource.layerCount = 1;
+        imageCopyRegion.extent.width = swapChain->extent.width;
+        imageCopyRegion.extent.height = swapChain->extent.height;
+        imageCopyRegion.extent.depth = 1;
+
+        vkCmdCopyImage(
+            copyCmd,
+            swapChain->images[0].back, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imageCopyRegion);
+
+        // Transition destination image to general layout, which is the required layout for mapping the image memory later on
+        insertImageMemoryBarrier(
+            copyCmd,
+            dstImage,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_MEMORY_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+        VkResult res = vkEndCommandBuffer(copyCmd);
+        device->pCheckVkResultFn(err);
+
+        {
+            VkSubmitInfo submitInfo = {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &copyCmd;
+            VkFenceCreateInfo fenceInfo = {};
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            VkFence fence;
+            res = vkCreateFence(device->device, &fenceInfo, nullptr, &fence);
+            device->pCheckVkResultFn(err);
+            res = vkQueueSubmit(device->queue, 1, &submitInfo, fence);
+            device->pCheckVkResultFn(err);
+            res = vkWaitForFences(device->device, 1, &fence, VK_TRUE, UINT64_MAX);
+            device->pCheckVkResultFn(err);
+            vkDestroyFence(device->device, fence, nullptr);
+        }
+
+        // Get layout of the image (including row pitch)
+        VkImageSubresource subResource{};
+        subResource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        VkSubresourceLayout subResourceLayout;
+
+        vkGetImageSubresourceLayout(device->device, dstImage, &subResource, &subResourceLayout);
+
+        // Map image memory so we can start copying from it
+        vkMapMemory(device->device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&imagedata);
+        imagedata += subResourceLayout.offset;
+
+        /*
+            Save host visible framebuffer image to disk (ppm format)
+        */
+
+            const char* filename = "headless.ppm";
+
+            std::ofstream file(filename, std::ios::out | std::ios::binary);
+
+            // ppm header
+            file << "P6\n" << swapChain->extent.width << "\n" << swapChain->extent.height << "\n" << 255 << "\n";
+
+            // If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
+            // Check if source is BGR and needs swizzle
+            std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+            const bool colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), VK_FORMAT_B8G8R8A8_UNORM) != formatsBGR.end());
+
+            // ppm binary pixel data
+            for (int32_t y = 0; y < swapChain->extent.height; y++) {
+                unsigned int *row = (unsigned int*)imagedata;
+                for (int32_t x = 0; x < swapChain->extent.width; x++) {
+                    if (colorSwizzle) {
+                        file.write((char*)row + 2, 1);
+                        file.write((char*)row + 1, 1);
+                        file.write((char*)row, 1);
+                    }
+                    else {
+                        file.write((char*)row, 3);
+                    }
+                    row++;
+                }
+                imagedata += subResourceLayout.rowPitch;
+            }
+            file.close();
+
+            printf("Framebuffer image saved to %s\n", filename);
+
+            // Clean up resources
+            vkUnmapMemory(device->device, dstImageMemory);
+            vkFreeMemory(device->device, dstImageMemory, nullptr);
+            vkDestroyImage(device->device, dstImage, nullptr);
+    }
+#endif
+
 
     // Dome
     moDestroyPipeline(domePipeline);
@@ -659,13 +894,15 @@ int main(int argc, char** argv)
     // Cleanup
     moShutdown();
     moDestroySwapChain(device, swapChain);
+#ifndef MO_HEADLESS
     vkDestroySurfaceKHR(instance, surface, allocator);
+#endif
     moDestroyDevice(device);
     moDestroyInstance(instance);
-
+#ifndef MO_HEADLESS
     glfwDestroyWindow(window);
     glfwTerminate();
-
+#endif
     return 0;
 }
 #ifdef __GNUC__
