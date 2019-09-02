@@ -1104,15 +1104,11 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     }
 
     {
-        VkDescriptorSetLayoutBinding binding[2];
+        VkDescriptorSetLayoutBinding binding[1];
         binding[0].binding = 0;
         binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         binding[0].descriptorCount = 1;
         binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
-        binding[1].binding = 1;
-        binding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        binding[1].descriptorCount = 1;
-        binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

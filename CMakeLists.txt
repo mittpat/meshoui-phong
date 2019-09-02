@@ -12,7 +12,7 @@ add_executable(meshouiview
     phong.h phong.cpp
     ${shaders})
 
-# run headless and same output to disk
+# run headless and save output to disk
 target_compile_definitions(meshouiview PRIVATE MO_HEADLESS)
 
 if(NOT MSVC)

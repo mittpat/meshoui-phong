@@ -630,7 +630,8 @@ int main(int argc, char** argv)
             uni.camera = camera.model().w.xyz();
             moSetLight(&uni);
         }
-        /*{
+#if 1
+        {
             MoPushConstant pmv = {};
             pmv.projection = projection_matrix;
             pmv.view = inverse(camera.model());
@@ -638,7 +639,7 @@ int main(int argc, char** argv)
             {
                 if (node.material && node.mesh)
                 {
-                    moBindMaterial(node.material);
+                    moBindMaterial(rectMaterial/*node.material*/);
                     pmv.model = model;
                     moSetPMV(&pmv);
                     moDrawMesh(node.mesh);
@@ -649,7 +650,8 @@ int main(int argc, char** argv)
                 }
             };
             draw(root, root.model);
-        }*/
+        }
+#else
         {
             camera = {"__default_camera", {0.f, 0.f, 1.f}, 0.f, 0.f};
 
@@ -661,7 +663,7 @@ int main(int argc, char** argv)
             moBindMaterial(rectMaterial);
             moDrawMesh(rectMesh);
         }
-
+#endif
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
 #ifndef MO_HEADLESS
