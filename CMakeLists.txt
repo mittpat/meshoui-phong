@@ -13,7 +13,7 @@ add_executable(meshouiview
     ${shaders})
 
 # run headless and save output to disk
-target_compile_definitions(meshouiview PRIVATE MO_HEADLESS)
+#target_compile_definitions(meshouiview PRIVATE MO_HEADLESS)
 
 if(NOT MSVC)
     target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg stdc++fs)

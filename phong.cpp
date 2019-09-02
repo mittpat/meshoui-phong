@@ -24,6 +24,8 @@ static MoPipeline                   g_StashedPipeline = VK_NULL_HANDLE;
 static uint32_t                     g_FrameIndex = 0;
 static const VkAllocationCallbacks* g_Allocator     = VK_NULL_HANDLE;
 
+PFN_vkDebugMarkerSetObjectNameEXT pfnDebugMarkerSetObjectName = VK_NULL_HANDLE;
+
 template <typename T, size_t N> size_t countof(T (& arr)[N]) { return std::extent<T[N]>::value; }
 
 static uint32_t memoryType(VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits)
@@ -1049,6 +1051,9 @@ void moInit(MoInitInfo *pInfo)
     pipelineCreateInfo.vertexShaderSize = mo_phong_shader_vert_spv.size();
     pipelineCreateInfo.pFragmentShader = (std::uint32_t*)mo_phong_shader_frag_spv.data();
     pipelineCreateInfo.fragmentShaderSize = mo_phong_shader_frag_spv.size();
+    pipelineCreateInfo.name = "Phong";
+
+    pfnDebugMarkerSetObjectName = reinterpret_cast<PFN_vkDebugMarkerSetObjectNameEXT>(vkGetDeviceProcAddr(g_Device->device, "vkDebugMarkerSetObjectNameEXT"));
 
     moCreatePipeline(&pipelineCreateInfo, &g_Pipeline);
 }
@@ -1105,6 +1110,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
 
     {
         VkDescriptorSetLayoutBinding binding[1];
+        // view position, light position
         binding[0].binding = 0;
         binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         binding[0].descriptorCount = 1;
@@ -1133,6 +1139,29 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         info.bindingCount = (uint32_t)countof(binding);
         info.pBindings = binding;
         err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT]);
+        g_Device->pCheckVkResultFn(err);
+    }
+
+    {
+        VkDescriptorSetLayoutBinding binding[2];
+
+        // triangle bvh nodes
+        binding[0].binding = 0;
+        binding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding[0].descriptorCount = 1;
+        binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        // triangle bvh objects
+        binding[1].binding = 1;
+        binding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding[1].descriptorCount = 1;
+        binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = (uint32_t)countof(binding);
+        info.pBindings = binding;
+        err = vkCreateDescriptorSetLayout(g_Device->device, &info, g_Allocator, &pipeline->descriptorSetLayout[MO_SSBO_DESC_LAYOUT]);
         g_Device->pCheckVkResultFn(err);
     }
 
@@ -1174,6 +1203,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         // model, view & projection
         std::vector<VkPushConstantRange> push_constants;
         push_constants.emplace_back(VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MoPushConstant)});
+
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount = (uint32_t)countof(pipeline->descriptorSetLayout);
@@ -1292,6 +1322,13 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     err = vkCreateGraphicsPipelines(g_Device->device, g_PipelineCache, 1, &info, g_Allocator, &pipeline->pipeline);
     g_Device->pCheckVkResultFn(err);
 
+    VkDebugMarkerObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT;
+    nameInfo.object = std::uint64_t(pipeline->pipeline);
+    nameInfo.pObjectName = pCreateInfo->name;
+    pfnDebugMarkerSetObjectName(g_Device->device, &nameInfo);
+
     vkDestroyShaderModule(g_Device->device, frag_module, nullptr);
     vkDestroyShaderModule(g_Device->device, vert_module, nullptr);
 }
@@ -1302,10 +1339,12 @@ void moDestroyPipeline(MoPipeline pipeline)
     for (size_t i = 0; i < MO_FRAME_COUNT; ++i) { deleteBuffer(g_Device, pipeline->uniformBuffer[i]); }
     vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT], g_Allocator);
     vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT], g_Allocator);
+    vkDestroyDescriptorSetLayout(g_Device->device, pipeline->descriptorSetLayout[MO_SSBO_DESC_LAYOUT], g_Allocator);
     vkDestroyPipelineLayout(g_Device->device, pipeline->pipelineLayout, g_Allocator);
     vkDestroyPipeline(g_Device->device, pipeline->pipeline, g_Allocator);
     pipeline->descriptorSetLayout[MO_PROGRAM_DESC_LAYOUT] = VK_NULL_HANDLE;
     pipeline->descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT] = VK_NULL_HANDLE;
+    pipeline->descriptorSetLayout[MO_SSBO_DESC_LAYOUT] = VK_NULL_HANDLE;
     pipeline->pipelineLayout = VK_NULL_HANDLE;
     pipeline->pipeline = VK_NULL_HANDLE;
     memset(&pipeline->uniformBuffer, 0, sizeof(pipeline->uniformBuffer));
@@ -1327,12 +1366,71 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
     createBuffer(g_Device, &mesh->tangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     createBuffer(g_Device, &mesh->bitangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     createBuffer(g_Device, &mesh->indexBuffer, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
     uploadBuffer(g_Device, mesh->verticesBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pVertices);
     uploadBuffer(g_Device, mesh->textureCoordsBuffer, pCreateInfo->vertexCount * sizeof(float2), pCreateInfo->pTextureCoords);
     uploadBuffer(g_Device, mesh->normalsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pNormals);
     uploadBuffer(g_Device, mesh->tangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pTangents);
     uploadBuffer(g_Device, mesh->bitangentsBuffer, pCreateInfo->vertexCount * sizeof(float3), pCreateInfo->pBitangents);
     uploadBuffer(g_Device, mesh->indexBuffer, index_size, pCreateInfo->pIndices);
+
+    if (pCreateInfo->bvh && pCreateInfo->bvh->splitNodeCount > 0)
+    {
+        VkDeviceSize nodesSize = sizeof(MoBVHSplitNode) * pCreateInfo->bvh->splitNodeCount;
+        createBuffer(g_Device, &mesh->bvhNodesBuffer, nodesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhNodesBuffer, nodesSize, pCreateInfo->bvh->pSplitNodes);
+
+        VkDeviceSize objectsSize = sizeof(MoTriangle) * pCreateInfo->bvh->objectCount;
+        createBuffer(g_Device, &mesh->bvhObjectBuffer, objectsSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhObjectBuffer, objectsSize, pCreateInfo->bvh->pObjects);
+    }
+    else
+    {
+        uint32_t data[4] = {};
+        VkDeviceSize size = sizeof(data);
+        createBuffer(g_Device, &mesh->bvhNodesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhNodesBuffer, size, &data);
+
+        createBuffer(g_Device, &mesh->bvhObjectBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhObjectBuffer, size, &data);
+    }
+
+    {
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = g_Device->descriptorPool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &g_Pipeline->descriptorSetLayout[MO_SSBO_DESC_LAYOUT];
+        VkResult err = vkAllocateDescriptorSets(g_Device->device, &alloc_info, &mesh->descriptorSet);
+        g_Device->pCheckVkResultFn(err);
+    }
+
+    VkDescriptorBufferInfo desc_buffer[2] = {};
+    desc_buffer[0].buffer = mesh->bvhNodesBuffer->buffer;
+    desc_buffer[0].offset = 0;
+    desc_buffer[0].range = mesh->bvhNodesBuffer->size;
+    desc_buffer[1].buffer = mesh->bvhObjectBuffer->buffer;
+    desc_buffer[1].offset = 0;
+    desc_buffer[1].range = mesh->bvhObjectBuffer->size;
+    VkWriteDescriptorSet write_desc[2] = {};
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        write_desc[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_desc[i].dstSet = mesh->descriptorSet;
+        write_desc[i].dstBinding = i;
+        write_desc[i].dstArrayElement = 0;
+        write_desc[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write_desc[i].descriptorCount = 1;
+        write_desc[i].pBufferInfo = &desc_buffer[i];
+    }
+    vkUpdateDescriptorSets(g_Device->device, 2, write_desc, 0, nullptr);
+
+    VkDebugMarkerObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT;
+    nameInfo.object = std::uint64_t(mesh->descriptorSet);
+    nameInfo.pObjectName = pCreateInfo->name;
+    pfnDebugMarkerSetObjectName(g_Device->device, &nameInfo);
 }
 
 void moDestroyMesh(MoMesh mesh)
@@ -1428,6 +1526,13 @@ void moCreateMaterial(const MoMaterialCreateInfo *pCreateInfo, MoMaterial *pMate
         }
         vkUpdateDescriptorSets(g_Device->device, 5, write_desc, 0, nullptr);
     }
+
+    VkDebugMarkerObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT;
+    nameInfo.object = std::uint64_t(material->descriptorSet);
+    nameInfo.pObjectName = pCreateInfo->name;
+    pfnDebugMarkerSetObjectName(g_Device->device, &nameInfo);
 }
 
 void moDestroyMaterial(MoMaterial material)
@@ -1497,6 +1602,7 @@ void moDrawMesh(MoMesh mesh)
                               0};
     vkCmdBindVertexBuffers(frame.buffer, 0, 5, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(frame.buffer, mesh->indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindDescriptorSets(frame.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, g_Pipeline->pipelineLayout, 2, 1, &mesh->descriptorSet, 0, nullptr);
 
     vkCmdDrawIndexed(frame.buffer, mesh->indexBufferSize, 1, 0, 0, 0);
 }
@@ -1686,6 +1792,7 @@ void moDemoPlane(MoMesh *pMesh, const float2 &halfExtents)
     meshInfo.pNormals = vertexNormals.data();
     meshInfo.pTangents = vertexTangents.data();
     meshInfo.pBitangents = vertexBitangents.data();
+    meshInfo.name = "DemoPlane";
     moCreateMesh(&meshInfo, pMesh);
 }
 
@@ -1816,6 +1923,7 @@ void moDemoSphere(MoMesh *pMesh)
     meshInfo.pNormals = vertexNormals.data();
     meshInfo.pTangents = vertexTangents.data();
     meshInfo.pBitangents = vertexBitangents.data();
+    meshInfo.name = "DemoSphere";
     moCreateMesh(&meshInfo, pMesh);
 }
 
@@ -1837,6 +1945,7 @@ void moDemoMaterial(MoMaterial *pMaterial)
     materialInfo.colorEmissive = { 0.0f, 0.0f, 0.0f, 1.0f };
     materialInfo.textureDiffuse.pData = (uint8_t*)diffuse;
     materialInfo.textureDiffuse.extent = { 8, 8 };
+    materialInfo.name = "DemoMaterial";
     moCreateMaterial(&materialInfo, pMaterial);
 }
 

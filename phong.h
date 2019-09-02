@@ -1,6 +1,7 @@
 #pragma once
 
 #include <linalg.h>
+#include <lightmap.h>
 
 #include <vulkan/vulkan.h>
 
@@ -11,6 +12,8 @@
 #endif
 #define MO_PROGRAM_DESC_LAYOUT 0
 #define MO_MATERIAL_DESC_LAYOUT 1
+#define MO_SSBO_DESC_LAYOUT 2
+#define MO_COUNT_DESC_LAYOUT MO_SSBO_DESC_LAYOUT+1
 
 typedef struct MoInstanceCreateInfo {
     const char* const*           pExtensions;
@@ -112,8 +115,12 @@ typedef struct MoMesh_T {
     MoDeviceBuffer tangentsBuffer;
     MoDeviceBuffer bitangentsBuffer;
     MoDeviceBuffer indexBuffer;
+    MoDeviceBuffer bvhNodesBuffer;
+    MoDeviceBuffer bvhObjectBuffer;
     uint32_t indexBufferSize;
     uint32_t vertexCount;
+
+    VkDescriptorSet descriptorSet;
 }* MoMesh;
 
 typedef struct MoMaterial_T {
@@ -135,7 +142,7 @@ typedef struct MoPipeline_T {
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
     // the buffers bound to this descriptor set may change frame to frame, one set per frame
-    VkDescriptorSetLayout descriptorSetLayout[MO_MATERIAL_DESC_LAYOUT+1];
+    VkDescriptorSetLayout descriptorSetLayout[MO_COUNT_DESC_LAYOUT];
     VkDescriptorSet descriptorSet[MO_FRAME_COUNT];
     MoDeviceBuffer uniformBuffer[MO_FRAME_COUNT];
 }* MoPipeline;
@@ -175,6 +182,8 @@ typedef struct MoMeshCreateInfo {
     linalg::aliases::float3* pTangents;
     linalg::aliases::float3* pBitangents;
     uint32_t                 vertexCount;
+    MoBVH                    bvh;
+    const char*              name;
 } MoMeshCreateInfo;
 
 typedef struct MoTextureInfo {
@@ -196,6 +205,7 @@ typedef struct MoMaterialCreateInfo {
     MoTextureInfo  textureNormal;
     MoTextureInfo  textureSpecular;
     MoTextureInfo  textureEmissive;
+    const char*    name;
 } MoMaterialCreateInfo;
 
 typedef enum MoPipelineFeature {
@@ -214,6 +224,7 @@ typedef struct MoPipelineCreateInfo {
     const uint32_t*       pFragmentShader;
     uint32_t              fragmentShaderSize;
     MoPipelineCreateFlags flags;
+    const char*           name;
 } MoPipelineCreateInfo;
 
 typedef struct MoPushConstant {

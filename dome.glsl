@@ -30,7 +30,7 @@ layout(location = 0) in VertexData
 {
     vec3 vertex;
 } inData;
-layout(std140, binding = 0) uniform Block
+layout(std140, set = 0, binding = 0) uniform Block
 {
     uniform vec3 viewPosition;
     uniform vec3 lightPosition;
