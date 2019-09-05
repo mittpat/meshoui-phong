@@ -389,6 +389,7 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
                 MoTriangleList triangleList;
                 moCreateTriangleList(mesh, &triangleList);
                 meshInfo.bvh = triangleList->bvh;
+                meshInfo.bvhUV = triangleList->bvhUV;
 
                 moCreateMesh(&meshInfo, &meshes[meshIdx]);
                 handles.meshes.push_back(meshes[meshIdx]);
@@ -504,8 +505,8 @@ int main(int argc, char** argv)
         int width, height;
 #undef NDEBUG
 #ifndef NDEBUG
-        width = 1920 / 2;
-        height = 1080 / 2;
+        width = 1024;
+        height = 1024;
 #endif
 #ifndef MO_HEADLESS
         glfwSetErrorCallback(glfw_error_callback);
@@ -619,49 +620,30 @@ int main(int argc, char** argv)
 
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
-    MoCamera camera{"__default_camera", {0.f, 10.f, 30.f}, 0.f, 0.f};
-    MoLight light{"__default_light", translation_matrix(float3{-300.f, 300.f, 150.f}), 0.f};
 
     std::filesystem::path fileToLoad = "teapot.dae";
 
-
-    // Rect
-    MoMesh rectMesh;
-    moDemoPlane(&rectMesh);
-    MoMaterial rectMaterial;
-    moDemoMaterial(&rectMaterial);
-
     // Dome
-    MoMesh sphereMesh;
-    moDemoSphere(&sphereMesh);
-    MoMaterial domeMaterial;
-    {
-        MoMaterialCreateInfo materialInfo = {};
-        materialInfo.colorAmbient = { 0.4f, 0.5f, 0.75f, 1.0f };
-        materialInfo.colorDiffuse = { 0.7f, 0.45f, 0.1f, 1.0f };
-        materialInfo.name = "DomeMaterial";
-        moCreateMaterial(&materialInfo, &domeMaterial);
-    }
-    MoPipeline domePipeline;
+    MoPipeline raytracePipeline;
     {
         MoPipelineCreateInfo pipelineCreateInfo = {};
-        std::vector<char> mo_dome_shader_vert_spv;
+        std::vector<char> mo_raytrace_shader_vert_spv;
         {
-            std::ifstream fileStream("dome.vert.spv", std::ifstream::binary);
-            mo_dome_shader_vert_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+            std::ifstream fileStream("raytrace.vert.spv", std::ifstream::binary);
+            mo_raytrace_shader_vert_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
         }
-        std::vector<char> mo_dome_shader_frag_spv;
+        std::vector<char> mo_raytrace_shader_frag_spv;
         {
-            std::ifstream fileStream("dome.frag.spv", std::ifstream::binary);
-            mo_dome_shader_frag_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+            std::ifstream fileStream("raytrace.frag.spv", std::ifstream::binary);
+            mo_raytrace_shader_frag_spv = std::vector<char>((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
         }
-        pipelineCreateInfo.pVertexShader = (std::uint32_t*)mo_dome_shader_vert_spv.data();
-        pipelineCreateInfo.vertexShaderSize = mo_dome_shader_vert_spv.size();
-        pipelineCreateInfo.pFragmentShader = (std::uint32_t*)mo_dome_shader_frag_spv.data();
-        pipelineCreateInfo.fragmentShaderSize = mo_dome_shader_frag_spv.size();
+        pipelineCreateInfo.pVertexShader = (std::uint32_t*)mo_raytrace_shader_vert_spv.data();
+        pipelineCreateInfo.vertexShaderSize = mo_raytrace_shader_vert_spv.size();
+        pipelineCreateInfo.pFragmentShader = (std::uint32_t*)mo_raytrace_shader_frag_spv.data();
+        pipelineCreateInfo.fragmentShaderSize = mo_raytrace_shader_frag_spv.size();
         pipelineCreateInfo.flags = MO_PIPELINE_FEATURE_NONE;
-        pipelineCreateInfo.name = "Dome";
-        moCreatePipeline(&pipelineCreateInfo, &domePipeline);
+        pipelineCreateInfo.name = "Raytrace";
+        moCreatePipeline(&pipelineCreateInfo, &raytracePipeline);
     }
 
     // Main loop
@@ -678,7 +660,7 @@ int main(int argc, char** argv)
             load(fileToLoad, handles, root.children);
             fileToLoad = "";
         }
-#ifndef MO_HEADLESS
+#if 0
         {
             const float speed = 0.5f;
             float3 forward = mul(camera.model(), {0.f,0.f,-1.f,0.f}).xyz();
@@ -700,94 +682,29 @@ int main(int argc, char** argv)
         // Frame begin
         VkSemaphore imageAcquiredSemaphore;
         moBeginSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
-        moPipelineOverride(domePipeline);
-        moBegin(frameIndex);
-
-        {
-            MoUniform uni = {};
-            uni.light = float4(light.model.w.xyz(), light.power);
-            uni.camera = camera.position;
-            moSetLight(&uni);
-        }
-        {
-            float4x4 view = inverse(camera.model());
-            view.w = float4(0,0,0,1);
-
-            MoPushConstant pmv = {};
-            pmv.projection = projection_matrix;
-            pmv.view = view;
-            {
-                pmv.model = identity;
-                moSetPMV(&pmv);
-                moBindMaterial(domeMaterial);
-                moDrawMesh(sphereMesh);
-            }
-        }
-        moPipelineOverride();
+        moPipelineOverride(raytracePipeline);
         moBegin(frameIndex);
         {
-            MoUniform uni = {};
-            uni.light = float4(light.model.w.xyz(), light.power);
-            uni.camera = camera.model().w.xyz();
-            moSetLight(&uni);
-        }
-#if 0
-        {
-            MoPushConstant pmv = {};
-            pmv.projection = projection_matrix;
-            pmv.view = inverse(camera.model());
-            std::function<void(const MoNode &, const float4x4 &)> draw = [&](const MoNode & node, const float4x4 & model)
-            {
-                if (node.material && node.mesh)
-                {
-                    moBindMaterial(node.material);
-                    pmv.model = model;
-                    moSetPMV(&pmv);
-                    moDrawMesh(node.mesh);
-                }
-                for (const MoNode & child : node.children)
-                {
-                    draw(child, mul(model, child.model));
-                }
-            };
-            draw(root, root.model);
-        }
-#elif 1
-        {
-            camera = {"__default_camera", {0.f, 0.f, 1.f}, 0.f, 0.f};
-            MoPushConstant pmv = {};
-            pmv.projection = orthographic_matrix;
-            pmv.view = inverse(camera.model());
-            pmv.model = identity;
-            std::function<void(const MoNode &, const float4x4 &)> draw = [&](const MoNode & node, const float4x4 & model)
-            {
-                if (node.material && node.mesh)
-                {
-                    moBindMaterial(rectMaterial);
-                    //pmv.model = model;
-                    moSetPMV(&pmv);
-                    moDrawMesh(node.mesh);
-                }
-                for (const MoNode & child : node.children)
-                {
-                    draw(child, mul(model, child.model));
-                }
-            };
-            draw(root, root.model);
-        }
-#else
-        {
-            camera = {"__default_camera", {0.f, 0.f, 1.f}, 0.f, 0.f};
-
+            MoCamera camera = {"__default_camera", {0.f, 0.f, 1.f}, 0.f, 0.f};
             MoPushConstant pmv = {};
             pmv.projection = orthographic_matrix;
             pmv.view = inverse(camera.model());
             pmv.model = identity;
             moSetPMV(&pmv);
-            moBindMaterial(rectMaterial);
-            moDrawMesh(rectMesh);
+            std::function<void(const MoNode &)> draw = [&](const MoNode & node)
+            {
+                if (node.material && node.mesh)
+                {
+                    moDrawMesh(node.mesh);
+                }
+                for (const MoNode & child : node.children)
+                {
+                    draw(child);
+                }
+            };
+            draw(root);
         }
-#endif
+        moPipelineOverride();
         // Frame end
         VkResult err = moEndSwapChain(swapChain, &frameIndex, &imageAcquiredSemaphore);
 #ifndef MO_HEADLESS
@@ -1028,12 +945,10 @@ int main(int argc, char** argv)
 
 
     // Dome
-    moDestroyPipeline(domePipeline);
-    moDestroyMaterial(domeMaterial);
+    moDestroyPipeline(raytracePipeline);
 
     // Meshoui cleanup
     moDestroyHandles(handles);
-    moDestroyMesh(sphereMesh);
 
     // Cleanup
     moShutdown();

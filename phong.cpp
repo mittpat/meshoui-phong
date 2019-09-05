@@ -1143,7 +1143,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     }
 
     {
-        VkDescriptorSetLayoutBinding binding[2];
+        VkDescriptorSetLayoutBinding binding[4];
 
         // triangle bvh nodes
         binding[0].binding = 0;
@@ -1156,6 +1156,18 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         binding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         binding[1].descriptorCount = 1;
         binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        // triangle bvh nodes
+        binding[2].binding = 2;
+        binding[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding[2].descriptorCount = 1;
+        binding[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        // triangle bvh objects
+        binding[3].binding = 3;
+        binding[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding[3].descriptorCount = 1;
+        binding[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1395,6 +1407,27 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         uploadBuffer(g_Device, mesh->bvhObjectBuffer, size, &data);
     }
 
+    if (pCreateInfo->bvhUV && pCreateInfo->bvhUV->splitNodeCount > 0)
+    {
+        VkDeviceSize nodesSize = sizeof(MoBVHSplitNode) * pCreateInfo->bvhUV->splitNodeCount;
+        createBuffer(g_Device, &mesh->bvhUVNodesBuffer, nodesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhUVNodesBuffer, nodesSize, pCreateInfo->bvhUV->pSplitNodes);
+
+        VkDeviceSize objectsSize = sizeof(MoTriangle) * pCreateInfo->bvhUV->objectCount;
+        createBuffer(g_Device, &mesh->bvhUVObjectBuffer, objectsSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhUVObjectBuffer, objectsSize, pCreateInfo->bvhUV->pObjects);
+    }
+    else
+    {
+        uint32_t data[4] = {};
+        VkDeviceSize size = sizeof(data);
+        createBuffer(g_Device, &mesh->bvhUVNodesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhUVNodesBuffer, size, &data);
+
+        createBuffer(g_Device, &mesh->bvhUVObjectBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        uploadBuffer(g_Device, mesh->bvhUVObjectBuffer, size, &data);
+    }
+
     {
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1405,15 +1438,22 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         g_Device->pCheckVkResultFn(err);
     }
 
-    VkDescriptorBufferInfo desc_buffer[2] = {};
+    VkDescriptorBufferInfo desc_buffer[4] = {};
     desc_buffer[0].buffer = mesh->bvhNodesBuffer->buffer;
     desc_buffer[0].offset = 0;
     desc_buffer[0].range = mesh->bvhNodesBuffer->size;
     desc_buffer[1].buffer = mesh->bvhObjectBuffer->buffer;
     desc_buffer[1].offset = 0;
     desc_buffer[1].range = mesh->bvhObjectBuffer->size;
-    VkWriteDescriptorSet write_desc[2] = {};
-    for (uint32_t i = 0; i < 2; ++i)
+    desc_buffer[2].buffer = mesh->bvhUVNodesBuffer->buffer;
+    desc_buffer[2].offset = 0;
+    desc_buffer[2].range = mesh->bvhUVNodesBuffer->size;
+    desc_buffer[3].buffer = mesh->bvhUVObjectBuffer->buffer;
+    desc_buffer[3].offset = 0;
+    desc_buffer[3].range = mesh->bvhUVObjectBuffer->size;
+
+    VkWriteDescriptorSet write_desc[4] = {};
+    for (uint32_t i = 0; i < 4; ++i)
     {
         write_desc[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_desc[i].dstSet = mesh->descriptorSet;
@@ -1423,7 +1463,7 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         write_desc[i].descriptorCount = 1;
         write_desc[i].pBufferInfo = &desc_buffer[i];
     }
-    vkUpdateDescriptorSets(g_Device->device, 2, write_desc, 0, nullptr);
+    vkUpdateDescriptorSets(g_Device->device, 4, write_desc, 0, nullptr);
 
     VkDebugMarkerObjectNameInfoEXT nameInfo = {};
     nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;

@@ -117,6 +117,8 @@ typedef struct MoMesh_T {
     MoDeviceBuffer indexBuffer;
     MoDeviceBuffer bvhNodesBuffer;
     MoDeviceBuffer bvhObjectBuffer;
+    MoDeviceBuffer bvhUVNodesBuffer;
+    MoDeviceBuffer bvhUVObjectBuffer;
     uint32_t indexBufferSize;
     uint32_t vertexCount;
 
@@ -183,6 +185,7 @@ typedef struct MoMeshCreateInfo {
     linalg::aliases::float3* pBitangents;
     uint32_t                 vertexCount;
     MoBVH                    bvh;
+    MoBVH                    bvhUV;
     const char*              name;
 } MoMeshCreateInfo;
 
