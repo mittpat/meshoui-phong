@@ -916,7 +916,7 @@ int main(int argc, char** argv)
             std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
             const bool colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), VK_FORMAT_B8G8R8A8_UNORM) != formatsBGR.end());
 
-            // ppm binary pixel data
+            //// ppm binary pixel data
             for (int32_t y = 0; y < swapChain->extent.height; y++) {
                 unsigned int *row = (unsigned int*)imagedata;
                 for (int32_t x = 0; x < swapChain->extent.width; x++) {
