@@ -24,6 +24,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <3rdparty/stb/stb_image_write.h>
+
+#define MO_SAVE_TO_FILE
+
 #include <iostream>
 #include <fstream>
 
@@ -454,6 +459,12 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
 
 int main(int argc, char** argv)
 {
+    const char * filename = "teapot.dae";
+    std::filesystem::path fileToLoad = filename;
+
+    std::cout << "generating light map for " << fileToLoad << std::endl;
+    auto start = std::chrono::steady_clock::now();
+
 #ifndef MO_HEADLESS
     GLFWwindow*                  window = nullptr;
 #endif
@@ -471,11 +482,11 @@ int main(int argc, char** argv)
     // Initialization
     {
         int width, height;
-#undef NDEBUG
-#ifndef NDEBUG
+//#undef NDEBUG
+//#ifndef NDEBUG
         width = 1024;
         height = 1024;
-#endif
+//#endif
 #ifndef MO_HEADLESS
         glfwSetErrorCallback(glfw_error_callback);
         glfwInit();
@@ -589,8 +600,6 @@ int main(int argc, char** argv)
     MoHandles handles;
     MoNode root{"__root", identity, nullptr, nullptr, {}};
 
-    std::filesystem::path fileToLoad = "teapot.dae";
-
     // Dome
     MoPipeline raytracePipeline;
     {
@@ -701,8 +710,6 @@ int main(int argc, char** argv)
         vk_check_result(err);
     }
 
-
-
 #ifndef MO_HEADLESS
 #else
     const char* imagedata = {};
@@ -748,7 +755,6 @@ int main(int argc, char** argv)
         device->pCheckVkResultFn(err);
         err = vkBindImageMemory(device->device, dstImage, dstImageMemory, 0);
         device->pCheckVkResultFn(err);
-
         // Do the actual blit from the offscreen image to our host visible destination image
         VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
         cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -868,49 +874,30 @@ int main(int argc, char** argv)
         vkMapMemory(device->device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&imagedata);
         imagedata += subResourceLayout.offset;
 
-        /*
-            Save host visible framebuffer image to disk (ppm format)
-        */
-
-            const char* filename = "headless.ppm";
-
-            std::ofstream file(filename, std::ios::out | std::ios::binary);
-
-            // ppm header
-            file << "P6\n" << swapChain->extent.width << "\n" << swapChain->extent.height << "\n" << 255 << "\n";
-
-            // If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
-            // Check if source is BGR and needs swizzle
-            std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
-            const bool colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), VK_FORMAT_B8G8R8A8_UNORM) != formatsBGR.end());
-
-            // ppm binary pixel data
-            for (int32_t y = 0; y < swapChain->extent.height; y++) {
-                unsigned int *row = (unsigned int*)imagedata;
-                for (int32_t x = 0; x < swapChain->extent.width; x++) {
-                    if (colorSwizzle) {
-                        file.write((char*)row + 2, 1);
-                        file.write((char*)row + 1, 1);
-                        file.write((char*)row, 1);
-                    }
-                    else {
-                        file.write((char*)row, 3);
-                    }
-                    row++;
+#ifdef MO_SAVE_TO_FILE
+        {
+            for (std::uint32_t y = 0; y < swapChain->extent.height; y++)
+            {
+                for (std::uint32_t x = 0; x < swapChain->extent.width; x++)
+                {
+#define MO_OUTPUT_COMPONENTS 4
+                    std::uint32_t pixel = (y * swapChain->extent.width + x) * MO_OUTPUT_COMPONENTS;
+                    ((unsigned char*)imagedata)[pixel + 3] = 255;
                 }
-                imagedata += subResourceLayout.rowPitch;
             }
-            file.close();
 
-            printf("Framebuffer image saved to %s\n", filename);
-
+            char outputFilename[256];
+            std::snprintf(outputFilename, 256, "%s_%d_%smap.png", std::filesystem::path(filename).stem().c_str(), 0, false ? "normal" : "light");
+            stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, imagedata, 4 * swapChain->extent.width);
+            std::cout << "saved output as " << outputFilename << std::endl;
+        }
+#endif
             // Clean up resources
             vkUnmapMemory(device->device, dstImageMemory);
             vkFreeMemory(device->device, dstImageMemory, nullptr);
             vkDestroyImage(device->device, dstImage, nullptr);
     }
 #endif
-
 
     // Dome
     moDestroyPipeline(raytracePipeline);
@@ -930,6 +917,11 @@ int main(int argc, char** argv)
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif
+
+    auto end = std::chrono::steady_clock::now();
+    auto secs = std::chrono::duration_cast<std::chrono::duration<float>>(end - start);
+    std::cout << "Elapsed: " << secs.count() << "s\n";
+
     return 0;
 }
 #ifdef __GNUC__

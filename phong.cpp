@@ -465,7 +465,7 @@ void moCreateDevice(MoDeviceCreateInfo *pCreateInfo, MoDevice *pDevice)
         }
     }
 #else
-    pCreateInfo->pSurfaceFormat->format = VK_FORMAT_B8G8R8A8_UNORM;
+    pCreateInfo->pSurfaceFormat->format = VK_FORMAT_R8G8B8A8_UNORM;//VK_FORMAT_B8G8R8A8_UNORM;
     pCreateInfo->pSurfaceFormat->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 #endif
 
@@ -1499,6 +1499,12 @@ void moDestroyMesh(MoMesh mesh)
     deleteBuffer(g_Device, mesh->tangentsBuffer);
     deleteBuffer(g_Device, mesh->bitangentsBuffer);
     deleteBuffer(g_Device, mesh->indexBuffer);
+
+    deleteBuffer(g_Device, mesh->bvhObjectBuffer);
+    deleteBuffer(g_Device, mesh->bvhNodesBuffer);
+    deleteBuffer(g_Device, mesh->bvhIndicesBuffer);
+    deleteBuffer(g_Device, mesh->bvhUVNodesBuffer);
+    deleteBuffer(g_Device, mesh->bvhUVIndicesBuffer);
     delete mesh;
 }
 

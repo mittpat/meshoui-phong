@@ -55,28 +55,15 @@ struct MoBBox
 {
     vec3 min;
     vec3 max;
-    vec3 extent;
 };
 
 bool moIntersect(in MoBBox self, in MoRay ray, out float t_near, out float t_far)
 {
-    float tx1 = (self.min.x - ray.origin.x) * ray.oneOverDirection.x;
-    float tx2 = (self.max.x - ray.origin.x) * ray.oneOverDirection.x;
+    vec3 t1 = (self.min - ray.origin) * ray.oneOverDirection;
+    vec3 t2 = (self.max - ray.origin) * ray.oneOverDirection;
 
-    t_near = min(tx1, tx2);
-    t_far = max(tx1, tx2);
-
-    float ty1 = (self.min.y - ray.origin.y) * ray.oneOverDirection.y;
-    float ty2 = (self.max.y - ray.origin.y) * ray.oneOverDirection.y;
-
-    t_near = max(t_near, min(ty1, ty2));
-    t_far = min(t_far, max(ty1, ty2));
-
-    float tz1 = (self.min.z - ray.origin.z) * ray.oneOverDirection.z;
-    float tz2 = (self.max.z - ray.origin.z) * ray.oneOverDirection.z;
-
-    t_near = max(t_near, min(tz1, tz2));
-    t_far = min(t_far, max(tz1, tz2));
+    t_near = max(max(min(t1.x, t2.x), min(t1.y, t2.y)), min(t1.z, t2.z));
+    t_far = min(min(max(t1.x, t2.x), max(t1.y, t2.y)), max(t1.z, t2.z));
 
     return t_far >= t_near;
 }
@@ -101,23 +88,13 @@ vec3 moGetUVBarycentric(in MoTriangle self, in vec2 uv)
             / d;
     float l3 = 1 - l1 - l2;
 
-#if 0
-    vec2 test = l1 * self.uv0 + l2 * self.uv1 + l3 * self.uv2;
-#endif
-
     return vec3(l1, l2, l3);
 }
 
 void moGetSurface(in MoTriangle self, in vec3 barycentricCoordinates, out vec3 point, out vec3 normal)
 {
-    point = self.v0 * barycentricCoordinates[0]
-          + self.v1 * barycentricCoordinates[1]
-          + self.v2 * barycentricCoordinates[2];
-
-    normal = self.n0 * barycentricCoordinates[0]
-           + self.n1 * barycentricCoordinates[1]
-           + self.n2 * barycentricCoordinates[2];
-    normal = normalize(normal);
+    point = mat3(self.v0, self.v1, self.v2) * barycentricCoordinates;
+    normal = mat3(self.n0, self.n1, self.n2) * barycentricCoordinates;
 }
 
 bool moRayTriangleIntersect(in MoTriangle self, in MoRay ray, out float t, out float u, out float v)
@@ -423,22 +400,13 @@ layout(location = 0) in VertexData
     mat3 TBN;
 } inData;
 
-const float MultiSampleOffset = 1.0/1024.0;
-const vec4 DefaultColor = vec4(0.5, 0.5, 0.5, 1.0);
-const vec3 MultiTexels[] = {vec3(vec2(0.0), -1.0),
-                            vec3(vec2(0.0) + vec2( MultiSampleOffset,  MultiSampleOffset), -1.0),
-                            vec3(vec2(0.0) + vec2(-MultiSampleOffset, -MultiSampleOffset), -1.0),
-                            vec3(vec2(0.0) + vec2( MultiSampleOffset, -MultiSampleOffset), -1.0),
-                            vec3(vec2(0.0) + vec2(-MultiSampleOffset,  MultiSampleOffset), -1.0)};
-const float SurfaceBias = 0.01f;
+const float PHI = 1.61803398874989484820459 * 00000.1; // Golden Ratio
+const float PI  = 3.14159265358979323846264 * 00000.1; // PI
+const float SQ2 = 1.41421356237309504880169 * 10000.0; // Square Root of Two
 
-float PHI = 1.61803398874989484820459 * 00000.1; // Golden Ratio
-float PI  = 3.14159265358979323846264 * 00000.1; // PI
-float SQ2 = 1.41421356237309504880169 * 10000.0; // Square Root of Two
-
-float gold_noise(in vec2 coordinate, in float seed)
+float goldNoise(in vec2 coordinate, in float seed)
 {
-    return fract(tan(distance(coordinate*(seed+PHI), vec2(PHI, PI)))*SQ2);
+    return fract(tan(distance(coordinate * (seed + PHI), vec2(PHI, PI))) * SQ2);
 }
 
 vec3 moNextSphericalSample(in vec2 coordinate, inout float seed, bool direction)
@@ -446,14 +414,12 @@ vec3 moNextSphericalSample(in vec2 coordinate, inout float seed, bool direction)
     vec3 vect;
     do
     {
-        vect.x = gold_noise(coordinate, seed) * 2.0 - 1.0;
-        seed = seed + 1;
-        vect.y = gold_noise(coordinate, seed) * 2.0 - 1.0;
-        seed = seed + 1;
-        vect.z = gold_noise(coordinate, seed) * 2.0 - 1.0;
-        seed = seed + 1;
+        vect.x = fma(goldNoise(coordinate, seed), 2.0, -1.0);
+        vect.y = fma(goldNoise(coordinate, seed+1), 2.0, -1.0);
+        vect.z = fma(goldNoise(coordinate, seed+2), 2.0, -1.0);
+        seed += 3;
     }
-    while (length(vect) > 1.f);
+    while (dot(vect, vect) > 1.f);
     if (direction)
     {
         vect = normalize(vect);
@@ -461,6 +427,8 @@ vec3 moNextSphericalSample(in vec2 coordinate, inout float seed, bool direction)
     return vect;
 }
 
+const vec4 DefaultColor = vec4(0.5, 0.5, 0.5, 1.0);
+const vec3 SurfaceBias = vec3(0.01f);
 const int SampleCount = 128;
 
 void main()
@@ -470,48 +438,43 @@ void main()
 
     MoRay ray;
     moInitRay(ray, origin, direction);
-    for (int i = 0; i < 5; ++i)
-    {
-        moInitRay(ray, MultiTexels[i] + origin, direction);
 
-        MoIntersectResult result;
-        if (moIntersectUVTriangleBVH(ray, result))
-        {
-            vec3 surfacePoint, surfaceNormal;
-            moGetSurface(result.triangle, moGetUVBarycentric(result.triangle, origin.xy), surfacePoint, surfaceNormal);
+    MoIntersectResult result;
+    if (moIntersectUVTriangleBVH(ray, result))
+    {
+        vec3 surfacePoint, surfaceNormal;
+        moGetSurface(result.triangle, moGetUVBarycentric(result.triangle, origin.xy), surfacePoint, surfaceNormal);
 //#define COMPUTE_NORMALS
 #ifdef COMPUTE_NORMALS
-            fragment = vec4(surfaceNormal / 2.0 + vec3(0.5, 0.5, 0.5), 1.0);
+        fragment = vec4(surfaceNormal / 2.0 + vec3(0.5, 0.5, 0.5), 1.0);
 #else
-            float seed = 0.0;
-            float value = 0.0;
-            for (int j = 0; j < SampleCount; ++j)
+        float seed = 0.0;
+        float value = 0.0;
+        for (int j = 0; j < SampleCount; ++j)
+        {
+            vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(1), seed, true);
+            float diffuseFactor = dot(surfaceNormal, nextDirection);
+            if (diffuseFactor > 0.f)
             {
-                vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(1), seed, true);
-                float diffuseFactor = dot(surfaceNormal, nextDirection);
-                if (diffuseFactor > 0.f)
-                {
-                    moInitRay(ray, surfacePoint + surfaceNormal * SurfaceBias, nextDirection);
+                moInitRay(ray, fma(surfaceNormal, SurfaceBias, surfacePoint), nextDirection);
 
-                    MoIntersectResult nextResult;
-                    if (moIntersectTriangleBVH(ray, nextResult) && nextResult.distance < 1.0 /*lightSourceDistance*/)
-                    {
-                        // light is occluded
-                    }
-                    else
-                    {
-                        value += diffuseFactor * 1.0 * 2.0 * 2.0 /*white point*/ /*lightSourcePower*/;
-                    }
+                MoIntersectResult nextResult;
+                if (moIntersectTriangleBVH(ray, nextResult) && nextResult.distance < 1.0 /*lightSourceDistance*/)
+                {
+                    // light is occluded
+                }
+                else
+                {
+                    value += diffuseFactor * 1.0 * 2.0 * 2.0 /*white point*/ /*lightSourcePower*/;
                 }
             }
-            fragment = vec4(vec3(value / SampleCount), 1.0);
+        }
+        fragment = vec4(vec3(value / SampleCount), 1.0);
 #endif
-            break;
-        }
-        else
-        {
-            fragment = DefaultColor;
-        }
+    }
+    else
+    {
+        fragment = DefaultColor;
     }
 }
 #endif
