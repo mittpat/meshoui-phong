@@ -394,38 +394,6 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
                 moCreateMesh(&meshInfo, &meshes[meshIdx]);
                 handles.meshes.push_back(meshes[meshIdx]);
             }
-
-
-            //MoTriangleList triangleList;
-            //moCreateTriangleList(mesh, &triangleList);
-            //meshInfo.bvh = triangleList->bvh;
-
-            //moCreateMesh(&meshInfo, &meshes[meshIdx]);
-            //handles.meshes.push_back(meshes[meshIdx]);
-
-#if 0
-            {
-                MoTriangleList triangleList;
-                moCreateTriangleList(mesh, &triangleList);
-
-                MoLightmapCreateInfo info = {};
-                info.nullColor = {127,127,127,255};
-                info.size = {256,256};
-                info.flipY = 1;
-                info.despeckle = 1;
-                info.ambientLightingSampleCount = 512;
-                info.ambientLightingPower = 1.0f;
-                info.ambientOcclusionDistance = 1.f;
-                info.directionalLightingSampleCount = 32;
-                info.pDirectionalLightSources = nullptr;
-                info.directionalLightSourceCount = 0;
-                info.pointLightingSampleCount = 32;
-                info.pPointLightSources = nullptr;
-                info.pointLightSourceCount = 0;
-                moGenerateLightMap(triangleList, output.data(), &info, &std::cout);
-                moDestroyTriangleList(triangleList);
-            }
-#endif
         }
 
         std::vector<MoMaterial> materials(scene->mNumMaterials);

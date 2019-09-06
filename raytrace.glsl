@@ -58,38 +58,6 @@ struct MoBBox
     vec3 extent;
 };
 
-void moInitBBox(inout MoBBox self, in vec3 _min, in vec3 _max)
-{
-    self.min = _min;
-    self.max = _max;
-    self.extent = self.max - self.min;
-}
-
-void moInitBBox(inout MoBBox self, in vec3 point)
-{
-    self.min = point;
-    self.max = point;
-    self.extent = self.max - self.min;
-}
-
-uint moLongestSide(in MoBBox self)
-{
-    uint dimension = 0;
-    if (self.extent.y > self.extent.x)
-    {
-        dimension = 1;
-        if (self.extent.z > self.extent.y)
-        {
-            dimension = 2;
-        }
-    }
-    else if (self.extent.z > self.extent.x)
-    {
-        dimension = 2;
-    }
-    return dimension;
-}
-
 bool moIntersect(in MoBBox self, in MoRay ray, out float t_near, out float t_far)
 {
     float tx1 = (self.min.x - ray.origin.x) * ray.oneOverDirection.x;
@@ -113,28 +81,6 @@ bool moIntersect(in MoBBox self, in MoRay ray, out float t_near, out float t_far
     return t_far >= t_near;
 }
 
-void moExpandToInclude(inout MoBBox self, in vec3 point)
-{
-    self.min.x = min(self.min.x, point.x);
-    self.min.y = min(self.min.y, point.y);
-    self.min.z = min(self.min.z, point.z);
-    self.max.x = max(self.max.x, point.x);
-    self.max.y = max(self.max.y, point.y);
-    self.max.z = max(self.max.z, point.z);
-    self.extent = self.max - self.min;
-}
-
-void moExpandToInclude(inout MoBBox self, in MoBBox box)
-{
-    self.min.x = min(self.min.x, box.min.x);
-    self.min.y = min(self.min.y, box.min.y);
-    self.min.z = min(self.min.z, box.min.z);
-    self.max.x = max(self.max.x, box.max.x);
-    self.max.y = max(self.max.y, box.max.y);
-    self.max.z = max(self.max.z, box.max.z);
-    self.extent = self.max - self.min;
-}
-
 /// TRIANGLE
 struct MoTriangle
 {
@@ -142,34 +88,6 @@ struct MoTriangle
     vec2 uv0, uv1, uv2;
     vec3 n0, n1, n2;
 };
-
-MoBBox moGetBoundingBox(in MoTriangle self)
-{
-    MoBBox bb;
-    moInitBBox(bb, self.v0);
-    moExpandToInclude(bb, self.v1);
-    moExpandToInclude(bb, self.v2);
-    return bb;
-}
-
-vec3 moGetCentroid(in MoTriangle self)
-{
-    return (self.v0 + self.v1 + self.v2) / 3.0f;
-}
-
-MoBBox moGetUVBoundingBox(in MoTriangle self)
-{
-    MoBBox bb;
-    moInitBBox(bb, vec3(self.uv0, 0.f));
-    moExpandToInclude(bb, vec3(self.uv1, 0.f));
-    moExpandToInclude(bb, vec3(self.uv2, 0.f));
-    return bb;
-}
-
-vec3 moGetUVCentroid(in MoTriangle self)
-{
-    return vec3((self.uv0 + self.uv1 + self.uv2) / 3.0f, 0.f);
-}
 
 vec3 moGetUVBarycentric(in MoTriangle self, in vec2 uv)
 {
@@ -281,23 +199,28 @@ void swap(inout uint left, inout uint right)
     right = temp;
 }
 
-layout(std430, set = 2, binding = 0) buffer BVHSplitNodes
-{
-    MoBVHSplitNode pSplitNodes[];
-} inBVHSplitNodes;
-layout(std430, set = 2, binding = 1) buffer BVHObjects
+layout(std430, set = 2, binding = 0) buffer BVHObjects
 {
     MoTriangle pObjects[];
 } inBVHObjects;
 
-layout(std430, set = 2, binding = 2) buffer BVHSplitNodesUV
+layout(std430, set = 2, binding = 1) buffer BVHSplitNodes
+{
+    MoBVHSplitNode pSplitNodes[];
+} inBVHSplitNodes;
+layout(std430, set = 2, binding = 2) buffer BVHIndices
+{
+    uint pIndices[];
+} inBVHIndices;
+
+layout(std430, set = 2, binding = 3) buffer BVHSplitNodesUV
 {
     MoBVHSplitNode pSplitNodes[];
 } inBVHSplitNodesUV;
-layout(std430, set = 2, binding = 3) buffer BVHObjectsUV
+layout(std430, set = 2, binding = 4) buffer BVHIndicesUV
 {
-    MoTriangle pObjects[];
-} inBVHObjectsUV;
+    uint pIndices[];
+} inBVHIndicesUV;
 
 bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 {
@@ -330,7 +253,7 @@ bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
             {
                 float currentDistance = 1.0 / 0.0;
                 float u, v;
-                MoTriangle triangle = inBVHObjects.pObjects[node.start + i];
+                MoTriangle triangle = inBVHObjects.pObjects[inBVHIndices.pIndices[node.start + i]];
                 if (moRayTriangleIntersect(triangle, ray, currentDistance, u, v))
                 {
                     if (currentDistance <= 0.0)
@@ -433,7 +356,7 @@ bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
             for (uint i = 0; i < node.count; ++i)
             {
                 float currentDistance = 1.0 / 0.0;
-                MoTriangle triangle = inBVHObjectsUV.pObjects[node.start + i];
+                MoTriangle triangle = inBVHObjects.pObjects[inBVHIndicesUV.pIndices[node.start + i]];
                 if (moTexcoordInTriangleUV(triangle, ray.origin.xy))
                 {
                     currentDistance = 0.0;
