@@ -906,6 +906,8 @@ int main(int argc, char** argv)
 
 #ifdef MO_SAVE_TO_FILE
     {
+        std::vector<std::uint8_t> bled = outputImg;
+
         auto indexOf = [&](std::int32_t u, std::int32_t v) -> std::uint32_t
         {
             u = std::min(std::int32_t(swapChain->extent.width), std::max(0, u));
@@ -924,7 +926,7 @@ int main(int argc, char** argv)
             for (std::uint32_t u = 0; u < swapChain->extent.height; u++)
             {
                 std::uint32_t pixel = indexOf(u, v);
-                outputImg[pixel + 3] = 255;
+                bled[pixel + 3] = 255;
                 // fix seams
                 if (isMiss(&outputImg[pixel]))
                 {
@@ -935,33 +937,33 @@ int main(int argc, char** argv)
                     pixelRight = indexOf(u + 1, v);
                     if (!isMiss(&outputImg[pixelUp]))
                     {
-                        outputImg[pixel + 0] = outputImg[pixelUp + 0];
-                        outputImg[pixel + 1] = outputImg[pixelUp + 1];
-                        outputImg[pixel + 2] = outputImg[pixelUp + 2];
+                        bled[pixel + 0] = outputImg[pixelUp + 0];
+                        bled[pixel + 1] = outputImg[pixelUp + 1];
+                        bled[pixel + 2] = outputImg[pixelUp + 2];
                     }
                     else if (!isMiss(&outputImg[pixelDown]))
                     {
-                        outputImg[pixel + 0] = outputImg[pixelDown + 0];
-                        outputImg[pixel + 1] = outputImg[pixelDown + 1];
-                        outputImg[pixel + 2] = outputImg[pixelDown + 2];
+                        bled[pixel + 0] = outputImg[pixelDown + 0];
+                        bled[pixel + 1] = outputImg[pixelDown + 1];
+                        bled[pixel + 2] = outputImg[pixelDown + 2];
                     }
                     else if (!isMiss(&outputImg[pixelLeft]))
                     {
-                        outputImg[pixel + 0] = outputImg[pixelLeft + 0];
-                        outputImg[pixel + 1] = outputImg[pixelLeft + 1];
-                        outputImg[pixel + 2] = outputImg[pixelLeft + 2];
+                        bled[pixel + 0] = outputImg[pixelLeft + 0];
+                        bled[pixel + 1] = outputImg[pixelLeft + 1];
+                        bled[pixel + 2] = outputImg[pixelLeft + 2];
                     }
                     else if (!isMiss(&outputImg[pixelRight]))
                     {
-                        outputImg[pixel + 0] = outputImg[pixelRight + 0];
-                        outputImg[pixel + 1] = outputImg[pixelRight + 1];
-                        outputImg[pixel + 2] = outputImg[pixelRight + 2];
+                        bled[pixel + 0] = outputImg[pixelRight + 0];
+                        bled[pixel + 1] = outputImg[pixelRight + 1];
+                        bled[pixel + 2] = outputImg[pixelRight + 2];
                     }
                     else
                     {
-                        outputImg[pixel + 0] = 127;
-                        outputImg[pixel + 1] = 127;
-                        outputImg[pixel + 2] = 127;
+                        bled[pixel + 0] = 127;
+                        bled[pixel + 1] = 127;
+                        bled[pixel + 2] = 127;
                     }
                 }
             }
@@ -969,7 +971,7 @@ int main(int argc, char** argv)
 
         char outputFilename[256];
         std::snprintf(outputFilename, 256, "%s_%d_%smap.png", std::filesystem::path(filename).stem().c_str(), 0, false ? "normal" : "light");
-        stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, outputImg.data(), 4 * swapChain->extent.width);
+        stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, bled.data(), 4 * swapChain->extent.width);
         std::cout << "saved output as " << outputFilename << std::endl;
     }
 #endif
