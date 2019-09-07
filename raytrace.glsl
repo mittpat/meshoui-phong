@@ -81,11 +81,9 @@ vec3 moGetUVBarycentric(in MoTriangle self, in vec2 uv)
     vec4 x = vec4(uv.x, self.uv0.x, self.uv1.x, self.uv2.x);
     vec4 y = vec4(uv.y, self.uv0.y, self.uv1.y, self.uv2.y);
 
-    float d = (y[2] - y[3]) * (x[1] - x[3]) + (x[3] - x[2]) * (y[1] - y[3]);
-    float l1 = ((y[2] - y[3]) * (x[0] - x[3]) + (x[3] - x[2]) * (y[0] - y[3]))
-            / d;
-    float l2 = ((y[3] - y[1]) * (x[0] - x[3]) + (x[1] - x[3]) * (y[0] - y[3]))
-            / d;
+    float d  = fma(y[2] - y[3], x[1] - x[3], (x[3] - x[2]) * (y[1] - y[3]));
+    float l1 = fma(y[2] - y[3], x[0] - x[3], (x[3] - x[2]) * (y[0] - y[3])) / d;
+    float l2 = fma(y[3] - y[1], x[0] - x[3], (x[1] - x[3]) * (y[0] - y[3])) / d;
     float l3 = 1 - l1 - l2;
 
     return vec3(l1, l2, l3);
@@ -100,11 +98,8 @@ void moGetSurface(in MoTriangle self, in vec3 barycentricCoordinates, out vec3 p
 bool moRayTriangleIntersect(in MoTriangle self, in MoRay ray, out float t, out float u, out float v)
 {
     float EPSILON = 0.0000001f;
-    vec3 vertex0 = self.v0;
-    vec3 vertex1 = self.v1;
-    vec3 vertex2 = self.v2;
-    vec3 edge1 = vertex1 - vertex0;
-    vec3 edge2 = vertex2 - vertex0;
+    vec3 edge1 = self.v1 - self.v0;
+    vec3 edge2 = self.v2 - self.v0;
     vec3 h = cross(ray.direction, edge2);
     float a = dot(edge1, h);
     if (a > -EPSILON && a < EPSILON)
@@ -114,7 +109,7 @@ bool moRayTriangleIntersect(in MoTriangle self, in MoRay ray, out float t, out f
     }
 
     float f = 1.0/a;
-    vec3 s = ray.origin - vertex0;
+    vec3 s = ray.origin - self.v0;
     u = f * dot(s, h);
     if (u < 0.0 || u > 1.0)
     {
@@ -188,14 +183,16 @@ layout(std430, set = 2, binding = 2) buffer BVHSplitNodesUV
     MoBVHSplitNode pSplitNodes[];
 } inBVHSplitNodesUV;
 
+
+// Working set
+MoBVHWorkingSet traversal[64];
+
 bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 {
     result.distance = 1.0 / 0.0;
     float bbhits[4];
     uint closer, other;
 
-    // Working set
-    MoBVHWorkingSet traversal[64];
     int stackPtr = 0;
 
     traversal[stackPtr].index = 0;
@@ -295,8 +292,6 @@ bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
     float bbhits[4];
     uint closer, other;
 
-    // Working set
-    MoBVHWorkingSet traversal[64];
     int stackPtr = 0;
 
     traversal[stackPtr].index = 0;
@@ -392,19 +387,21 @@ float goldNoise(in vec2 coordinate, in float seed)
     return fract(tan(distance(coordinate * (seed + PHI), vec2(PHI, PI))) * SQ2);
 }
 
-vec3 moNextSphericalSample(in vec2 coordinate, inout float seed, bool direction)
+vec3 moNextSphericalSample(in vec2 coordinate, in float seed, bool direction)
 {
+    float length2;
     vec3 vect;
     do
     {
         vect.x = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
         vect.y = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
         vect.z = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
+        length2 = dot(vect, vect);
     }
-    while (dot(vect, vect) > 1.f);
+    while (length2 > 1.f);
     if (direction)
     {
-        vect = normalize(vect);
+        vect /= sqrt(length2);
     }
     return vect;
 }
@@ -428,13 +425,12 @@ void main()
         moGetSurface(result.triangle, moGetUVBarycentric(result.triangle, origin.xy), surfacePoint, surfaceNormal);
 //#define COMPUTE_NORMALS
 #ifdef COMPUTE_NORMALS
-        fragment = vec4(surfaceNormal / 2.0 + vec3(0.5, 0.5, 0.5), 1.0);
+        fragment = vec4(fma(surfaceNormal, 0.5, vec3(0.5)), 1.0);
 #else
-        float seed = 0.0;
         float value = 0.0;
         for (int j = 0; j < SampleCount; ++j)
         {
-            vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(0.5), seed, true);
+            vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(0.5), 3.0 * j, true);
             float diffuseFactor = dot(surfaceNormal, nextDirection);
             if (diffuseFactor > 0.f)
             {
