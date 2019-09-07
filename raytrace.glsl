@@ -143,10 +143,9 @@ bool moRayTriangleIntersect(in MoTriangle self, in MoRay ray, out float t, out f
 /// BVH
 struct MoBVHSplitNode
 {
-    uint start;
-    uint count;
-    uint offset;
     MoBBox boundingBox;
+    uint start;
+    uint offset;
 };
 
 struct MoBVHWorkingSet
@@ -180,24 +179,14 @@ layout(std430, set = 2, binding = 0) buffer BVHObjects
 {
     MoTriangle pObjects[];
 } inBVHObjects;
-
 layout(std430, set = 2, binding = 1) buffer BVHSplitNodes
 {
     MoBVHSplitNode pSplitNodes[];
 } inBVHSplitNodes;
-layout(std430, set = 2, binding = 2) buffer BVHIndices
-{
-    uint pIndices[];
-} inBVHIndices;
-
-layout(std430, set = 2, binding = 3) buffer BVHSplitNodesUV
+layout(std430, set = 2, binding = 2) buffer BVHSplitNodesUV
 {
     MoBVHSplitNode pSplitNodes[];
 } inBVHSplitNodesUV;
-layout(std430, set = 2, binding = 4) buffer BVHIndicesUV
-{
-    uint pIndices[];
-} inBVHIndicesUV;
 
 bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 {
@@ -226,27 +215,24 @@ bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 
         if (node.offset == 0)
         {
-            for (uint i = 0; i < node.count; ++i)
+            float currentDistance = 1.0 / 0.0;
+            float u, v;
+            MoTriangle triangle = inBVHObjects.pObjects[node.start];
+            if (moRayTriangleIntersect(triangle, ray, currentDistance, u, v))
             {
-                float currentDistance = 1.0 / 0.0;
-                float u, v;
-                MoTriangle triangle = inBVHObjects.pObjects[inBVHIndices.pIndices[node.start + i]];
-                if (moRayTriangleIntersect(triangle, ray, currentDistance, u, v))
+                if (currentDistance <= 0.0)
                 {
-                    if (currentDistance <= 0.0)
-                    {
-                        result.triangle = triangle;
-                        result.barycentric = vec3(1.f - u - v, u, v);
-                        result.distance = currentDistance;
+                    result.triangle = triangle;
+                    result.barycentric = vec3(1.f - u - v, u, v);
+                    result.distance = currentDistance;
 
-                        return true;
-                    }
-                    if (currentDistance < result.distance)
-                    {
-                        result.triangle = triangle;
-                        result.barycentric = vec3(1.f - u - v, u, v);
-                        result.distance = currentDistance;
-                    }
+                    return true;
+                }
+                if (currentDistance < result.distance)
+                {
+                    result.triangle = triangle;
+                    result.barycentric = vec3(1.f - u - v, u, v);
+                    result.distance = currentDistance;
                 }
             }
         }
@@ -330,26 +316,23 @@ bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
 
         if (node.offset == 0)
         {
-            for (uint i = 0; i < node.count; ++i)
+            float currentDistance = 1.0 / 0.0;
+            MoTriangle triangle = inBVHObjects.pObjects[node.start];
+            if (moTexcoordInTriangleUV(triangle, ray.origin.xy))
             {
-                float currentDistance = 1.0 / 0.0;
-                MoTriangle triangle = inBVHObjects.pObjects[inBVHIndicesUV.pIndices[node.start + i]];
-                if (moTexcoordInTriangleUV(triangle, ray.origin.xy))
-                {
-                    currentDistance = 0.0;
-                }
-                if (currentDistance <= 0.0)
-                {
-                    result.triangle = triangle;
-                    result.distance = currentDistance;
+                currentDistance = 0.0;
+            }
+            if (currentDistance <= 0.0)
+            {
+                result.triangle = triangle;
+                result.distance = currentDistance;
 
-                    return true;
-                }
-                if (currentDistance < result.distance)
-                {
-                    result.triangle = triangle;
-                    result.distance = currentDistance;
-                }
+                return true;
+            }
+            if (currentDistance < result.distance)
+            {
+                result.triangle = triangle;
+                result.distance = currentDistance;
             }
         }
         else

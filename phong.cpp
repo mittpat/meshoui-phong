@@ -1143,7 +1143,7 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
     }
 
     {
-        VkDescriptorSetLayoutBinding binding[5];
+        VkDescriptorSetLayoutBinding binding[3];
 
         // triangle bvh objects
         binding[0].binding = 0;
@@ -1157,23 +1157,11 @@ void moCreatePipeline(const MoPipelineCreateInfo *pCreateInfo, MoPipeline *pPipe
         binding[1].descriptorCount = 1;
         binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-        // triangle bvh indices
+        // uv bvh nodes
         binding[2].binding = 2;
         binding[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         binding[2].descriptorCount = 1;
         binding[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        // uv bvh nodes
-        binding[3].binding = 3;
-        binding[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        binding[3].descriptorCount = 1;
-        binding[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        // uv bvh indices
-        binding[4].binding = 4;
-        binding[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        binding[4].descriptorCount = 1;
-        binding[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1403,19 +1391,11 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
             VkDeviceSize nodesSize = sizeof(MoBVHSplitNode) * pCreateInfo->bvh->splitNodeCount;
             createBuffer(g_Device, &mesh->bvhNodesBuffer, nodesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             uploadBuffer(g_Device, mesh->bvhNodesBuffer, nodesSize, pCreateInfo->bvh->pSplitNodes);
-
-            VkDeviceSize indicesSize = sizeof(std::uint32_t) * pCreateInfo->bvh->triangleList->triangleCount;
-            createBuffer(g_Device, &mesh->bvhIndicesBuffer, indicesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-            uploadBuffer(g_Device, mesh->bvhIndicesBuffer, indicesSize, pCreateInfo->bvh->pIndices);
         }
         {
             VkDeviceSize nodesSize = sizeof(MoBVHSplitNode) * pCreateInfo->bvhUV->splitNodeCount;
             createBuffer(g_Device, &mesh->bvhUVNodesBuffer, nodesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             uploadBuffer(g_Device, mesh->bvhUVNodesBuffer, nodesSize, pCreateInfo->bvhUV->pSplitNodes);
-
-            VkDeviceSize indicesSize = sizeof(std::uint32_t) * pCreateInfo->bvh->triangleList->triangleCount;
-            createBuffer(g_Device, &mesh->bvhUVIndicesBuffer, indicesSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-            uploadBuffer(g_Device, mesh->bvhUVIndicesBuffer, indicesSize, pCreateInfo->bvhUV->pIndices);
         }
     }
     else
@@ -1429,16 +1409,10 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         {
             createBuffer(g_Device, &mesh->bvhNodesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             uploadBuffer(g_Device, mesh->bvhNodesBuffer, size, &data);
-
-            createBuffer(g_Device, &mesh->bvhIndicesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-            uploadBuffer(g_Device, mesh->bvhIndicesBuffer, size, &data);
         }
         {
             createBuffer(g_Device, &mesh->bvhUVNodesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             uploadBuffer(g_Device, mesh->bvhUVNodesBuffer, size, &data);
-
-            createBuffer(g_Device, &mesh->bvhUVIndicesBuffer, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-            uploadBuffer(g_Device, mesh->bvhUVIndicesBuffer, size, &data);
         }
     }
 
@@ -1459,18 +1433,12 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
     desc_buffer[1].buffer = mesh->bvhNodesBuffer->buffer;
     desc_buffer[1].offset = 0;
     desc_buffer[1].range = mesh->bvhNodesBuffer->size;
-    desc_buffer[2].buffer = mesh->bvhIndicesBuffer->buffer;
+    desc_buffer[2].buffer = mesh->bvhUVNodesBuffer->buffer;
     desc_buffer[2].offset = 0;
-    desc_buffer[2].range = mesh->bvhIndicesBuffer->size;
-    desc_buffer[3].buffer = mesh->bvhUVNodesBuffer->buffer;
-    desc_buffer[3].offset = 0;
-    desc_buffer[3].range = mesh->bvhUVNodesBuffer->size;
-    desc_buffer[4].buffer = mesh->bvhUVIndicesBuffer->buffer;
-    desc_buffer[4].offset = 0;
-    desc_buffer[4].range = mesh->bvhUVIndicesBuffer->size;
+    desc_buffer[2].range = mesh->bvhUVNodesBuffer->size;
 
-    VkWriteDescriptorSet write_desc[5] = {};
-    for (uint32_t i = 0; i < 5; ++i)
+    VkWriteDescriptorSet write_desc[3] = {};
+    for (uint32_t i = 0; i < 3; ++i)
     {
         write_desc[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_desc[i].dstSet = mesh->descriptorSet;
@@ -1480,7 +1448,7 @@ void moCreateMesh(const MoMeshCreateInfo *pCreateInfo, MoMesh *pMesh)
         write_desc[i].descriptorCount = 1;
         write_desc[i].pBufferInfo = &desc_buffer[i];
     }
-    vkUpdateDescriptorSets(g_Device->device, 5, write_desc, 0, nullptr);
+    vkUpdateDescriptorSets(g_Device->device, 3, write_desc, 0, nullptr);
 
     VkDebugMarkerObjectNameInfoEXT nameInfo = {};
     nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
@@ -1502,9 +1470,7 @@ void moDestroyMesh(MoMesh mesh)
 
     deleteBuffer(g_Device, mesh->bvhObjectBuffer);
     deleteBuffer(g_Device, mesh->bvhNodesBuffer);
-    deleteBuffer(g_Device, mesh->bvhIndicesBuffer);
     deleteBuffer(g_Device, mesh->bvhUVNodesBuffer);
-    deleteBuffer(g_Device, mesh->bvhUVIndicesBuffer);
     delete mesh;
 }
 

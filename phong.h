@@ -117,9 +117,7 @@ typedef struct MoMesh_T {
     MoDeviceBuffer indexBuffer;
     MoDeviceBuffer bvhObjectBuffer;
     MoDeviceBuffer bvhNodesBuffer;
-    MoDeviceBuffer bvhIndicesBuffer;
     MoDeviceBuffer bvhUVNodesBuffer;
-    MoDeviceBuffer bvhUVIndicesBuffer;
     uint32_t indexBufferSize;
     uint32_t vertexCount;
 
