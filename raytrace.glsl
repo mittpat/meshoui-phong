@@ -414,10 +414,9 @@ vec3 moNextSphericalSample(in vec2 coordinate, inout float seed, bool direction)
     vec3 vect;
     do
     {
-        vect.x = fma(goldNoise(coordinate, seed), 2.0, -1.0);
-        vect.y = fma(goldNoise(coordinate, seed+1), 2.0, -1.0);
-        vect.z = fma(goldNoise(coordinate, seed+2), 2.0, -1.0);
-        seed += 3;
+        vect.x = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
+        vect.y = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
+        vect.z = fma(goldNoise(coordinate, seed++), 2.0, -1.0);
     }
     while (dot(vect, vect) > 1.f);
     if (direction)
@@ -452,7 +451,7 @@ void main()
         float value = 0.0;
         for (int j = 0; j < SampleCount; ++j)
         {
-            vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(1), seed, true);
+            vec3 nextDirection = moNextSphericalSample(/*origin.xy*/vec2(0.5), seed, true);
             float diffuseFactor = dot(surfaceNormal, nextDirection);
             if (diffuseFactor > 0.f)
             {

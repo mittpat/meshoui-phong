@@ -623,6 +623,8 @@ int main(int argc, char** argv)
         moCreatePipeline(&pipelineCreateInfo, &raytracePipeline);
     }
 
+    std::vector<std::uint8_t> outputImg;
+
     // Main loop
 #ifndef MO_HEADLESS
     while (!glfwWindowShouldClose(window))
@@ -874,28 +876,12 @@ int main(int argc, char** argv)
         vkMapMemory(device->device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&imagedata);
         imagedata += subResourceLayout.offset;
 
-#ifdef MO_SAVE_TO_FILE
-        {
-            for (std::uint32_t y = 0; y < swapChain->extent.height; y++)
-            {
-                for (std::uint32_t x = 0; x < swapChain->extent.width; x++)
-                {
-#define MO_OUTPUT_COMPONENTS 4
-                    std::uint32_t pixel = (y * swapChain->extent.width + x) * MO_OUTPUT_COMPONENTS;
-                    ((unsigned char*)imagedata)[pixel + 3] = 255;
-                }
-            }
+        outputImg.insert(outputImg.end(), (std::uint8_t*)imagedata, (std::uint8_t*)imagedata + subResourceLayout.size);
 
-            char outputFilename[256];
-            std::snprintf(outputFilename, 256, "%s_%d_%smap.png", std::filesystem::path(filename).stem().c_str(), 0, false ? "normal" : "light");
-            stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, imagedata, 4 * swapChain->extent.width);
-            std::cout << "saved output as " << outputFilename << std::endl;
-        }
-#endif
-            // Clean up resources
-            vkUnmapMemory(device->device, dstImageMemory);
-            vkFreeMemory(device->device, dstImageMemory, nullptr);
-            vkDestroyImage(device->device, dstImage, nullptr);
+        // Clean up resources
+        vkUnmapMemory(device->device, dstImageMemory);
+        vkFreeMemory(device->device, dstImageMemory, nullptr);
+        vkDestroyImage(device->device, dstImage, nullptr);
     }
 #endif
 
@@ -916,6 +902,20 @@ int main(int argc, char** argv)
 #ifndef MO_HEADLESS
     glfwDestroyWindow(window);
     glfwTerminate();
+#endif
+
+#ifdef MO_SAVE_TO_FILE
+    {
+        for (std::uint32_t pixel = 0; pixel < outputImg.size(); pixel += 4)
+        {
+            outputImg[pixel + 3] = 255;
+        }
+
+        char outputFilename[256];
+        std::snprintf(outputFilename, 256, "%s_%d_%smap.png", std::filesystem::path(filename).stem().c_str(), 0, false ? "normal" : "light");
+        stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, outputImg.data(), 4 * swapChain->extent.width);
+        std::cout << "saved output as " << outputFilename << std::endl;
+    }
 #endif
 
     auto end = std::chrono::steady_clock::now();
