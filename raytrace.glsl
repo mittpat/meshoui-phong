@@ -190,9 +190,6 @@ MoBVHWorkingSet traversal[64];
 bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 {
     result.distance = 1.0 / 0.0;
-    float bbhits[4];
-    uint closer, other;
-
     int stackPtr = 0;
 
     traversal[stackPtr].index = 0;
@@ -212,42 +209,47 @@ bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
 
         if (node.offset == 0)
         {
-            float currentDistance = 1.0 / 0.0;
+            float t = 1.0 / 0.0;
             float u, v;
             MoTriangle triangle = inBVHObjects.pObjects[node.start];
-            if (moRayTriangleIntersect(triangle, ray, currentDistance, u, v))
-            {
-                if (currentDistance <= 0.0)
+            if (moRayTriangleIntersect(triangle, ray, t, u, v))
+            {                
+                if (t < result.distance)
                 {
                     result.triangle = triangle;
                     result.barycentric = vec3(1.f - u - v, u, v);
-                    result.distance = currentDistance;
-
-                    return true;
+                    result.distance = t;
                 }
-                if (currentDistance < result.distance)
+                if (t <= 0.0)
                 {
-                    result.triangle = triangle;
-                    result.barycentric = vec3(1.f - u - v, u, v);
-                    result.distance = currentDistance;
+                    return true;
                 }
             }
         }
         else
         {
+            uint closer = index + 1;
+            uint other = index + node.offset;
+
+            float bbhits[5];
+
             bool hitLeft = moIntersect(inBVHSplitNodes.pSplitNodes[index + 1].boundingBox, ray, bbhits[0], bbhits[1]);
             bool hitRight = moIntersect(inBVHSplitNodes.pSplitNodes[index + node.offset].boundingBox, ray, bbhits[2], bbhits[3]);
 
             if (hitLeft && hitRight)
             {
-                closer = index + 1;
-                other = index + node.offset;
-
                 if (bbhits[2] < bbhits[0])
                 {
-                    swap(bbhits[0], bbhits[2]);
-                    swap(bbhits[1], bbhits[3]);
-                    swap(closer, other);
+                    other = index + 1;
+                    closer = index + node.offset;
+                    // swap
+                    bbhits[4] = bbhits[0];
+                    bbhits[0] = bbhits[2];
+                    bbhits[2] = bbhits[4];
+                    // swap
+                    bbhits[4] = bbhits[1];
+                    bbhits[1] = bbhits[3];
+                    bbhits[3] = bbhits[4];
                 }
 
                 ++stackPtr;
@@ -258,12 +260,12 @@ bool moIntersectTriangleBVH(in MoRay ray, out MoIntersectResult result)
             else if (hitLeft)
             {
                 ++stackPtr;
-                traversal[stackPtr] = MoBVHWorkingSet(index + 1, bbhits[0]);
+                traversal[stackPtr] = MoBVHWorkingSet(closer, bbhits[0]);
             }
             else if (hitRight)
             {
                 ++stackPtr;
-                traversal[stackPtr] = MoBVHWorkingSet(index + node.offset, bbhits[2]);
+                traversal[stackPtr] = MoBVHWorkingSet(other, bbhits[2]);
             }
         }
     }
@@ -289,8 +291,7 @@ bool moTexcoordInTriangleUV(in MoTriangle self, in vec2 tex)
 bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
 {
     result.distance = 1.0 / 0.0;
-    float bbhits[4];
-    uint closer, other;
+    float bbhits[5];
 
     int stackPtr = 0;
 
@@ -311,40 +312,46 @@ bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
 
         if (node.offset == 0)
         {
-            float currentDistance = 1.0 / 0.0;
+            float t = 1.0 / 0.0;
             MoTriangle triangle = inBVHObjects.pObjects[node.start];
             if (moTexcoordInTriangleUV(triangle, ray.origin.xy))
             {
-                currentDistance = 0.0;
+                t = 0.0;
             }
-            if (currentDistance <= 0.0)
+            if (t < result.distance)
             {
                 result.triangle = triangle;
-                result.distance = currentDistance;
-
+                result.distance = t;
+            }
+            if (t <= 0.0)
+            {
                 return true;
-            }
-            if (currentDistance < result.distance)
-            {
-                result.triangle = triangle;
-                result.distance = currentDistance;
             }
         }
         else
         {
+            uint closer = index + 1;
+            uint other = index + node.offset;
+
+            float bbhits[5];
+
             bool hitLeft = moIntersect(inBVHSplitNodesUV.pSplitNodes[index + 1].boundingBox, ray, bbhits[0], bbhits[1]);
             bool hitRight = moIntersect(inBVHSplitNodesUV.pSplitNodes[index + node.offset].boundingBox, ray, bbhits[2], bbhits[3]);
 
             if (hitLeft && hitRight)
             {
-                closer = index + 1;
-                other = index + node.offset;
-
                 if (bbhits[2] < bbhits[0])
                 {
-                    swap(bbhits[0], bbhits[2]);
-                    swap(bbhits[1], bbhits[3]);
-                    swap(closer, other);
+                    other = index + 1;
+                    closer = index + node.offset;
+                    // swap
+                    bbhits[4] = bbhits[0];
+                    bbhits[0] = bbhits[2];
+                    bbhits[2] = bbhits[4];
+                    // swap
+                    bbhits[4] = bbhits[1];
+                    bbhits[1] = bbhits[3];
+                    bbhits[3] = bbhits[4];
                 }
 
                 ++stackPtr;
@@ -355,12 +362,12 @@ bool moIntersectUVTriangleBVH(in MoRay ray, out MoIntersectResult result)
             else if (hitLeft)
             {
                 ++stackPtr;
-                traversal[stackPtr] = MoBVHWorkingSet(index + 1, bbhits[0]);
+                traversal[stackPtr] = MoBVHWorkingSet(closer, bbhits[0]);
             }
             else if (hitRight)
             {
                 ++stackPtr;
-                traversal[stackPtr] = MoBVHWorkingSet(index + node.offset, bbhits[2]);
+                traversal[stackPtr] = MoBVHWorkingSet(other, bbhits[2]);
             }
         }
     }
@@ -406,17 +413,16 @@ vec3 moNextSphericalSample(in vec2 coordinate, in float seed, bool direction)
     return vect;
 }
 
-const vec4 DefaultColor = vec4(0.5, 0.5, 0.5, 1.0);
+const vec4 DefaultColor = vec4(1.0, 0.0, 1.0, 1.0);
 const vec3 SurfaceBias = vec3(0.01f);
-const int SampleCount = 128;
+const int SampleCount = 256;
 
 void main()
 {
     vec3 origin = vec3(vec2(1.0, 1.0) - inData.texcoord, -1.0);
-    vec3 direction = vec3(0.0, 0.0, 1.0);
 
     MoRay ray;
-    moInitRay(ray, origin, direction);
+    moInitRay(ray, origin, vec3(0.0, 0.0, 1.0));
 
     MoIntersectResult result;
     if (moIntersectUVTriangleBVH(ray, result))

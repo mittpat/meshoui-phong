@@ -906,9 +906,65 @@ int main(int argc, char** argv)
 
 #ifdef MO_SAVE_TO_FILE
     {
-        for (std::uint32_t pixel = 0; pixel < outputImg.size(); pixel += 4)
+        auto indexOf = [&](std::int32_t u, std::int32_t v) -> std::uint32_t
         {
-            outputImg[pixel + 3] = 255;
+            u = std::min(std::int32_t(swapChain->extent.width), std::max(0, u));
+            v = std::min(std::int32_t(swapChain->extent.height), std::max(0, v));
+            return 4 * (v * swapChain->extent.width + u);
+        };
+        auto isMiss = [](std::uint8_t* data)
+        {
+            return data[0] == 255 &&
+                   data[1] == 0 &&
+                   data[2] == 255;
+        };
+
+        for (std::uint32_t v = 0; v < swapChain->extent.width; v++)
+        {
+            for (std::uint32_t u = 0; u < swapChain->extent.height; u++)
+            {
+                std::uint32_t pixel = indexOf(u, v);
+                outputImg[pixel + 3] = 255;
+                // fix seams
+                if (isMiss(&outputImg[pixel]))
+                {
+                    std::uint32_t pixelUp, pixelDown, pixelLeft, pixelRight;
+                    pixelUp = indexOf(u, v + 1);
+                    pixelDown = indexOf(u, v - 1);
+                    pixelLeft = indexOf(u - 1, v);
+                    pixelRight = indexOf(u + 1, v);
+                    if (!isMiss(&outputImg[pixelUp]))
+                    {
+                        outputImg[pixel + 0] = outputImg[pixelUp + 0];
+                        outputImg[pixel + 1] = outputImg[pixelUp + 1];
+                        outputImg[pixel + 2] = outputImg[pixelUp + 2];
+                    }
+                    else if (!isMiss(&outputImg[pixelDown]))
+                    {
+                        outputImg[pixel + 0] = outputImg[pixelDown + 0];
+                        outputImg[pixel + 1] = outputImg[pixelDown + 1];
+                        outputImg[pixel + 2] = outputImg[pixelDown + 2];
+                    }
+                    else if (!isMiss(&outputImg[pixelLeft]))
+                    {
+                        outputImg[pixel + 0] = outputImg[pixelLeft + 0];
+                        outputImg[pixel + 1] = outputImg[pixelLeft + 1];
+                        outputImg[pixel + 2] = outputImg[pixelLeft + 2];
+                    }
+                    else if (!isMiss(&outputImg[pixelRight]))
+                    {
+                        outputImg[pixel + 0] = outputImg[pixelRight + 0];
+                        outputImg[pixel + 1] = outputImg[pixelRight + 1];
+                        outputImg[pixel + 2] = outputImg[pixelRight + 2];
+                    }
+                    else
+                    {
+                        outputImg[pixel + 0] = 127;
+                        outputImg[pixel + 1] = 127;
+                        outputImg[pixel + 2] = 127;
+                    }
+                }
+            }
         }
 
         char outputFilename[256];
