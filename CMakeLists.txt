@@ -5,14 +5,12 @@ find_package(Vulkan REQUIRED)
 
 add_subdirectory(3rdparty)
 
-set(shaders dome.glsl phong.glsl raytrace.glsl)
-set(headers raytrace.h)
+set(shaders raytrace.glsl)
 set_source_files_properties(${shaders} PROPERTIES HEADER_FILE_ONLY TRUE)
-set_source_files_properties(${headers} PROPERTIES HEADER_FILE_ONLY TRUE)
 add_executable(meshouiview
     main.cpp
     phong.h phong.cpp
-    icosphere.h
+    raytrace.h icosphere.h
     ${headers} ${shaders})
 
 # run headless and save output to disk

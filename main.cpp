@@ -480,13 +480,11 @@ int main(int argc, char** argv)
     MoInputs                     inputs = {};
 #endif
     // Initialization
+    int width, height;
+    width = 1024;
+    height = 1024;
     {
-        int width, height;
 //#undef NDEBUG
-//#ifndef NDEBUG
-        width = 1024;
-        height = 1024;
-//#endif
 #ifndef MO_HEADLESS
         glfwSetErrorCallback(glfw_error_callback);
         glfwInit();
@@ -623,8 +621,6 @@ int main(int argc, char** argv)
         moCreatePipeline(&pipelineCreateInfo, &raytracePipeline);
     }
 
-    std::vector<std::uint8_t> outputImg;
-
     // Main loop
 #ifndef MO_HEADLESS
     while (!glfwWindowShouldClose(window))
@@ -714,175 +710,8 @@ int main(int argc, char** argv)
 
 #ifndef MO_HEADLESS
 #else
-    const char* imagedata = {};
-    {
-        auto memoryType = [](VkPhysicalDevice physicalDevice, VkMemoryPropertyFlags properties, uint32_t type_bits) -> uint32_t
-        {
-            VkPhysicalDeviceMemoryProperties prop;
-            vkGetPhysicalDeviceMemoryProperties(physicalDevice, &prop);
-            for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-                if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
-                    return i;
-            return 0xFFFFFFFF;
-        };
-
-        // Create the linear tiled destination image to copy to and to read the memory from
-        VkImageCreateInfo imgCreateInfo = {};
-        imgCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imgCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-        imgCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        imgCreateInfo.extent.width = swapChain->extent.width;
-        imgCreateInfo.extent.height = swapChain->extent.height;
-        imgCreateInfo.extent.depth = 1;
-        imgCreateInfo.arrayLayers = 1;
-        imgCreateInfo.mipLevels = 1;
-        imgCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imgCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imgCreateInfo.tiling = VK_IMAGE_TILING_LINEAR;
-        imgCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        // Create the image
-        VkImage dstImage;
-        VkResult err = vkCreateImage(device->device, &imgCreateInfo, nullptr, &dstImage);
-        device->pCheckVkResultFn(err);
-        // Create memory to back up the image
-        VkMemoryRequirements memRequirements;
-        VkMemoryAllocateInfo memAllocInfo = {};
-        memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        VkDeviceMemory dstImageMemory;
-        vkGetImageMemoryRequirements(device->device, dstImage, &memRequirements);
-        memAllocInfo.allocationSize = memRequirements.size;
-        // Memory must be host visible to copy from
-        memAllocInfo.memoryTypeIndex = memoryType(device->physicalDevice, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memRequirements.memoryTypeBits);
-        err = vkAllocateMemory(device->device, &memAllocInfo, nullptr, &dstImageMemory);
-        device->pCheckVkResultFn(err);
-        err = vkBindImageMemory(device->device, dstImage, dstImageMemory, 0);
-        device->pCheckVkResultFn(err);
-        // Do the actual blit from the offscreen image to our host visible destination image
-        VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
-        cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        cmdBufAllocateInfo.commandPool = swapChain->frames[0].pool;
-        cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cmdBufAllocateInfo.commandBufferCount = 1;
-        VkCommandBuffer copyCmd;
-        err = vkAllocateCommandBuffers(device->device, &cmdBufAllocateInfo, &copyCmd);
-        device->pCheckVkResultFn(err);
-        VkCommandBufferBeginInfo cmdBufInfo = {};
-        cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        err = vkBeginCommandBuffer(copyCmd, &cmdBufInfo);
-        device->pCheckVkResultFn(err);
-
-        auto insertImageMemoryBarrier = [](
-            VkCommandBuffer cmdbuffer,
-            VkImage image,
-            VkAccessFlags srcAccessMask,
-            VkAccessFlags dstAccessMask,
-            VkImageLayout oldImageLayout,
-            VkImageLayout newImageLayout,
-            VkPipelineStageFlags srcStageMask,
-            VkPipelineStageFlags dstStageMask,
-            VkImageSubresourceRange subresourceRange)
-        {
-            VkImageMemoryBarrier imageMemoryBarrier = {};
-            imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageMemoryBarrier.srcAccessMask = srcAccessMask;
-            imageMemoryBarrier.dstAccessMask = dstAccessMask;
-            imageMemoryBarrier.oldLayout = oldImageLayout;
-            imageMemoryBarrier.newLayout = newImageLayout;
-            imageMemoryBarrier.image = image;
-            imageMemoryBarrier.subresourceRange = subresourceRange;
-
-            vkCmdPipelineBarrier(
-                cmdbuffer,
-                srcStageMask,
-                dstStageMask,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &imageMemoryBarrier);
-        };
-
-        // Transition destination image to transfer destination layout
-        insertImageMemoryBarrier(
-            copyCmd,
-            dstImage,
-            0,
-            VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
-
-        // colorAttachment.image is already in VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, and does not need to be transitioned
-
-        VkImageCopy imageCopyRegion{};
-        imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageCopyRegion.srcSubresource.layerCount = 1;
-        imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageCopyRegion.dstSubresource.layerCount = 1;
-        imageCopyRegion.extent.width = swapChain->extent.width;
-        imageCopyRegion.extent.height = swapChain->extent.height;
-        imageCopyRegion.extent.depth = 1;
-
-        vkCmdCopyImage(
-            copyCmd,
-            swapChain->images[0].back, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &imageCopyRegion);
-
-        // Transition destination image to general layout, which is the required layout for mapping the image memory later on
-        insertImageMemoryBarrier(
-            copyCmd,
-            dstImage,
-            VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_ACCESS_MEMORY_READ_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
-
-        VkResult res = vkEndCommandBuffer(copyCmd);
-        device->pCheckVkResultFn(err);
-
-        {
-            VkSubmitInfo submitInfo = {};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &copyCmd;
-            VkFenceCreateInfo fenceInfo = {};
-            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            VkFence fence;
-            res = vkCreateFence(device->device, &fenceInfo, nullptr, &fence);
-            device->pCheckVkResultFn(err);
-            res = vkQueueSubmit(device->queue, 1, &submitInfo, fence);
-            device->pCheckVkResultFn(err);
-            res = vkWaitForFences(device->device, 1, &fence, VK_TRUE, UINT64_MAX);
-            device->pCheckVkResultFn(err);
-            vkDestroyFence(device->device, fence, nullptr);
-        }
-
-        // Get layout of the image (including row pitch)
-        VkImageSubresource subResource{};
-        subResource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        VkSubresourceLayout subResourceLayout;
-
-        vkGetImageSubresourceLayout(device->device, dstImage, &subResource, &subResourceLayout);
-
-        // Map image memory so we can start copying from it
-        vkMapMemory(device->device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&imagedata);
-        imagedata += subResourceLayout.offset;
-
-        outputImg.insert(outputImg.end(), (std::uint8_t*)imagedata, (std::uint8_t*)imagedata + subResourceLayout.size);
-
-        // Clean up resources
-        vkUnmapMemory(device->device, dstImageMemory);
-        vkFreeMemory(device->device, dstImageMemory, nullptr);
-        vkDestroyImage(device->device, dstImage, nullptr);
-    }
+    std::vector<std::uint8_t> readback(width * height * 4);
+    moFramebufferReadback(swapChain->images[0].back, {std::uint32_t(width), std::uint32_t(height)}, readback.data(), readback.size(), swapChain->frames[0].pool);
 #endif
 
     // Dome
@@ -906,13 +735,13 @@ int main(int argc, char** argv)
 
 #ifdef MO_SAVE_TO_FILE
     {
-        std::vector<std::uint8_t> bled = outputImg;
+        std::vector<std::uint8_t> bled = readback;
 
         auto indexOf = [&](std::int32_t u, std::int32_t v) -> std::uint32_t
         {
-            u = std::min(std::int32_t(swapChain->extent.width), std::max(0, u));
-            v = std::min(std::int32_t(swapChain->extent.height), std::max(0, v));
-            return 4 * (v * swapChain->extent.width + u);
+            u = std::min(width, std::max(0, u));
+            v = std::min(height, std::max(0, v));
+            return 4 * (v * width + u);
         };
         auto isMiss = [](std::uint8_t* data)
         {
@@ -921,43 +750,42 @@ int main(int argc, char** argv)
                    data[2] == 255;
         };
 
-        for (std::uint32_t v = 0; v < swapChain->extent.width; v++)
+        for (std::uint32_t v = 0; v < width; v++)
         {
-            for (std::uint32_t u = 0; u < swapChain->extent.height; u++)
+            for (std::uint32_t u = 0; u < height; u++)
             {
                 std::uint32_t pixel = indexOf(u, v);
-                bled[pixel + 3] = 255;
                 // fix seams
-                if (isMiss(&outputImg[pixel]))
+                if (isMiss(&readback[pixel]))
                 {
                     std::uint32_t pixelUp, pixelDown, pixelLeft, pixelRight;
                     pixelUp = indexOf(u, v + 1);
                     pixelDown = indexOf(u, v - 1);
                     pixelLeft = indexOf(u - 1, v);
                     pixelRight = indexOf(u + 1, v);
-                    if (!isMiss(&outputImg[pixelUp]))
+                    if (!isMiss(&readback[pixelUp]))
                     {
-                        bled[pixel + 0] = outputImg[pixelUp + 0];
-                        bled[pixel + 1] = outputImg[pixelUp + 1];
-                        bled[pixel + 2] = outputImg[pixelUp + 2];
+                        bled[pixel + 0] = readback[pixelUp + 0];
+                        bled[pixel + 1] = readback[pixelUp + 1];
+                        bled[pixel + 2] = readback[pixelUp + 2];
                     }
-                    else if (!isMiss(&outputImg[pixelDown]))
+                    else if (!isMiss(&readback[pixelDown]))
                     {
-                        bled[pixel + 0] = outputImg[pixelDown + 0];
-                        bled[pixel + 1] = outputImg[pixelDown + 1];
-                        bled[pixel + 2] = outputImg[pixelDown + 2];
+                        bled[pixel + 0] = readback[pixelDown + 0];
+                        bled[pixel + 1] = readback[pixelDown + 1];
+                        bled[pixel + 2] = readback[pixelDown + 2];
                     }
-                    else if (!isMiss(&outputImg[pixelLeft]))
+                    else if (!isMiss(&readback[pixelLeft]))
                     {
-                        bled[pixel + 0] = outputImg[pixelLeft + 0];
-                        bled[pixel + 1] = outputImg[pixelLeft + 1];
-                        bled[pixel + 2] = outputImg[pixelLeft + 2];
+                        bled[pixel + 0] = readback[pixelLeft + 0];
+                        bled[pixel + 1] = readback[pixelLeft + 1];
+                        bled[pixel + 2] = readback[pixelLeft + 2];
                     }
-                    else if (!isMiss(&outputImg[pixelRight]))
+                    else if (!isMiss(&readback[pixelRight]))
                     {
-                        bled[pixel + 0] = outputImg[pixelRight + 0];
-                        bled[pixel + 1] = outputImg[pixelRight + 1];
-                        bled[pixel + 2] = outputImg[pixelRight + 2];
+                        bled[pixel + 0] = readback[pixelRight + 0];
+                        bled[pixel + 1] = readback[pixelRight + 1];
+                        bled[pixel + 2] = readback[pixelRight + 2];
                     }
                     else
                     {
@@ -971,7 +799,7 @@ int main(int argc, char** argv)
 
         char outputFilename[256];
         std::snprintf(outputFilename, 256, "%s_%d_%smap.png", std::filesystem::path(filename).stem().c_str(), 0, false ? "normal" : "light");
-        stbi_write_png(outputFilename, swapChain->extent.width, swapChain->extent.height, 4, bled.data(), 4 * swapChain->extent.width);
+        stbi_write_png(outputFilename, width, height, 4, bled.data(), 4 * width);
         std::cout << "saved output as " << outputFilename << std::endl;
     }
 #endif
