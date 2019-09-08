@@ -320,6 +320,8 @@ void moDemoPlane(MoMesh* pMesh, const linalg::aliases::float2 & halfExtents = li
 // create a demo mesh
 void moDemoSphere(MoMesh *pMesh);
 
+void moDemoIcoSphere();
+
 // create a demo material
 void moDemoMaterial(MoMaterial* pMaterial);
 

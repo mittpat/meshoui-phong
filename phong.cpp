@@ -8,7 +8,10 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <functional>
+#include <iostream>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 using namespace linalg;
@@ -1954,6 +1957,101 @@ void moDemoSphere(MoMesh *pMesh)
     meshInfo.pBitangents = vertexBitangents.data();
     meshInfo.name = "DemoSphere";
     moCreateMesh(&meshInfo, pMesh);
+}
+
+void moDemoIcoSphere()
+{
+    // https://schneide.blog/2016/07/15/generating-an-icosphere-in-c/
+    typedef unsigned Index;
+    typedef uint3 Triangle;
+    typedef std::vector<Triangle> TriangleList;
+    typedef std::vector<float3> VertexList;
+
+    const float X=.525731112119133606f;
+    const float Z=.850650808352039932f;
+    const float N=0.f;
+
+    static const VertexList Vertices =
+    {
+        {-X,N,Z}, {X,N,Z}, {-X,N,-Z}, {X,N,-Z},
+        {N,Z,X}, {N,Z,-X}, {N,-Z,X}, {N,-Z,-X},
+        {Z,X,N}, {-Z,X, N}, {Z,-X,N}, {-Z,-X, N}
+    };
+
+    static const TriangleList Triangles =
+    {
+        {0,4,1},{0,9,4},{9,5,4},{4,5,8},{4,8,1},
+        {8,10,1},{8,3,10},{5,3,8},{5,2,3},{2,7,3},
+        {7,10,3},{7,6,10},{7,11,6},{11,0,6},{0,1,6},
+        {6,1,10},{9,0,11},{9,11,2},{9,2,5},{7,2,11}
+    };
+
+    auto hasher = [](const std::pair<Index, Index>& key) -> size_t
+    {
+        return ((uint64_t)key.first << 32) | (uint64_t)key.second;
+    };
+
+    typedef std::unordered_map<std::pair<Index, Index>, Index, std::function<size_t(const std::pair<Index, Index>&)>> Lookup;
+    auto vertex_for_edge = [](Lookup& lookup, VertexList& vertices, Index first, Index second) -> Index
+    {
+        Lookup::key_type key(first, second);
+        if (key.first>key.second)
+            std::swap(key.first, key.second);
+
+        auto inserted=lookup.insert({key, vertices.size()});
+        if (inserted.second)
+        {
+            auto& edge0 = vertices[first];
+            auto& edge1 = vertices[second];
+            auto point = normalize(edge0+edge1);
+            vertices.push_back(point);
+        }
+
+        return inserted.first->second;
+    };
+
+    auto subdivide = [hasher, vertex_for_edge](VertexList& vertices, TriangleList triangles) -> TriangleList
+    {
+        Lookup lookup(100, hasher);
+        TriangleList result;
+
+        for (auto&& each : triangles)
+        {
+            std::array<Index, 3> mid;
+            for (int edge = 0; edge < 3; ++edge)
+            {
+                mid[edge] = vertex_for_edge(lookup, vertices, each[edge], each[(edge+1)%3]);
+            }
+
+            result.push_back({each[0], mid[0], mid[2]});
+            result.push_back({each[1], mid[1], mid[0]});
+            result.push_back({each[2], mid[2], mid[1]});
+            result.push_back({mid[0], mid[1], mid[2]});
+        }
+
+        return result;
+    };
+
+    typedef std::pair<VertexList, TriangleList> IndexedMesh;
+    auto make_icosphere = [subdivide](int subdivisions) -> IndexedMesh
+    {
+        VertexList vertices = Vertices;
+        TriangleList triangles = Triangles;
+
+        for (int i = 0; i < subdivisions; ++i)
+        {
+            triangles = subdivide(vertices, triangles);
+        }
+
+        return {vertices, triangles};
+    };
+
+    //1T = 0, 4T = 1, 16T = 2
+    IndexedMesh mesh = make_icosphere(3);
+    for (auto&& vertex : mesh.first)
+    {
+        std::cout << "{ " << vertex.x << "," << vertex.y << "," << vertex.z << "},\n";
+    }
 }
 
 void moDemoMaterial(MoMaterial *pMaterial)

@@ -6,19 +6,22 @@ find_package(Vulkan REQUIRED)
 add_subdirectory(3rdparty)
 
 set(shaders dome.glsl phong.glsl raytrace.glsl)
+set(headers raytrace.h)
 set_source_files_properties(${shaders} PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(${headers} PROPERTIES HEADER_FILE_ONLY TRUE)
 add_executable(meshouiview
     main.cpp
     phong.h phong.cpp
-    ${shaders})
+    icosphere.h
+    ${headers} ${shaders})
 
 # run headless and save output to disk
 target_compile_definitions(meshouiview PRIVATE MO_HEADLESS)
 
 if(NOT MSVC)
-    target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg stdc++fs)
+    target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg stb stdc++fs)
 else()
-    target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg)
+    target_link_libraries(meshouiview meshouiray ${Vulkan_LIBRARIES} assimp glfw linalg stb)
 endif()
 
 add_custom_command(TARGET meshouiview POST_BUILD
