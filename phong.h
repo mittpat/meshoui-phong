@@ -277,6 +277,9 @@ void moBindMaterial(MoMaterial material);
 // draw a mesh
 void moDrawMesh(MoMesh mesh);
 
+// readback a framebuffer
+void moFramebufferReadback(VkImage source, VkExtent2D extent, std::uint8_t* pDestination, uint32_t destinationSize, VkCommandPool commandPool);
+
 // create a default material
 void moDefaultMaterial(MoMaterial* pMaterial);
 
