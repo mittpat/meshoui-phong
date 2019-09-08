@@ -459,9 +459,6 @@ void load(const std::string & filename, MoHandles & handles, std::vector<MoNode>
 
 int main(int argc, char** argv)
 {
-    moDemoIcoSphere();
-    return 0;
-
     const char * filename = "teapot.dae";
     std::filesystem::path fileToLoad = filename;
 

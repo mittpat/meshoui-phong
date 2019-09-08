@@ -274,7 +274,7 @@ void main()
         float value = 0.0;
         for (int j = 0; j < SampleCount; ++j)
         {
-            vec3 nextDirection = MoIcosphereData25T[j];
+            vec3 nextDirection = MoIcosphereData64T[j];
             float diffuseFactor = dot(surfaceNormal, nextDirection);
             if (diffuseFactor > 0.f)
             {
